@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS projects (
   name               TEXT NOT NULL,
   identifier         TEXT NOT NULL UNIQUE COLLATE NOCASE,
   description        TEXT,
-  color              TEXT NOT NULL DEFAULT '#2F7A6B',
+  color              TEXT NOT NULL DEFAULT '#0070C0',
   status             TEXT NOT NULL DEFAULT 'not_set'
                      CHECK (status IN ('not_set','on_track','at_risk','off_track','finished','discontinued')),
   status_explanation TEXT,

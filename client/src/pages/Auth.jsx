@@ -5,10 +5,10 @@ import { Field, ErrorBox } from '../components/ui.jsx';
 
 function Art({ appName }) {
   const lanes = [
-    { k: 'CRM', c: '#4FA894', a: 4, w: 58 },
-    { k: 'HRMS', c: '#A487C6', a: 18, w: 40 },
-    { k: 'SALES', c: '#D9932B', a: 30, w: 52 },
-    { k: 'OPS', c: '#7FA6D6', a: 10, w: 34 },
+    { k: 'CRM', c: '#2E9BEA', a: 4, w: 58 },
+    { k: 'HRMS', c: '#33B014', a: 18, w: 40 },
+    { k: 'SALES', c: '#F39219', a: 30, w: 52 },
+    { k: 'OPS', c: '#A3B9D8', a: 10, w: 34 },
   ];
   return (
     <div className="auth-art">

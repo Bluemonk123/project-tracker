@@ -86,5 +86,5 @@ export const MEETING_KINDS = {
 };
 
 // deterministic soft colour for people
-const PEOPLE = ['#3B6EA8', '#2F7A6B', '#7A4FA3', '#B5662A', '#2E8A9A', '#9C4F6E', '#5B6B85', '#6E7A2E'];
+const PEOPLE = ['#0070C0', '#0B3A7A', '#2D7F14', '#B25F00', '#3B6EA8', '#2F7A6B', '#7A4FA3', '#B5662A', '#2E8A9A', '#9C4F6E', '#5B6B85', '#6E7A2E'];
 export const personColor = (id) => PEOPLE[Math.abs(Number(id) || 0) % PEOPLE.length];

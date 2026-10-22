@@ -9,8 +9,8 @@ import NewProjectModal from '../pages/NewProjectModal.jsx';
 function BrandMark() {
   return (
     <svg className="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
-      <rect width="32" height="32" rx="7" fill="#22443D" />
-      <rect x="7" y="8" width="4" height="16" rx="2" fill="#D9932B" />
+      <rect width="32" height="32" rx="7" fill="#134889" />
+      <rect x="7" y="8" width="4" height="16" rx="2" fill="#F39219" />
       <rect x="14" y="8" width="11" height="4" rx="2" fill="#fff" />
       <rect x="14" y="15" width="8" height="4" rx="2" fill="#fff" opacity=".7" />
       <rect x="14" y="22" width="5" height="2" rx="1" fill="#fff" opacity=".5" />

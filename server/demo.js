@@ -45,13 +45,13 @@ tx(() => {
   team('Quality', 'Meera', ['Meera']);
 
   const projects = [
-    { name: 'Customer Portal', key: 'CRM', color: '#2F7A6B', status: 'on_track', manager: 'Priya',
+    { name: 'Customer Portal', key: 'CRM', color: '#0070C0', status: 'on_track', manager: 'Priya',
       desc: 'Self-service portal where customers raise requests, track orders and download invoices.',
       members: [['Rahul', 'Team lead'], ['Anita', 'Developer'], ['Vikram', 'Developer'], ['Meera', 'QA / Tester'], ['Sneha', 'Developer']] },
-    { name: 'HR Management System', key: 'HRMS', color: '#7A4FA3', status: 'at_risk', manager: 'Priya',
+    { name: 'HR Management System', key: 'HRMS', color: '#33B014', status: 'at_risk', manager: 'Priya',
       desc: 'Leave, attendance and payroll inputs for all employees.', status_explanation: 'Payroll integration is waiting on the vendor API.',
       members: [['Vikram', 'Team lead'], ['Rahul', 'Developer'], ['Meera', 'QA / Tester'], ['Sneha', 'Developer']] },
-    { name: 'Field Sales App', key: 'SALES', color: '#B5662A', status: 'on_track', manager: 'Priya',
+    { name: 'Field Sales App', key: 'SALES', color: '#F39219', status: 'on_track', manager: 'Priya',
       desc: 'Android and iOS app for the field sales team: visits, orders and offline sync.',
       members: [['Karan', 'Team lead'], ['Anita', 'Developer'], ['Meera', 'QA / Tester']] },
   ];

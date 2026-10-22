@@ -269,7 +269,7 @@ export function MultiUserPicker({ value = [], onChange, users }) {
   );
 }
 
-export const COLORS = ['#2F7A6B', '#3B6EA8', '#7A4FA3', '#B5662A', '#C2453B', '#2E8A9A', '#9C4F6E', '#6E7A2E', '#5B6B85', '#C98A1B', '#1F2933', '#8A5A44'];
+export const COLORS = ['#0070C0', '#F39219', '#33B014', '#0B3A7A', '#4D4D4D', '#2F7A6B', '#3B6EA8', '#7A4FA3', '#B5662A', '#C2453B', '#2E8A9A', '#9C4F6E', '#6E7A2E', '#5B6B85', '#C98A1B', '#1F2933', '#8A5A44'];
 export function ColorPicker({ value, onChange }) {
   return (
     <div className="row">

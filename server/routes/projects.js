@@ -79,7 +79,7 @@ r.post('/projects', (req, res) => {
   const id = tx(() => {
     const { id } = run(`INSERT INTO projects(name, identifier, description, color, status, status_explanation, parent_id, manager_id, start_date, end_date, created_by)
                         VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
-      f.name, identifier, f.description || null, f.color || '#2F7A6B', f.status || 'not_set', f.status_explanation || null,
+      f.name, identifier, f.description || null, f.color || '#0070C0', f.status || 'not_set', f.status_explanation || null,
       f.parent_id || null, f.manager_id || null, f.start_date || null, f.end_date || null, req.user.id);
     run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', id, req.user.id, pmRole.id);
     if (f.manager_id) run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', id, f.manager_id, pmRole.id);
