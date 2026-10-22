@@ -1,0 +1,33 @@
+{
+  "name": "project-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Self-hosted project, task, team and meeting tracker for the office.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/start.js",
+    "dev": "concurrently -k -n api,web \"node --watch --disable-warning=ExperimentalWarning server/start.js\" \"vite\"",
+    "build": "vite build",
+    "demo": "node --disable-warning=ExperimentalWarning server/demo.js",
+    "test": "node --disable-warning=ExperimentalWarning --test server/test/*.test.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "express": "^5.3.0",
+    "multer": "^2.5.0"
+  },
+  "devDependencies": {
+    "@fontsource-variable/instrument-sans": "^5.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "concurrently": "^10.0.6",
+    "dompurify": "^3.4.17",
+    "marked": "^18.1.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.4",
+    "vite": "^8.3.5"
+  }
+}
