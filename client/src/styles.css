@@ -124,9 +124,14 @@ p { margin: 0 0 0.6em; }
   display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 6px;
   color: var(--on-spruce); font-size: var(--fs); text-decoration: none; position: relative;
 }
-.nav-link:hover { background: var(--spruce-2); text-decoration: none; }
-.nav-link.active { background: var(--spruce-2); color: #fff; box-shadow: inset 3px 0 0 var(--accent); }
-.nav-link.active svg { color: var(--accent); opacity: 1; }
+/* hover and active share the brand orange fill, with navy text for contrast */
+.nav-link:hover, .nav-link.active { background: var(--brand-orange); color: var(--spruce); text-decoration: none; }
+.nav-link.active { font-weight: 600; }
+.nav-link.quiet:not(:hover):not(.active) { color: var(--on-spruce-2); }
+.nav-link:hover svg, .nav-link.active svg { opacity: 1; }
+.nav-link:hover .pkey, .nav-link.active .pkey { color: var(--spruce); }
+.nav-link:hover .count, .nav-link.active .count { background: var(--spruce); color: #fff; }
+.nav-link:hover .stripe, .nav-link.active .stripe { box-shadow: 0 0 0 1.5px #fff; }
 .nav-link svg { width: 17px; height: 17px; flex: none; opacity: 0.85; }
 .nav-link .count { margin-left: auto; font-size: var(--fs-xs); background: var(--brand-orange); color: #2A1600; border-radius: 10px; padding: 0 6px; font-weight: 600; }
 .nav-project .stripe { width: 4px; height: 16px; border-radius: 2px; flex: none; }

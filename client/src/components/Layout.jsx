@@ -123,7 +123,7 @@ export default function Layout() {
               <span className="pkey">{p.identifier}</span>
             </NavLink>
           ))}
-          <NavLink to="/projects" end className="nav-link" style={{ color: 'var(--on-spruce-2)' }}><Icon name="folder" />All projects</NavLink>
+          <NavLink to="/projects" end className="nav-link quiet"><Icon name="folder" />All projects</NavLink>
         </nav>
         <div className="sidebar-foot">
           {isAdmin || can('admin.users') || can('admin.roles') || can('admin.settings') ? (
