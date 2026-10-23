@@ -29,7 +29,7 @@ function client() {
     const data = ct.includes('json') ? await res.json() : await res.text();
     return { status: res.status, data };
   };
-  return { get: u => call('GET', u), post: (u, b) => call('POST', u, b), patch: (u, b) => call('PATCH', u, b), put: (u, b) => call('PUT', u, b), del: (u, b) => call('DELETE', u, b) };
+  return { cookie: () => cookie, get: u => call('GET', u), post: (u, b) => call('POST', u, b), patch: (u, b) => call('PATCH', u, b), put: (u, b) => call('PUT', u, b), del: (u, b) => call('DELETE', u, b) };
 }
 
 const admin = client();
@@ -306,4 +306,32 @@ test('kanban board: columns, date range, employee and project filters', async ()
   assert.equal(r.data.rows[0].can_edit, true);
   assert.equal((await admin.get('/board?from=2026-10-23&to=2026-10-19')).status, 400);
   assert.equal((await admin.get('/board')).status, 400);
+});
+
+test('task links, attachment limits and assigning a non-member', async () => {
+  const p = (await admin.post('/projects', { name: 'Attach Test', identifier: 'ATT' })).data;
+  // dev is not a member yet; assigning adds them
+  let r = await admin.post('/work-packages', { project_id: p.id, subject: 'With links', assignee_id: ids.dev,
+    links: ['figma.com/file/abc', { url: 'https://docs.example.com/spec', title: 'Spec' }] });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const wp = r.data;
+  assert.ok((await dev.get('/projects')).data.some(x => x.id === p.id), 'assignee became a member');
+  r = await admin.get(`/work-packages/${wp.id}`);
+  assert.deepEqual(r.data.links.map(l => l.url), ['https://figma.com/file/abc', 'https://docs.example.com/spec']);
+  assert.equal(r.data.links[1].title, 'Spec');
+  assert.equal((await admin.post('/work-packages', { project_id: p.id, subject: 'Bad', links: ['javascript:alert(1)'] })).status, 400);
+  r = await admin.post(`/work-packages/${wp.id}/links`, { url: 'http://test.local/build' });
+  assert.equal(r.status, 201);
+  assert.equal((await admin.del(`/links/${r.data.id}`)).status, 200);
+  // uploads: only photo/pdf/zip, at most 5
+  const up = async (name) => {
+    const fd = new FormData();
+    fd.append('container_type', 'wp'); fd.append('container_id', String(wp.id));
+    fd.append('file', new Blob(['x']), name);
+    const res = await fetch(base + '/attachments', { method: 'POST', body: fd, headers: { cookie: admin.cookie() } });
+    return res.status;
+  };
+  assert.equal(await up('notes.exe'), 400);
+  for (const n of ['a.png', 'b.JPG', 'c.pdf', 'd.zip', 'e.webp']) assert.equal(await up(n), 201, n);
+  assert.equal(await up('f.png'), 400);
 });

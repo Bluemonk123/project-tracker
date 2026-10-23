@@ -184,6 +184,17 @@ CREATE TABLE IF NOT EXISTS wp_relations (
   UNIQUE (from_id, to_id, type)
 );
 
+-- Web links attached to a work package (designs, documents, test builds...)
+CREATE TABLE IF NOT EXISTS wp_links (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  wp_id      INTEGER NOT NULL REFERENCES work_packages(id) ON DELETE CASCADE,
+  url        TEXT NOT NULL,
+  title      TEXT,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_wp_links ON wp_links(wp_id);
+
 CREATE TABLE IF NOT EXISTS wp_watchers (
   wp_id   INTEGER NOT NULL REFERENCES work_packages(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

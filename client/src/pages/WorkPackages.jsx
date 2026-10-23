@@ -98,7 +98,7 @@ export default function WorkPackages({ project }) {
         <span className="spacer" />
         <a className="btn sm" href={exportUrl}><Icon name="download" />Export CSV</a>
         <button type="button" className="btn sm" onClick={() => window.print()}><Icon name="printer" />Print</button>
-        {canCreate && <button type="button" className="btn primary" onClick={() => setCreating(true)}><Icon name="plus" />New work package</button>}
+        {canCreate && <button type="button" className="btn primary" onClick={() => setCreating(true)}><Icon name="plus" />New task</button>}
       </div>
 
       <div className="filterbar" role="group" aria-label="Filters">
@@ -188,7 +188,7 @@ export default function WorkPackages({ project }) {
           </table>
         </div>
         {data && !rows.length && (
-          <Empty title="No work packages match" action={canCreate && <button className="btn primary" onClick={() => setCreating(true)}><Icon name="plus" />New work package</button>}>
+          <Empty title="No work packages match" action={canCreate && <button className="btn primary" onClick={() => setCreating(true)}><Icon name="plus" />New task</button>}>
             Change the filters above, or create the first item for this list.
           </Empty>
         )}

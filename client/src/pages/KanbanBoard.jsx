@@ -167,7 +167,7 @@ export default function KanbanBoard({ project }) {
         </div>
       )}
       {adding && (
-        <NewWpModal projectId={project?.id || (projectId ? Number(projectId) : undefined)} title={`New work package in ${adding.name}`}
+        <NewWpModal projectId={project?.id || (projectId ? Number(projectId) : undefined)} title={`New task in ${adding.name}`}
           defaults={{
             status_id: adding.statuses[0].id,
             assignee_id: employee === 'me' ? user.id : /^\d+$/.test(employee) ? Number(employee) : null,

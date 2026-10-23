@@ -84,6 +84,8 @@ r.get('/wiki/:id/versions', (req, res) => {
 
 // ---------- attachments ----------
 const MAX_MB = Number(process.env.MAX_UPLOAD_MB || 25);
+export const MAX_WP_FILES = 5;
+export const WP_FILE_TYPES = /\.(jpe?g|png|gif|webp|heic|heif|bmp|pdf|zip)$/i;
 const upload = multer({
   storage: multer.diskStorage({
     destination: UPLOAD_DIR,
@@ -113,9 +115,16 @@ r.post('/attachments', (req, res, next) => {
       const type = String(req.body.container_type);
       const cid = Number(req.body.container_id);
       let projectId;
-      try { projectId = containerProject(type, cid); need(req, 'files.upload', projectId); }
-      catch (e) { fs.rmSync(req.file.path, { force: true }); throw e; }
       const name = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+      try {
+        projectId = containerProject(type, cid);
+        need(req, 'files.upload', projectId);
+        if (type === 'wp') {
+          if (!WP_FILE_TYPES.test(name)) fail(400, 'Only photos (JPG, PNG, GIF, WEBP, HEIC), PDF and ZIP files can be attached to a task.');
+          const count = get("SELECT COUNT(*) AS n FROM attachments WHERE container_type = 'wp' AND container_id = ?", cid).n;
+          if (count >= MAX_WP_FILES) fail(400, `A task can have at most ${MAX_WP_FILES} files. Remove one first.`);
+        }
+      } catch (e) { fs.rmSync(req.file.path, { force: true }); throw e; }
       const { id } = run(`INSERT INTO attachments(container_type, container_id, project_id, filename, stored_name, content_type, size, uploaded_by)
                           VALUES(?,?,?,?,?,?,?,?)`, type, cid, projectId, name, req.file.filename, req.file.mimetype, req.file.size, req.user.id);
       if (type === 'wp') run('INSERT INTO journals(wp_id, user_id, changes) VALUES(?,?,?)', cid, req.user.id, JSON.stringify({ attachment: [null, name] }));

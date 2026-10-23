@@ -225,6 +225,29 @@ function checkMemberOrNull(projectId, userId, label) {
   return u.id;
 }
 
+// Someone assigned to a task must be able to see it: add them to the project if needed.
+function ensureMember(projectId, userId) {
+  if (!userId || get('SELECT 1 AS x FROM project_members WHERE project_id = ? AND user_id = ?', projectId, userId)) return;
+  const role = get("SELECT id FROM roles WHERE scope = 'project' AND name = 'Developer'") || get("SELECT id FROM roles WHERE scope = 'project' ORDER BY position LIMIT 1");
+  run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', projectId, userId, role.id);
+}
+
+const URL_RE = /^https?:\/\/[^\s]+$/i;
+function cleanLink(l) {
+  let url = String(l?.url ?? l ?? '').trim();
+  if (!url) return null;
+  // only web links; reject other schemes such as javascript: or file:
+  if (/^[a-z][a-z0-9+.-]*:(?!\d)/i.test(url) && !/^https?:\/\//i.test(url)) fail(400, 'Only web links starting with http:// or https:// can be added.');
+  if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+  if (!URL_RE.test(url)) fail(400, `“${url}” is not a valid web link.`);
+  return { url: url.slice(0, 2000), title: l?.title ? String(l.title).trim().slice(0, 200) || null : null };
+}
+export function addLinks(wpId, links, userId) {
+  for (const l of (links || []).map(cleanLink).filter(Boolean)) {
+    run('INSERT INTO wp_links(wp_id, url, title, created_by) VALUES(?,?,?,?)', wpId, l.url, l.title, userId);
+  }
+}
+
 function validateRefs(projectId, f, wpId = null) {
   if (f.type_id !== undefined && !get('SELECT id FROM types WHERE id = ?', f.type_id)) fail(400, 'Unknown type.');
   if (f.status_id !== undefined && !get('SELECT id FROM statuses WHERE id = ?', f.status_id)) fail(400, 'Unknown status.');
@@ -295,7 +318,10 @@ export function createWp(req, projectId, body, { journalNote } = {}) {
   validateRefs(projectId, f);
   const st = get('SELECT done_ratio FROM statuses WHERE id = ?', f.status_id);
   if (st?.done_ratio != null && f.done_ratio == null) f.done_ratio = st.done_ratio;
+  (body.links || []).forEach(cleanLink); // validate before saving anything
   return tx(() => {
+    ensureMember(projectId, f.assignee_id);
+    ensureMember(projectId, f.responsible_id);
     const number = nextNumber(projectId);
     const pos = get('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM work_packages WHERE project_id = ?', projectId).p;
     const { id } = run(`INSERT INTO work_packages(project_id, number, type_id, subject, description, status_id, priority_id, assignee_id,
@@ -305,6 +331,7 @@ export function createWp(req, projectId, body, { journalNote } = {}) {
       f.responsible_id || null, req.user.id, f.parent_id || null, f.version_id || null, f.category_id || null,
       f.start_date || null, f.due_date || null, f.estimated_hours ?? null, f.done_ratio ?? 0, f.position ?? pos);
     run('INSERT INTO journals(wp_id, user_id, notes, changes) VALUES(?,?,?,?)', id, req.user.id, journalNote || null, JSON.stringify({ created: [null, true] }));
+    addLinks(id, body.links, req.user.id);
     watch(id, req.user.id); watch(id, f.assignee_id); watch(id, f.responsible_id);
     const wp = loadWp(id);
     if (f.assignee_id) notify([f.assignee_id], { actorId: req.user.id, projectId, wpId: id, reason: 'assigned', message: `${req.user.name} assigned you ${wp.key}: ${wp.subject}` });
@@ -338,6 +365,8 @@ r.get('/work-packages/:id', (req, res) => {
   const watchers = all('SELECT u.id, u.name FROM wp_watchers w JOIN users u ON u.id = w.user_id WHERE w.wp_id = ? ORDER BY u.name', wp.id);
   const attachments = all(`SELECT a.*, u.name AS uploaded_by_name FROM attachments a LEFT JOIN users u ON u.id = a.uploaded_by
                            WHERE a.container_type = 'wp' AND a.container_id = ? ORDER BY a.created_at`, wp.id);
+  const links = all(`SELECT l.*, u.name AS created_by_name FROM wp_links l LEFT JOIN users u ON u.id = l.created_by
+                     WHERE l.wp_id = ? ORDER BY l.id`, wp.id);
   const time = all(`SELECT te.*, u.name AS user_name FROM time_entries te JOIN users u ON u.id = te.user_id
                     WHERE te.wp_id = ? ORDER BY te.spent_on DESC, te.id DESC`, wp.id);
   const meetings = all(`SELECT m.id, m.title, m.starts_at FROM meetings m WHERE m.id IN (
@@ -353,7 +382,7 @@ r.get('/work-packages/:id', (req, res) => {
     cur = a.parent_id;
   }
   res.json({
-    ...wp, children, relations, journals, watchers, attachments, time, meetings, ancestors,
+    ...wp, children, relations, journals, watchers, attachments, links, time, meetings, ancestors, max_files: 5,
     can: {
       edit: canEditWp(req, wp), assign: can(req, 'wp.assign', wp.project_id) || can(req, 'wp.edit', wp.project_id),
       delete: can(req, 'wp.delete', wp.project_id), comment: can(req, 'wp.comment', wp.project_id),
@@ -397,6 +426,8 @@ export function updateWp(req, wp, body) {
   if (projectId !== wp.project_id) { set.project_id = projectId; changes.project_id = [wp.project_id, projectId]; }
   const keys = Object.keys(set).filter(k => set[k] !== undefined);
   return tx(() => {
+    if (changes.assignee_id) ensureMember(projectId, changes.assignee_id[1]);
+    if (changes.responsible_id) ensureMember(projectId, changes.responsible_id[1]);
     if (keys.length) {
       if (projectId !== wp.project_id) {
         set.number = nextNumber(projectId);
@@ -496,6 +527,23 @@ r.delete('/relations/:id', (req, res) => {
   const wp = loadWp(rel.from_id);
   if (!canEditWp(req, wp) && !canEditWp(req, loadWp(rel.to_id))) fail(403, 'You do not have permission to change this relation.');
   run('DELETE FROM wp_relations WHERE id = ?', rel.id);
+  res.json({ ok: true });
+});
+
+r.post('/work-packages/:id/links', (req, res) => {
+  const wp = loadWp(req.params.id);
+  if (!canEditWp(req, wp) && !can(req, 'wp.comment', wp.project_id)) fail(403, 'You do not have permission to add links here.');
+  const l = cleanLink(req.body) || fail(400, 'Enter a web link.');
+  const { id } = run('INSERT INTO wp_links(wp_id, url, title, created_by) VALUES(?,?,?,?)', wp.id, l.url, l.title, req.user.id);
+  run('INSERT INTO journals(wp_id, user_id, changes) VALUES(?,?,?)', wp.id, req.user.id, JSON.stringify({ link_added: [null, l.title || l.url] }));
+  res.status(201).json({ id });
+});
+
+r.delete('/links/:id', (req, res) => {
+  const l = get('SELECT * FROM wp_links WHERE id = ?', req.params.id) || fail(404, 'Link not found.');
+  const wp = loadWp(l.wp_id);
+  if (l.created_by !== req.user.id && !canEditWp(req, wp)) fail(403, 'You can only remove links you added.');
+  run('DELETE FROM wp_links WHERE id = ?', l.id);
   res.json({ ok: true });
 });
 

@@ -55,7 +55,7 @@ export default function MyPage() {
         </div>
         <div className="head-actions">
           <button className="btn" onClick={() => setModal('time')}><Icon name="clock" />Log time</button>
-          {projects.length > 0 && <button className="btn primary" onClick={() => setModal('wp')}><Icon name="plus" />New work package</button>}
+          {projects.length > 0 && <button className="btn primary" onClick={() => setModal('wp')}><Icon name="plus" />New task</button>}
         </div>
       </div>
 

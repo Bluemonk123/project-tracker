@@ -7,15 +7,15 @@ import {
   Loading, ErrorBox, StatusPill, TypeLabel, Due, Person, Key, Progress, Avatar, Markdown, MarkdownEditor,
   UserSelect, useAsync, confirmDialog, MoreMenu, Modal, Field,
 } from '../components/ui.jsx';
-import NewWpModal, { useProjectInfo, WpSearchSelect } from './NewWpModal.jsx';
+import NewWpModal, { useProjectInfo, WpSearchSelect, LinkEditor, FILE_ACCEPT } from './NewWpModal.jsx';
 import { LogTimeModal } from './Time.jsx';
 import { fmtDate, fmtDateTime, fmtHours, fmtSize, timeAgo } from '../lib/format.js';
 
 const FIELD_LABELS = {
   type_id: 'Type', subject: 'Subject', description: 'Description', status_id: 'Status', priority_id: 'Priority',
   assignee_id: 'Assignee', responsible_id: 'Accountable', parent_id: 'Parent', version_id: 'Version', category_id: 'Category',
-  start_date: 'Start date', due_date: 'Finish date', estimated_hours: 'Estimated hours', done_ratio: '% done', project_id: 'Project',
-  relation_added: 'Relation', attachment: 'File',
+  start_date: 'Start date', due_date: 'Due date', estimated_hours: 'Estimated hours', done_ratio: '% done', project_id: 'Project',
+  relation_added: 'Relation', attachment: 'File', link_added: 'Link',
 };
 const REL_LABEL = {
   out: { relates: 'Related to', blocks: 'Blocks', precedes: 'Precedes', duplicates: 'Duplicates' },
@@ -66,6 +66,7 @@ function Journal({ j, label, canEditOwn, onSaved }) {
                 {k === 'description' ? <><b>Description</b> updated</>
                   : k === 'relation_added' ? <>Added relation <b>{to}</b></>
                   : k === 'attachment' ? <>Attached <b>{to}</b></>
+                  : k === 'link_added' ? <>Added link <b>{to}</b></>
                   : <><b>{FIELD_LABELS[k] || k}</b> {from == null ? 'set to' : <>changed from {label(k, from)} to</>} <b>{label(k, to)}</b></>}
               </li>
             ))}
@@ -254,15 +255,16 @@ export default function WpDetail() {
             </div>
           ) : <p className="small muted">Link work that blocks, follows or duplicates this one.</p>}
 
-          <div className="section-title">Files <span className="muted">({wp.attachments.length})</span>
-            {can.upload && (
+          <div className="section-title">Photos, PDF and ZIP files <span className="muted">({wp.attachments.length} of {wp.max_files})</span>
+            {can.upload && wp.attachments.length < wp.max_files && (
               <span className="actions">
                 <label className="btn sm ghost" style={{ cursor: 'pointer' }}><Icon name="paperclip" />Attach files
-                  <input type="file" multiple hidden onChange={(e) => { upload([...e.target.files]); e.target.value = ''; }} />
+                  <input type="file" multiple hidden accept={FILE_ACCEPT} onChange={(e) => { upload([...e.target.files].slice(0, wp.max_files - wp.attachments.length)); e.target.value = ''; }} />
                 </label>
               </span>
             )}
           </div>
+          {!wp.attachments.length && <p className="small muted">{can.upload ? `Attach up to ${wp.max_files} photos, PDF or ZIP files.` : 'No files.'}</p>}
           {wp.attachments.length > 0 && (
             <div className="panel">
               {wp.attachments.map(a => (
@@ -278,6 +280,21 @@ export default function WpDetail() {
               ))}
             </div>
           )}
+
+          <div className="section-title">Links <span className="muted">({wp.links.length})</span></div>
+          {wp.links.length > 0 && (
+            <div className="panel" style={{ marginBottom: 8 }}>
+              {wp.links.map(l => (
+                <div key={l.id} className="child-row">
+                  <Icon name="link" size={15} />
+                  <a href={l.url} target="_blank" rel="noopener noreferrer" className="ellipsis grow">{l.title || l.url}</a>
+                  {l.title && <span className="xs muted ellipsis hide-sm" style={{ maxWidth: 260 }}>{l.url}</span>}
+                  {(l.created_by === user.id || can.edit) && <button className="icon-btn" aria-label="Remove link" onClick={async () => { await run(() => api.del(`/links/${l.id}`)); reload(); }}><Icon name="x" /></button>}
+                </div>
+              ))}
+            </div>
+          )}
+          {(can.edit || can.comment) && <LinkEditor links={[]} onChange={async (ls) => { const l = ls[ls.length - 1]; if (l && await run(() => api.post(`/work-packages/${wp.id}/links`, l), 'Link added')) reload(); }} />}
 
           <div className="section-title">Activity</div>
           <div>
@@ -298,7 +315,7 @@ export default function WpDetail() {
               <span className="v">{sel('status_id', meta.statuses)}</span>
               <span className="k">Assignee</span>
               <span className="v">{can.assign || !can.edit
-                ? <UserSelect value={wp.assignee_id} disabled={!can.edit || !can.assign} users={members.length ? members : undefined} onChange={(v) => update({ assignee_id: v })} />
+                ? <UserSelect value={wp.assignee_id} disabled={!can.edit || !can.assign} onChange={(v) => update({ assignee_id: v })} />
                 : <select value={wp.assignee_id ?? ''} onChange={(e) => update({ assignee_id: e.target.value ? Number(e.target.value) : null })}>
                     <option value="">Unassigned</option><option value={user.id}>{user.name}</option>
                     {wp.assignee_id && wp.assignee_id !== user.id && <option value={wp.assignee_id}>{wp.assignee_name}</option>}
@@ -318,7 +335,7 @@ export default function WpDetail() {
                 <span className="k">Start date</span>
                 <span className="v"><input type="date" value={wp.start_date || ''} disabled={!can.edit} max={wp.due_date || undefined} onChange={(e) => update({ start_date: e.target.value || null })} /></span>
               </>}
-              <span className="k">{isMilestone ? 'Date' : 'Finish date'}</span>
+              <span className="k">{isMilestone ? 'Date' : 'Due date'}</span>
               <span className="v">
                 <input type="date" value={wp.due_date || ''} disabled={!can.edit} min={wp.start_date || undefined}
                   onChange={(e) => update(isMilestone ? { start_date: e.target.value || null, due_date: e.target.value || null } : { due_date: e.target.value || null })} />
