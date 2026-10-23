@@ -96,7 +96,9 @@ Everything lives in the **`data`** folder next to `start.bat`:
 3. replaces the program files while leaving `data`, `node_modules` and a portable `node-v…` folder alone,
 4. starts the app, which reinstalls and rebuilds itself if anything changed.
 
-**Mac / Linux:** `git pull` (or download the new ZIP and copy your `data` folder across), then `./start.sh`.
+**Mac:** stop the app, then double-click **`update.command`** (or run `./update.sh` in Terminal). It works the same way: backs up the database, gets the latest version (with Git if the folder is a Git copy, otherwise by ZIP) and starts the app. To just start the app, double-click **`start.command`**.
+
+**Linux:** `./update.sh`.
 
 `start.bat` / `start.sh` always check whether the code changed since the last build and rebuild only when needed, so you never have to delete anything by hand. Your data is never overwritten by an update; the database is upgraded automatically on start.
 
