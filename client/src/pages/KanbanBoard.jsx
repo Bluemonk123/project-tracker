@@ -11,9 +11,8 @@ import { addDays, diffDays, fmtDate, startOfWeek, today, parseDate } from '../li
 const thisWeek = () => { const mon = startOfWeek(today()); return { from: mon, to: addDays(mon, 4) }; };
 
 function rangeLabel(from, to) {
-  const a = parseDate(from), b = parseDate(to);
-  const sameYear = a.getFullYear() === b.getFullYear();
-  return `${fmtDate(from, { year: !sameYear })} – ${fmtDate(to, { year: true })}`;
+  // e.g. "19 Oct – 23 Oct"; the year appears only when it is not the current year
+  return `${fmtDate(from)} – ${fmtDate(to)}`;
 }
 
 function cardDates(w) {
@@ -119,7 +118,7 @@ export default function KanbanBoard({ project }) {
           <label className="kb-field"><span>Employee</span>
             <select value={employee} onChange={(e) => set({ employee: e.target.value })}>
               <option value="">All employees</option>
-              <option value="me">Me ({user.name})</option>
+              <option value="me">Me</option>
               <option value="none">Unassigned</option>
               {people.filter(u => u.id !== user.id).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
@@ -132,9 +131,9 @@ export default function KanbanBoard({ project }) {
               </select>
             </label>
           )}
-          <label className="check small kb-undated"><input type="checkbox" checked={undated} onChange={(e) => set({ undated: e.target.checked ? '' : '0' })} />Show open items without dates</label>
+          <label className="check small kb-undated"><input type="checkbox" checked={undated} onChange={(e) => set({ undated: e.target.checked ? '' : '0' })} /><span>Show open items<br />without dates</span></label>
           {(employee || (!project && projectId) || !isThisWeek || !undated) && (
-            <button className="btn sm ghost" onClick={() => setSp({}, { replace: true })}>Reset filters</button>
+            <button className="btn sm ghost" onClick={() => setSp({}, { replace: true })}>Reset</button>
           )}
         </div>
       </div>
