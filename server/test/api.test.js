@@ -275,3 +275,35 @@ test('short key is generated from the project name when not given', async () => 
   r = await admin.post('/projects', { name: 'X' });
   assert.match(r.data.identifier, /^[A-Z][A-Z0-9]{1,9}$/);
 });
+
+test('kanban board: columns, date range, employee and project filters', async () => {
+  const meta = (await admin.get('/meta')).data;
+  const byName = (n) => meta.statuses.find(s => s.name === n);
+  assert.ok(byName('In design') && byName('In testing'), 'new statuses exist');
+  assert.equal(byName('In design').board_column, 'design');
+  assert.equal(byName('In testing').board_column, 'testing');
+  assert.equal(byName('Done').board_column, 'closed');
+  const p = (await admin.post('/projects', { name: 'Board Test', identifier: 'BRD' })).data;
+  await admin.post(`/projects/${p.id}/members`, { user_id: ids.dev, role_id: ids.devRole });
+  const mk = (b) => admin.post('/work-packages', { project_id: p.id, ...b }).then(r => r.data);
+  const inWeek = await mk({ subject: 'In week', start_date: '2026-09-07', due_date: '2026-09-09', assignee_id: ids.dev, status_id: byName('In design').id });
+  const nextWeek = await mk({ subject: 'Next week', start_date: '2026-09-15', due_date: '2026-09-16' });
+  const spanning = await mk({ subject: 'Spans the week', start_date: '2026-08-01', due_date: '2026-10-30' });
+  const undated = await mk({ subject: 'No dates' });
+  const q = `/board?from=2026-09-07&to=2026-09-11&project_id=${p.id}`;
+  let r = await admin.get(q);
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.deepEqual(r.data.columns.map(c => c.name), ['New', 'In Design', 'In Develop', 'In Testing', 'Closed']);
+  const ids2 = r.data.rows.map(x => x.id);
+  assert.ok(ids2.includes(inWeek.id) && ids2.includes(spanning.id) && ids2.includes(undated.id));
+  assert.ok(!ids2.includes(nextWeek.id));
+  assert.equal(r.data.rows.find(x => x.id === inWeek.id).board_column, 'design');
+  r = await admin.get(q + '&undated=0');
+  assert.ok(!r.data.rows.some(x => x.id === undated.id));
+  r = await admin.get(q + `&assignee_id=${ids.dev}`);
+  assert.deepEqual(r.data.rows.map(x => x.id), [inWeek.id]);
+  r = await dev.get(q + '&assignee_id=me');
+  assert.equal(r.data.rows[0].can_edit, true);
+  assert.equal((await admin.get('/board?from=2026-10-23&to=2026-10-19')).status, 400);
+  assert.equal((await admin.get('/board')).status, 400);
+});

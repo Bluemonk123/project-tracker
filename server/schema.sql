@@ -116,6 +116,7 @@ CREATE TABLE IF NOT EXISTS statuses (
   is_closed  INTEGER NOT NULL DEFAULT 0,
   is_default INTEGER NOT NULL DEFAULT 0,
   done_ratio INTEGER,
+  board_column TEXT,          -- new | design | develop | testing | closed (Kanban board column)
   position   INTEGER NOT NULL DEFAULT 0
 );
 

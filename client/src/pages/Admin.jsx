@@ -6,6 +6,8 @@ import Icon from '../components/Icon.jsx';
 import { Loading, ErrorBox, Empty, Modal, Field, Person, useAsync, confirmDialog, MoreMenu, ColorPicker, Pill } from '../components/ui.jsx';
 import { timeAgo, fmtSize, fmtDateTime } from '../lib/format.js';
 
+const BOARD_COLUMN_NAMES = { new: 'New', design: 'In Design', develop: 'In Develop', testing: 'In Testing', closed: 'Closed' };
+
 // ---------------- users ----------------
 function UserModal({ user, onClose, onSaved }) {
   const { meta, isAdmin } = useApp();
@@ -216,11 +218,11 @@ function EnumEditor({ table, title, help, extra }) {
 }
 
 function EnumModal({ table, row, onClose, onSaved }) {
-  const [f, setF] = useState({ name: row?.name || '', color: row?.color || '#5B6B85', is_closed: !!row?.is_closed, is_default: !!row?.is_default, is_milestone: !!row?.is_milestone, done_ratio: row?.done_ratio ?? '' });
+  const [f, setF] = useState({ name: row?.name || '', color: row?.color || '#5B6B85', is_closed: !!row?.is_closed, is_default: !!row?.is_default, is_milestone: !!row?.is_milestone, done_ratio: row?.done_ratio ?? '', board_column: row?.board_column || '' });
   const [busy, run] = useAsync();
   const save = async () => {
     const body = { name: f.name, color: f.color };
-    if (table === 'statuses') Object.assign(body, { is_closed: f.is_closed, is_default: f.is_default, done_ratio: f.done_ratio === '' ? null : Number(f.done_ratio) });
+    if (table === 'statuses') Object.assign(body, { is_closed: f.is_closed, is_default: f.is_default, done_ratio: f.done_ratio === '' ? null : Number(f.done_ratio), board_column: f.board_column || undefined });
     if (table === 'priorities') body.is_default = f.is_default;
     if (table === 'types') body.is_milestone = f.is_milestone;
     const r = await run(() => (row ? api.patch(`/admin/${table}/${row.id}`, body) : api.post(`/admin/${table}`, body)), 'Saved');
@@ -233,6 +235,11 @@ function EnumModal({ table, row, onClose, onSaved }) {
       {table === 'statuses' && <>
         <label className="check"><input type="checkbox" checked={f.is_closed} onChange={(e) => setF({ ...f, is_closed: e.target.checked })} />Counts as closed (finished or rejected)</label>
         <label className="check"><input type="checkbox" checked={f.is_default} onChange={(e) => setF({ ...f, is_default: e.target.checked })} />Default for new work packages</label>
+        <Field label="Kanban board column" hint="Which column of the Kanban board shows work in this status. Dragging a card into a column sets it to the first status of that column.">
+          <select value={f.board_column || (f.is_closed ? 'closed' : 'develop')} onChange={(e) => setF({ ...f, board_column: e.target.value })}>
+            {Object.entries(BOARD_COLUMN_NAMES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </Field>
         <Field label="Set % done to" hint="Optional. When a work package moves into this status its % done is set to this value."><input type="number" min="0" max="100" value={f.done_ratio} onChange={(e) => setF({ ...f, done_ratio: e.target.value })} /></Field>
       </>}
       {table === 'priorities' && <label className="check"><input type="checkbox" checked={f.is_default} onChange={(e) => setF({ ...f, is_default: e.target.checked })} />Default priority</label>}
@@ -313,7 +320,7 @@ export default function Admin() {
         <Route path="roles" element={<Roles />} />
         <Route path="work" element={<>
           <EnumEditor table="types" title="Work package types" help="What kinds of work you track." extra={(r) => (r.is_milestone ? 'Milestone' : '')} />
-          <EnumEditor table="statuses" title="Statuses" help="The steps work moves through. Order sets the board columns." extra={(r) => [r.is_closed ? 'Closed' : 'Open', r.is_default ? 'Default' : null, r.done_ratio != null ? `sets ${r.done_ratio}% done` : null].filter(Boolean).join(', ')} />
+          <EnumEditor table="statuses" title="Statuses" help="The steps work moves through, and the Kanban column each one appears in." extra={(r) => [BOARD_COLUMN_NAMES[r.board_column] ? `Board: ${BOARD_COLUMN_NAMES[r.board_column]}` : null, r.is_closed ? 'Closed' : 'Open', r.is_default ? 'Default' : null, r.done_ratio != null ? `sets ${r.done_ratio}% done` : null].filter(Boolean).join(', ')} />
           <EnumEditor table="priorities" title="Priorities" help="Lowest first." extra={(r) => (r.is_default ? 'Default' : '')} />
         </>} />
         <Route path="general" element={<General />} />

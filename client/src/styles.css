@@ -557,3 +557,41 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .kp-icon.danger { background: var(--danger-soft); color: var(--danger); }
 .kp-icon.muted { background: var(--sunken); color: var(--ink-3); border: 1px dashed var(--line); }
 .kp-code { font-size: var(--fs-sm); }
+
+/* ---------- Kanban board ---------- */
+.kb-head { display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px; }
+.kb-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; }
+.kb-range { display: flex; align-items: center; gap: 6px; padding-bottom: 1px; }
+.kb-range-label { font-weight: 620; min-width: 170px; text-align: center; font-variant-numeric: tabular-nums; }
+.kb-field { display: flex; flex-direction: column; gap: 3px; font-size: var(--fs-xs); color: var(--ink-3); }
+.kb-field input, .kb-field select { height: 32px; font-size: var(--fs-sm); width: auto; min-width: 150px; color: var(--ink); }
+.kb-undated { padding-bottom: 7px; }
+.kb-board { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 14px; align-items: flex-start; }
+.kb-col { flex: 1 1 0; min-width: 205px; max-width: 380px; display: flex; flex-direction: column; border-radius: 6px; transition: background 0.12s; }
+.kb-col.drop { background: color-mix(in srgb, var(--accent) 10%, transparent); outline: 2px dashed var(--accent); outline-offset: 4px; }
+.kb-col-bar { height: 5px; border-radius: 3px; }
+.kb-col-head { padding: 8px 2px 10px; }
+.kb-col-label { font-size: var(--fs-xs); color: var(--ink-3); }
+.kb-col-head h2 { font-size: 21px; font-weight: 560; line-height: 1.15; }
+.kb-count { font-size: var(--fs-sm); color: var(--ink-3); font-variant-numeric: tabular-nums; margin-left: 2px; }
+.kb-add { height: 40px; border: 1px solid var(--line); background: var(--surface); border-radius: 4px; cursor: pointer; display: grid; place-items: center; color: var(--ink-2); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); margin-bottom: 12px; }
+.kb-add:hover { border-color: var(--accent); color: var(--accent-text); }
+.kb-add svg { width: 18px; height: 18px; }
+.kb-cards { display: flex; flex-direction: column; gap: 12px; min-height: 80px; }
+.kb-card { background: var(--surface); border: 1px solid var(--line); border-top: 3px solid color-mix(in srgb, var(--tc) 30%, var(--line)); border-radius: 4px; padding: 10px 14px 12px; cursor: pointer; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
+.kb-card[draggable="true"] { cursor: grab; }
+.kb-card:hover { border-color: color-mix(in srgb, var(--ink-3) 55%, var(--line)); border-top-color: var(--tc); }
+.kb-card.dragging { opacity: 0.4; }
+.kb-meta { font-size: var(--fs-sm); color: var(--ink-3); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kb-title { font-size: 16px; line-height: 1.35; margin-top: 4px; color: var(--ink); overflow-wrap: anywhere; }
+.kb-type { font-weight: 650; letter-spacing: 0.01em; }
+.kb-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin-top: 10px; }
+.kb-foot .kb-dates { margin-left: auto; }
+.kb-dates { font-size: var(--fs-sm); color: var(--ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.kb-dates.overdue { color: var(--danger); font-weight: 600; }
+.kb-status { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: color-mix(in srgb, var(--c) 14%, transparent); color: color-mix(in srgb, var(--c) 80%, var(--ink)); white-space: nowrap; }
+.kb-empty { font-size: var(--fs-sm); color: var(--ink-3); text-align: center; padding: 18px 8px; border: 1px dashed var(--line); border-radius: 4px; }
+@media (max-width: 860px) {
+  .kb-col { flex-basis: 82vw; }
+  .kb-range-label { min-width: 0; }
+}

@@ -10,7 +10,7 @@ const BASE_SELECT = `
   SELECT wp.*, p.identifier AS project_identifier, p.name AS project_name, p.color AS project_color,
     p.identifier || '-' || wp.number AS key,
     t.name AS type_name, t.color AS type_color, t.is_milestone,
-    s.name AS status_name, s.color AS status_color, s.is_closed,
+    s.name AS status_name, s.color AS status_color, s.is_closed, s.board_column,
     pr.name AS priority_name, pr.color AS priority_color, pr.position AS priority_position,
     a.name AS assignee_name, rs.name AS responsible_name, au.name AS author_name,
     v.name AS version_name, c.name AS category_name,
@@ -146,6 +146,49 @@ r.get('/work-packages', (req, res) => {
     relations = all(`SELECT * FROM wp_relations WHERE from_id IN (${ph}) AND to_id IN (${ph})`, ...ids, ...ids);
   }
   res.json({ total, rows, relations });
+});
+
+// ---------- Kanban board (New / In Design / In Develop / In Testing / Closed) ----------
+export const BOARD_COLUMNS = [
+  { key: 'new', name: 'New', color: '#8FD9C4' },
+  { key: 'design', name: 'In Design', color: '#B79BDB' },
+  { key: 'develop', name: 'In Develop', color: '#5BC8DE' },
+  { key: 'testing', name: 'In Testing', color: '#F39219' },
+  { key: 'closed', name: 'Closed', color: '#C9CED6' },
+];
+
+r.get('/board', (req, res) => {
+  const q = req.query;
+  const DATE = /^\d{4}-\d{2}-\d{2}$/;
+  if (!DATE.test(q.from || '') || !DATE.test(q.to || '')) fail(400, 'Choose a date range.');
+  if (q.from > q.to) fail(400, 'The start of the range must be before its end.');
+  let projectIds;
+  if (q.project_id) {
+    const p = resolveProject(q.project_id);
+    need(req, 'wp.view', p.id);
+    projectIds = [p.id];
+  } else projectIds = visibleProjectIds(req, 'wp.view');
+  const statuses = all('SELECT id, name, color, board_column, is_closed, position FROM statuses ORDER BY position, id');
+  const columns = BOARD_COLUMNS.map(c => ({ ...c, statuses: statuses.filter(st => st.board_column === c.key) }));
+  if (!projectIds.length) return res.json({ columns, rows: [] });
+  const where = [`wp.project_id IN (${projectIds.map(() => '?').join(',')})`];
+  const params = [...projectIds];
+  // dated work overlapping the range; undated work that is still open, or was closed/changed in the range
+  where.push(`(
+    ((wp.start_date IS NOT NULL OR wp.due_date IS NOT NULL)
+       AND COALESCE(wp.start_date, wp.due_date) <= ? AND COALESCE(wp.due_date, wp.start_date) >= ?)
+    OR (wp.start_date IS NULL AND wp.due_date IS NULL
+       AND ((s.is_closed = 0 AND ? = 1) OR date(wp.updated_at) BETWEEN ? AND ?))
+  )`);
+  params.push(q.to, q.from, q.undated === '0' ? 0 : 1, q.from, q.to);
+  if (q.assignee_id === 'me') { where.push('wp.assignee_id = ?'); params.push(req.user.id); }
+  else if (q.assignee_id === 'none') where.push('wp.assignee_id IS NULL');
+  else if (/^\d+$/.test(q.assignee_id || '')) { where.push('wp.assignee_id = ?'); params.push(Number(q.assignee_id)); }
+  if (/^\d+$/.test(q.type_id || '')) { where.push('wp.type_id = ?'); params.push(Number(q.type_id)); }
+  const rows = all(`${BASE_SELECT} WHERE ${where.join(' AND ')}
+                    ORDER BY wp.due_date IS NULL, wp.due_date, pr.position DESC, wp.id LIMIT 2000`, ...params)
+    .map(w => ({ ...w, can_edit: canEditWp(req, w) }));
+  res.json({ columns, rows });
 });
 
 r.get('/work-packages/export.csv', (req, res) => {

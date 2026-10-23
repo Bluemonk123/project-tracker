@@ -15,7 +15,7 @@ import ProjectOverview from './pages/project/ProjectOverview.jsx';
 import WorkPackages from './pages/WorkPackages.jsx';
 import WpDetail from './pages/WpDetail.jsx';
 import Requirements from './pages/project/Requirements.jsx';
-import Board from './pages/project/Board.jsx';
+import KanbanBoard from './pages/KanbanBoard.jsx';
 import Gantt from './pages/project/Gantt.jsx';
 import Calendar from './pages/project/Calendar.jsx';
 import Roadmap from './pages/project/Roadmap.jsx';
@@ -61,7 +61,7 @@ function Root() {
           <Route index element={<ProjectOverview />} />
           <Route path="work-packages" element={<InProject Component={WorkPackages} />} />
           <Route path="requirements" element={<InProject Component={Requirements} />} />
-          <Route path="board" element={<InProject Component={Board} />} />
+          <Route path="board" element={<InProject Component={KanbanBoard} />} />
           <Route path="gantt" element={<InProject Component={Gantt} />} />
           <Route path="calendar" element={<InProject Component={Calendar} />} />
           <Route path="roadmap" element={<InProject Component={Roadmap} />} />
@@ -74,6 +74,7 @@ function Root() {
           <Route path="settings" element={<InProject Component={ProjectSettings} />} />
         </Route>
         <Route path="work-packages" element={<WorkPackages />} />
+        <Route path="board" element={<KanbanBoard />} />
         <Route path="wp/:id" element={<WpDetail />} />
         <Route path="meetings" element={<Meetings />} />
         <Route path="meetings/:id" element={<MeetingDetail />} />

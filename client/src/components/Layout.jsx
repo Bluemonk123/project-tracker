@@ -106,6 +106,7 @@ export default function Layout() {
           <NavLink to="/" end className="nav-link"><Icon name="home" />My page</NavLink>
           {showReports && <NavLink to="/overview" className="nav-link"><Icon name="chart" />Manager overview</NavLink>}
           <NavLink to="/work-packages" className="nav-link"><Icon name="list" />All work</NavLink>
+          <NavLink to="/board" className="nav-link"><Icon name="board" />Kanban board</NavLink>
           <NavLink to="/meetings" className="nav-link"><Icon name="chat" />Meetings</NavLink>
           <NavLink to="/time" className="nav-link"><Icon name="clock" />Time</NavLink>
           <NavLink to="/teams" className="nav-link"><Icon name="users" />Teams</NavLink>

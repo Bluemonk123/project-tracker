@@ -150,9 +150,10 @@ r.delete('/admin/roles/:id', (req, res) => {
 // ---------- types / statuses / priorities ----------
 const ENUMS = {
   types: ['name', 'color', 'is_milestone', 'position'],
-  statuses: ['name', 'color', 'is_closed', 'is_default', 'done_ratio', 'position'],
+  statuses: ['name', 'color', 'is_closed', 'is_default', 'done_ratio', 'board_column', 'position'],
   priorities: ['name', 'color', 'is_default', 'position'],
 };
+const BOARD_COLUMNS = ['new', 'design', 'develop', 'testing', 'closed'];
 const USAGE_COL = { types: 'type_id', statuses: 'status_id', priorities: 'priority_id' };
 
 for (const [table, cols] of Object.entries(ENUMS)) {
@@ -163,6 +164,10 @@ for (const [table, cols] of Object.entries(ENUMS)) {
     const pos = get(`SELECT COALESCE(MAX(position), 0) + 1 AS p FROM ${table}`).p;
     const vals = { name, color: req.body.color || '#5B6472', position: pos };
     for (const c of cols) if (!(c in vals) && req.body[c] !== undefined) vals[c] = typeof req.body[c] === 'boolean' ? (req.body[c] ? 1 : 0) : req.body[c];
+    if (table === 'statuses') {
+      if (vals.board_column && !BOARD_COLUMNS.includes(vals.board_column)) fail(400, 'Unknown board column.');
+      vals.board_column ||= vals.is_closed ? 'closed' : 'develop';
+    }
     const keys = Object.keys(vals);
     tx(() => {
       if (vals.is_default) run(`UPDATE ${table} SET is_default = 0`);
@@ -176,6 +181,7 @@ for (const [table, cols] of Object.entries(ENUMS)) {
     const fields = {};
     for (const c of cols) if (req.body[c] !== undefined) fields[c] = typeof req.body[c] === 'boolean' ? (req.body[c] ? 1 : 0) : req.body[c];
     if (fields.name !== undefined) fields.name = requireText(fields.name, 'Name');
+    if (fields.board_column !== undefined && !BOARD_COLUMNS.includes(fields.board_column)) fail(400, 'Unknown board column.');
     tx(() => {
       if (fields.is_default) run(`UPDATE ${table} SET is_default = 0`);
       const { sql, values } = updateSet(fields);

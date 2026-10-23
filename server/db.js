@@ -119,6 +119,34 @@ function migrate() {
       setSetting('migration_positions_v1', '1');
     });
   }
+
+  // Kanban board: every status belongs to one board column.
+  if (!all('PRAGMA table_info(statuses)').some(c => c.name === 'board_column')) {
+    db.exec('ALTER TABLE statuses ADD COLUMN board_column TEXT');
+  }
+  if (getSetting('migration_board_v1') === null) {
+    tx(() => {
+      const addBefore = (name, color, beforeName) => {
+        if (get('SELECT id FROM statuses WHERE name = ?', name)) return;
+        const ref = get('SELECT position FROM statuses WHERE name = ?', beforeName);
+        const pos = ref ? ref.position - 0.5 : get('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM statuses').p;
+        run('INSERT INTO statuses(name, color, is_closed, is_default, position) VALUES(?,?,0,0,?)', name, color, pos);
+      };
+      addBefore('In design', '#7A4FA3', 'In specification');
+      addBefore('In testing', '#2E8A9A', 'In review');
+      const map = {
+        new: ['New', 'To do'], design: ['In design', 'In specification'], develop: ['In progress', 'On hold'],
+        testing: ['In testing', 'In review', 'Tested'], closed: ['Done', 'Rejected'],
+      };
+      for (const [col, names] of Object.entries(map)) {
+        for (const n of names) run('UPDATE statuses SET board_column = ? WHERE name = ? AND board_column IS NULL', col, n);
+      }
+      // anything else: closed statuses go to Closed, open ones to In Develop
+      run("UPDATE statuses SET board_column = CASE WHEN is_closed = 1 THEN 'closed' ELSE 'develop' END WHERE board_column IS NULL");
+      all('SELECT id FROM statuses ORDER BY position, id').forEach((s, i) => run('UPDATE statuses SET position = ? WHERE id = ?', i, s.id));
+      setSetting('migration_board_v1', '1');
+    });
+  }
 }
 migrate();
 
