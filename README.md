@@ -26,9 +26,11 @@ It covers the same ground as OpenProject for day-to-day work:
 
 ## Install on the office laptop
 
-1. Install **Node.js LTS** from <https://nodejs.org> (accept the defaults).
+1. Get **Node.js 22.13 or newer**, either way:
+   - **With admin rights:** install the LTS version from <https://nodejs.org> (accept the defaults).
+   - **Without admin rights:** download the portable ZIP from <https://nodejs.org/dist/latest-v24.x/> (the file ending in `-win-x64.zip`) and, after step 2, unzip it **into the app folder** so you have e.g. `ProjectTracker\node-v24.22.1-win-x64\node.exe`. `start.bat` finds and uses it automatically. Nothing is installed on Windows.
 2. Get this project onto the laptop, either:
-   - on GitHub, click **Code → Download ZIP** and unzip it somewhere permanent, e.g. `C:\ProjectTracker`, **or**
+   - on GitHub, click **Code → Download ZIP** and unzip it somewhere permanent that you can write to, e.g. `C:\ProjectTracker` or `Documents\ProjectTracker`, **or**
    - with Git: `git clone https://github.com/Bluemonk123/project-tracker.git C:\ProjectTracker`
 3. Open the folder and double-click **`start.bat`** (on Mac/Linux run `./start.sh`).
    The first run installs components and builds the interface, which takes a minute or two and needs internet.
@@ -46,7 +48,7 @@ It covers the same ground as OpenProject for day-to-day work:
 
 - Give colleagues the **office network** address shown in the window (e.g. `http://192.168.1.25:4000`).
 - The first time, Windows may ask whether to allow Node.js through the firewall. Choose **Allow** for *Private networks*.
-- If colleagues cannot connect, check the laptop is on the same network, and that the firewall allows port 4000.
+- If colleagues cannot connect, check the laptop is on the same network, and that the firewall allows port 4000. Adding a firewall rule needs admin rights; without them, ask IT to allow inbound TCP port 4000 (or `node.exe`) on the private network.
 - Laptop IP addresses can change. Ask IT to give the laptop a fixed (reserved) IP address so the link keeps working.
 
 ### Adding people
