@@ -5,6 +5,7 @@ import { useApp, useLoad } from '../context.jsx';
 import Icon from '../components/Icon.jsx';
 import { Loading, ErrorBox, Empty, ProjectStatus, Progress, Person } from '../components/ui.jsx';
 import NewProjectModal from './NewProjectModal.jsx';
+import { KeyPeopleStrip, KeyPeopleLegend } from '../components/KeyPeople.jsx';
 import { fmtDate, fmtMeeting } from '../lib/format.js';
 
 export default function Projects() {
@@ -24,6 +25,7 @@ export default function Projects() {
       </div>
       <div className="filterbar">
         <input type="search" placeholder="Filter projects" value={q} onChange={(e) => setQ(e.target.value)} />
+        <span className="spacer" /><KeyPeopleLegend />
         <div className="subtabs">
           <button className={!archived ? 'active' : ''} onClick={() => setArchived(false)}>Active</button>
           <button className={archived ? 'active' : ''} onClick={() => setArchived(true)}>Archived</button>
@@ -41,7 +43,7 @@ export default function Projects() {
         <div className="panel table-wrap">
           <table className="table">
             <thead><tr>
-              <th>Project</th><th>Status</th><th className="hide-sm">Manager</th><th style={{ width: 150 }}>Progress</th>
+              <th>Project</th><th>Status</th><th>Key people</th><th className="hide-sm">Manager</th><th style={{ width: 150 }}>Progress</th>
               <th className="num">Open</th><th className="num">Overdue</th><th className="hide-sm">Dates</th><th className="hide-sm">Next meeting</th><th className="hide-sm">My role</th>
             </tr></thead>
             <tbody>
@@ -54,6 +56,7 @@ export default function Projects() {
                     {p.description && <div className="xs muted ellipsis" style={{ maxWidth: 340 }}>{p.description}</div>}
                   </td>
                   <td><ProjectStatus status={p.status} /></td>
+                  <td><KeyPeopleStrip positions={p.positions} /></td>
                   <td className="hide-sm"><Person id={p.manager_id} name={p.manager_name} /></td>
                   <td><Progress value={p.stats.progress} color={p.color} /></td>
                   <td className="num">{p.stats.open}</td>

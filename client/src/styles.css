@@ -540,3 +540,20 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
   .content { padding: 0; }
   .panel { border-color: #ccc; }
 }
+
+/* ---------- key people (PM / AM / BA / DT) ---------- */
+.kp-strip { display: inline-flex; gap: 4px; white-space: nowrap; }
+.kp-chip { display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 5px; font-size: 11px; line-height: 1.4; border: 1px solid transparent; }
+.kp-chip b { font-weight: 650; letter-spacing: 0.02em; }
+.kp-chip.ok { background: var(--ok-soft); color: var(--ok); }
+.kp-chip.danger { background: var(--danger-soft); color: var(--danger); }
+.kp-chip.muted { background: var(--sunken); color: var(--ink-3); border-style: dashed; border-color: var(--line); }
+.kp-chip.plain { background: none; border: 0; padding: 0; }
+.kp-n { font-weight: 650; }
+.kp-legend { display: inline-flex; gap: 12px; flex-wrap: wrap; }
+.kp-row { align-items: flex-start !important; }
+.kp-icon { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; flex: none; }
+.kp-icon.ok { background: var(--ok-soft); color: var(--ok); }
+.kp-icon.danger { background: var(--danger-soft); color: var(--danger); }
+.kp-icon.muted { background: var(--sunken); color: var(--ink-3); border: 1px dashed var(--line); }
+.kp-code { font-size: var(--fs-sm); }

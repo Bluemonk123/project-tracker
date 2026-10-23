@@ -7,6 +7,7 @@ import { get, all, run, tx, UPLOAD_DIR } from '../db.js';
 import { need, can, fail, visibleProjectIds } from '../access.js';
 import { requireText, intOrNull, notify, mentionedUserIds, todayISO } from '../util.js';
 import { resolveProject, projectStats } from './projects.js';
+import { positionsFor } from '../positions.js';
 
 const r = Router();
 
@@ -216,8 +217,9 @@ r.get('/reports/portfolio', (req, res) => {
   const hours = all(`SELECT project_id, ROUND(SUM(hours), 1) AS hours FROM time_entries WHERE project_id IN (${ph}) AND spent_on >= ? GROUP BY project_id`, ...ids, monthStart);
   const nextVersion = all(`SELECT v.project_id, v.name, v.due_date FROM versions v WHERE v.project_id IN (${ph}) AND v.status <> 'closed' AND v.due_date IS NOT NULL
                            AND v.due_date = (SELECT MIN(v2.due_date) FROM versions v2 WHERE v2.project_id = v.project_id AND v2.status <> 'closed' AND v2.due_date IS NOT NULL)`, ...ids);
+  const positions = positionsFor(ids);
   const rows = projects.map(p => ({
-    ...p, stats: stats.get(p.id),
+    ...p, stats: stats.get(p.id), positions: positions.get(p.id),
     hours_month: hours.find(h => h.project_id === p.id)?.hours || 0,
     next_version: nextVersion.find(v => v.project_id === p.id) || null,
   }));
@@ -225,7 +227,8 @@ r.get('/reports/portfolio', (req, res) => {
     projects: t.projects + 1, open: t.open + p.stats.open, overdue: t.overdue + p.stats.overdue,
     at_risk: t.at_risk + (p.status === 'at_risk' ? 1 : 0), off_track: t.off_track + (p.status === 'off_track' ? 1 : 0),
     hours_month: t.hours_month + p.hours_month,
-  }), { projects: 0, open: 0, overdue: 0, at_risk: 0, off_track: 0, hours_month: 0 });
+    team_gaps: t.team_gaps + (Object.values(p.positions).some(x => x.status !== 'active') ? 1 : 0),
+  }), { projects: 0, open: 0, overdue: 0, at_risk: 0, off_track: 0, hours_month: 0, team_gaps: 0 });
   res.json({ projects: rows, totals });
 });
 

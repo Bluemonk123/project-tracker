@@ -99,6 +99,29 @@ function seedDefaults() {
 }
 seedDefaults();
 
+// One-off upgrades for databases created by older versions.
+function migrate() {
+  if (getSetting('migration_positions_v1') === null) {
+    tx(() => {
+      for (const name of ['Account manager', 'Business analyst']) {
+        const r = DEFAULT_ROLES.find(x => x.name === name);
+        if (!get("SELECT id FROM roles WHERE name = ? AND scope = 'project'", name)) {
+          const pos = get('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM roles').p;
+          run('INSERT INTO roles(name, scope, description, permissions, builtin, position) VALUES(?,?,?,?,0,?)',
+            r.name, 'project', r.description, JSON.stringify(r.permissions), pos);
+        }
+      }
+      // Existing project managers become the active PM of their project.
+      for (const p of all(`SELECT p.id, p.manager_id, u.name FROM projects p JOIN users u ON u.id = p.manager_id
+                           WHERE NOT EXISTS (SELECT 1 FROM project_positions pp WHERE pp.project_id = p.id AND pp.position = 'PM')`)) {
+        run("INSERT INTO project_positions(project_id, position, user_id, user_name) VALUES(?, 'PM', ?, ?)", p.id, p.manager_id, p.name);
+      }
+      setSetting('migration_positions_v1', '1');
+    });
+  }
+}
+migrate();
+
 // Remove expired sessions on start
 run("DELETE FROM sessions WHERE expires_at < datetime('now')");
 

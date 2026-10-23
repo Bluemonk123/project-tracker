@@ -5,6 +5,7 @@ import { useApp, useLoad } from '../../context.jsx';
 import Icon from '../../components/Icon.jsx';
 import { Modal, Field, MultiUserPicker, Person, Empty, useAsync, confirmDialog } from '../../components/ui.jsx';
 import { timeAgo } from '../../lib/format.js';
+import { KeyPeoplePanel } from '../../components/KeyPeople.jsx';
 
 function AddMembers({ project, onClose, onSaved }) {
   const { meta, activeUsers } = useApp();
@@ -57,6 +58,7 @@ export default function Members({ project, reloadProject }) {
         <div className="grow"><h2>Members</h2><p>People working on {project.name} and what they are allowed to do.</p></div>
         {canManage && <div className="head-actions"><button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" />Add members</button></div>}
       </div>
+      <div style={{ marginBottom: 20 }}><KeyPeoplePanel key={JSON.stringify(project.positions)} project={project} onChanged={reloadProject} /></div>
       <div className="panel">
         {!members.length ? <Empty title="No members yet">Add people or a whole team so they can see and work on this project.</Empty> : (
           <div className="table-wrap">

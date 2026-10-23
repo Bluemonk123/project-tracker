@@ -6,6 +6,7 @@ import Icon from '../../components/Icon.jsx';
 import { Markdown, Avatar, Progress, Empty, Modal, Field, useAsync, MarkdownEditor, confirmDialog, ProjectStatus } from '../../components/ui.jsx';
 import { WorkloadTable } from '../Overview.jsx';
 import { ActivityItem } from '../MyPage.jsx';
+import { KeyPeoplePanel } from '../../components/KeyPeople.jsx';
 import { fmtDate, fmtMeeting, MEETING_KINDS, PROJECT_STATUS, timeAgo } from '../../lib/format.js';
 
 function StatusModal({ project, onClose, onSaved }) {
@@ -118,6 +119,7 @@ export default function ProjectOverview() {
         </div>
 
         <div className="stack" style={{ gap: 20 }}>
+          <KeyPeoplePanel key={JSON.stringify(project.positions)} project={project} onChanged={reloadProject} />
           <section className="panel">
             <div className="panel-head"><h3>Announcements</h3>
               <div className="actions">{has('news.manage') && <button className="btn sm" onClick={() => setModal('news')}><Icon name="megaphone" />Post</button>}</div>

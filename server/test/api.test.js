@@ -219,3 +219,45 @@ test('locking a user ends their session', async () => {
   assert.equal((await outsider.get('/auth/me')).status, 401);
   assert.equal((await admin.patch(`/admin/users/1`, { status: 'locked' })).status, 400);
 });
+
+test('key people: active, broken and unmapped links', async () => {
+  let r = await admin.post('/projects', { name: 'Billing', identifier: 'BILL', manager_id: 1 });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const pid = r.data.id;
+  let pos = (await admin.get(`/projects/${pid}`)).data.positions;
+  assert.equal(pos.PM.status, 'active');
+  assert.equal(pos.AM.status, 'unmapped');
+  assert.equal(pos.BA.status, 'unmapped');
+  assert.equal(pos.DT.status, 'unmapped');
+  // single positions refuse two people; DT accepts many
+  assert.equal((await admin.put(`/projects/${pid}/positions/AM`, { user_ids: [1, ids.dev] })).status, 400);
+  r = await admin.put(`/projects/${pid}/positions/DT`, { user_ids: [ids.dev, 1] });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.DT.active.length, 2);
+  // mapping makes the person a project member, so the developer can now see it
+  assert.ok((await dev.get('/projects')).data.some(p => p.id === pid));
+  // developers cannot change key people
+  assert.equal((await dev.put(`/projects/${pid}/positions/BA`, { user_ids: [ids.dev] })).status, 403);
+  // map then unmap the BA -> broken
+  await admin.put(`/projects/${pid}/positions/BA`, { user_ids: [ids.dev] });
+  r = await admin.put(`/projects/${pid}/positions/BA`, { user_ids: [] });
+  assert.equal(r.data.BA.status, 'broken');
+  assert.equal(r.data.BA.removed[0].name, 'Dev One');
+  // removing someone from the project breaks their links; DT stays active through the other person
+  const members = (await admin.get(`/projects/${pid}/members`)).data;
+  const devMember = members.find(m => m.user_id === ids.dev);
+  await admin.del(`/projects/${pid}/members/${devMember.id}`);
+  pos = (await admin.get(`/projects/${pid}`)).data.positions;
+  assert.equal(pos.DT.status, 'active');
+  assert.equal(pos.DT.active.length, 1);
+  assert.equal(pos.DT.removed[0].reason, 'Removed from project');
+  // PM follows the project manager field
+  await admin.patch(`/projects/${pid}`, { manager_id: '' });
+  pos = (await admin.get(`/projects/${pid}`)).data.positions;
+  assert.equal(pos.PM.status, 'broken');
+  // list and portfolio include positions
+  const list = (await admin.get('/projects')).data.find(p => p.id === pid);
+  assert.equal(list.positions.PM.status, 'broken');
+  const port = (await admin.get('/reports/portfolio')).data;
+  assert.ok(port.totals.team_gaps >= 1);
+});

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { get, all, run, tx } from '../db.js';
 import { need, can, fail, visibleProjectIds, projectPerms } from '../access.js';
 import { requireText, dateOrNull, updateSet, notify, todayISO } from '../util.js';
+import { positionsFor, setPosition, removeUserFromPositions, POSITIONS } from '../positions.js';
 
 const r = Router();
 
@@ -48,7 +49,8 @@ r.get('/projects', (req, res) => {
      WHERE p.id IN (${ids.map(() => '?').join(',')}) ${archived ? 'AND p.archived = 1' : 'AND p.archived = 0'}
      ORDER BY p.name`, req.user.id, ...ids);
   const stats = projectStats(rows.map(p => p.id));
-  res.json(rows.map(p => ({ ...p, stats: stats.get(p.id) })));
+  const positions = positionsFor(rows.map(p => p.id));
+  res.json(rows.map(p => ({ ...p, stats: stats.get(p.id), positions: positions.get(p.id) })));
 });
 
 function projectFields(b) {
@@ -83,6 +85,10 @@ r.post('/projects', (req, res) => {
       f.parent_id || null, f.manager_id || null, f.start_date || null, f.end_date || null, req.user.id);
     run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', id, req.user.id, pmRole.id);
     if (f.manager_id) run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', id, f.manager_id, pmRole.id);
+    if (f.manager_id) setPosition(id, 'PM', [f.manager_id], req.user.id);
+    if (b.am_id) setPosition(id, 'AM', [b.am_id], req.user.id);
+    if (b.ba_id) setPosition(id, 'BA', [b.ba_id], req.user.id);
+    if (Array.isArray(b.dt_ids) && b.dt_ids.length) setPosition(id, 'DT', b.dt_ids, req.user.id);
     return id;
   });
   res.status(201).json({ id, identifier });
@@ -106,6 +112,7 @@ r.get('/projects/:pid', (req, res) => {
     parent: p.parent_id ? get('SELECT id, name, identifier FROM projects WHERE id = ?', p.parent_id) : null,
     children: all('SELECT id, name, identifier, color, status FROM projects WHERE parent_id = ? AND archived = 0', p.id),
     permissions: perms,
+    positions: positionsFor([p.id]).get(p.id),
     stats: projectStats([p.id]).get(p.id),
     statusCounts, typeCounts,
     members: listMembers(p.id),
@@ -129,8 +136,10 @@ r.patch('/projects/:pid', (req, res) => {
     if (get('SELECT id FROM projects WHERE identifier = ? AND id <> ?', ident, p.id)) fail(400, 'Another project already uses this short key.');
     f.identifier = ident;
   }
+  const managerChanged = f.manager_id !== undefined && (Number(f.manager_id) || null) !== (p.manager_id || null);
   const { sql, values } = updateSet(f);
   if (sql) run(`UPDATE projects SET ${sql}, updated_at = datetime('now') WHERE id = ?`, ...values, p.id);
+  if (managerChanged) setPosition(p.id, 'PM', f.manager_id ? [Number(f.manager_id)] : [], req.user.id);
   if (f.status && f.status !== p.status) {
     const ids = all('SELECT user_id FROM project_members WHERE project_id = ?', p.id).map(x => x.user_id);
     notify(ids, { actorId: req.user.id, projectId: p.id, reason: 'project_status',
@@ -204,8 +213,29 @@ r.patch('/projects/:pid/members/:mid', (req, res) => {
 r.delete('/projects/:pid/members/:mid', (req, res) => {
   const p = resolveProject(req.params.pid);
   need(req, 'project.members', p.id);
+  const m = get('SELECT user_id FROM project_members WHERE id = ? AND project_id = ?', req.params.mid, p.id);
   run('DELETE FROM project_members WHERE id = ? AND project_id = ?', req.params.mid, p.id);
+  if (m) removeUserFromPositions(p.id, m.user_id, req.user.id);
   res.json({ ok: true });
+});
+
+// ---------- key people (PM / AM / BA / DT) ----------
+r.get('/projects/:pid/positions', (req, res) => {
+  const p = resolveProject(req.params.pid);
+  need(req, 'project.view', p.id);
+  res.json(positionsFor([p.id]).get(p.id));
+});
+
+r.put('/projects/:pid/positions/:code', (req, res) => {
+  const p = resolveProject(req.params.pid);
+  need(req, 'project.members', p.id);
+  const code = String(req.params.code).toUpperCase();
+  const def = POSITIONS.find(x => x.code === code) || fail(400, 'Unknown position. Use PM, AM, BA or DT.');
+  const ids = Array.isArray(req.body.user_ids) ? req.body.user_ids : req.body.user_id ? [req.body.user_id] : [];
+  const changes = setPosition(p.id, code, ids, req.user.id);
+  notify(changes.added, { actorId: req.user.id, projectId: p.id, reason: 'member_added', message: `${req.user.name} mapped you as ${def.label} of ${p.name}` });
+  notify(changes.removed, { actorId: req.user.id, projectId: p.id, reason: 'member_added', message: `${req.user.name} removed you as ${def.label} of ${p.name}` });
+  res.json(positionsFor([p.id]).get(p.id));
 });
 
 // ---------- versions (releases / sprints) ----------

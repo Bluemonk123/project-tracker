@@ -63,6 +63,18 @@ export const DEFAULT_ROLES = [
       'time.log', 'time.view_all', 'meetings.view', 'meetings.manage', 'wiki.view', 'wiki.edit', 'files.upload', 'news.manage'],
   },
   {
+    name: 'Account manager', scope: 'project', builtin: 0,
+    description: 'Owns the client relationship: follows progress, meetings and time.',
+    permissions: ['project.view', 'wp.view', 'wp.create', 'wp.comment', 'time.log', 'time.view_all',
+      'meetings.view', 'meetings.manage', 'wiki.view', 'files.upload', 'news.manage'],
+  },
+  {
+    name: 'Business analyst', scope: 'project', builtin: 0,
+    description: 'Writes and maintains requirements, specs and acceptance criteria.',
+    permissions: ['project.view', 'project.versions', 'wp.view', 'wp.create', 'wp.edit', 'wp.assign', 'wp.comment',
+      'time.log', 'meetings.view', 'meetings.manage', 'wiki.view', 'wiki.edit', 'files.upload'],
+  },
+  {
     name: 'Developer', scope: 'project', builtin: 0,
     description: 'Works on tasks and logs time.',
     permissions: ['project.view', 'wp.view', 'wp.create', 'wp.edit_own', 'wp.comment',

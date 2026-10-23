@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, qs } from '../api.js';
 import { useApp, useLoad } from '../context.jsx';
 import { Loading, ErrorBox, Empty, ProjectStatus, Progress, Person } from '../components/ui.jsx';
+import { KeyPeopleStrip, KeyPeopleLegend } from '../components/KeyPeople.jsx';
 import { fmtDate, fmtHours, fmtMeeting, timeAgo } from '../lib/format.js';
 
 export function WorkloadTable({ projectId, teamId }) {
@@ -60,18 +61,19 @@ export default function Overview() {
         <div className="figure"><div className="n">{t.projects}</div><div className="l">Active projects</div></div>
         <div className={`figure${t.at_risk ? ' signal' : ''}`}><div className="n">{t.at_risk}</div><div className="l">At risk</div></div>
         <div className={`figure${t.off_track ? ' danger' : ''}`}><div className="n">{t.off_track}</div><div className="l">Off track</div></div>
+        <div className={`figure${t.team_gaps ? ' danger' : ''}`}><div className="n">{t.team_gaps}</div><div className="l">Missing key people</div></div>
         <Link className="figure" to="/work-packages"><div className="n">{t.open}</div><div className="l">Open work packages</div></Link>
         <Link className={`figure${t.overdue ? ' danger' : ''}`} to="/work-packages?overdue=1"><div className="n">{t.overdue}</div><div className="l">Overdue</div></Link>
         <Link className="figure" to="/time"><div className="n">{fmtHours(t.hours_month)}</div><div className="l">Logged this month</div></Link>
       </div>
 
       <section className="panel" style={{ marginBottom: 20 }}>
-        <div className="panel-head"><h3>Projects</h3></div>
+        <div className="panel-head"><h3>Projects</h3><div className="actions"><KeyPeopleLegend /></div></div>
         {!data.projects.length ? <Empty small>No projects yet.</Empty> : (
           <div className="table-wrap">
             <table className="table">
               <thead><tr>
-                <th>Project</th><th>Status</th><th className="hide-sm">Manager</th><th style={{ width: 150 }}>Progress</th>
+                <th>Project</th><th>Status</th><th>Key people</th><th className="hide-sm">Manager</th><th style={{ width: 150 }}>Progress</th>
                 <th className="num">Open</th><th className="num">Overdue</th><th className="num hide-sm">People</th>
                 <th className="hide-sm">Next release</th><th className="hide-sm">Next meeting</th><th className="hide-sm">Last activity</th>
               </tr></thead>
@@ -85,6 +87,7 @@ export default function Overview() {
                       {p.status_explanation && <div className="xs muted ellipsis" style={{ maxWidth: 300 }} title={p.status_explanation}>{p.status_explanation}</div>}
                     </td>
                     <td><ProjectStatus status={p.status} /></td>
+                    <td><KeyPeopleStrip positions={p.positions} /></td>
                     <td className="hide-sm"><Person id={p.manager_id} name={p.manager_name} /></td>
                     <td><Progress value={p.stats.progress} color={p.color} /></td>
                     <td className="num"><Link to={`/projects/${p.identifier}/work-packages`}>{p.stats.open}</Link></td>

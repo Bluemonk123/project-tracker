@@ -1,6 +1,7 @@
 // Fills an empty database with sample people, projects, tasks and meetings so you can try the app.
 // Usage: npm run demo
 import { get, all, run, tx, hashPassword } from './db.js';
+import { setPosition } from './positions.js';
 
 if (get('SELECT COUNT(*) AS n FROM projects').n > 0) {
   console.log('The database already has projects, so demo data was not added.');
@@ -29,6 +30,7 @@ tx(() => {
     ['Meera Iyer', 'meera@office.local', 'Employee', 'QA engineer'],
     ['Karan Mehta', 'karan@office.local', 'Employee', 'Mobile developer'],
     ['Sneha Kapoor', 'sneha@office.local', 'Employee', 'Business analyst'],
+    ['Arjun Nair', 'arjun@office.local', 'Employee', 'Account manager'],
   ];
   const u = {};
   for (const [name, email, r, title] of people) {
@@ -62,6 +64,13 @@ tx(() => {
     run('INSERT INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', pid, adminId, role('Project manager', 'project'));
     run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', pid, u[p.manager], role('Project manager', 'project'));
     for (const [m, r] of p.members) run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', pid, u[m], role(r, 'project'));
+    // Key people: CRM fully mapped, HRMS has a broken AM link and no BA, SALES has a broken BA link
+    setPosition(pid, 'PM', [u[p.manager]], adminId);
+    setPosition(pid, 'AM', [u.Arjun], adminId);
+    if (p.key === 'HRMS') setPosition(pid, 'AM', [], adminId);
+    if (p.key !== 'HRMS') setPosition(pid, 'BA', [u.Sneha], adminId);
+    if (p.key === 'SALES') setPosition(pid, 'BA', [], adminId);
+    setPosition(pid, 'DT', p.members.filter(([m, r]) => m !== 'Sneha' && ['Developer', 'Team lead'].includes(r)).map(([m]) => u[m]), adminId);
     const v1 = run('INSERT INTO versions(project_id, name, status, start_date, due_date) VALUES(?,?,?,?,?)', pid, 'Sprint 7', 'open', day(-7), day(7)).id;
     const v2 = run('INSERT INTO versions(project_id, name, status, start_date, due_date) VALUES(?,?,?,?,?)', pid, 'Release 2.0', 'open', day(8), day(40)).id;
 

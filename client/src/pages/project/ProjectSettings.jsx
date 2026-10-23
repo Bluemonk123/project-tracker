@@ -39,7 +39,7 @@ export default function ProjectSettings({ project, reloadProject }) {
           <div className="panel-body form-grid">
             <Field label="Name"><input type="text" value={f.name} onChange={(e) => set('name', e.target.value)} required /></Field>
             <Field label="Short key" hint="Changing it renames every work package ID, e.g. CRM-12."><input type="text" value={f.identifier} maxLength={10} onChange={(e) => set('identifier', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} required /></Field>
-            <Field label="Project manager"><UserSelect value={f.manager_id} onChange={(v) => set('manager_id', v)} placeholder="Nobody" /></Field>
+            <Field label="Project Manager (PM)" hint="Also shown under Key people."><UserSelect value={f.manager_id} onChange={(v) => set('manager_id', v)} placeholder="Nobody" /></Field>
             <Field label="Part of">
               <select value={f.parent_id} onChange={(e) => set('parent_id', e.target.value)}>
                 <option value="">None</option>{projects.filter(p => p.id !== project.id).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}

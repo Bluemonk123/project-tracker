@@ -84,6 +84,23 @@ CREATE TABLE IF NOT EXISTS project_members (
   UNIQUE (project_id, user_id)
 );
 
+-- Key people of a project: PM (project manager), AM (account manager), BA (business analyst),
+-- DT (development team). Rows are never deleted, only marked removed, so the app can tell
+-- "never mapped" (question mark) apart from "was mapped, now removed" (broken link).
+CREATE TABLE IF NOT EXISTS project_positions (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  position    TEXT NOT NULL CHECK (position IN ('PM','AM','BA','DT')),
+  user_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  user_name   TEXT NOT NULL,
+  assigned_at TEXT NOT NULL DEFAULT (datetime('now')),
+  assigned_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  removed_at  TEXT,
+  removed_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  removed_reason TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_positions_project ON project_positions(project_id, position);
+
 CREATE TABLE IF NOT EXISTS types (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   name         TEXT NOT NULL UNIQUE,
