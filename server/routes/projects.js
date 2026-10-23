@@ -13,6 +13,19 @@ export function resolveProject(param) {
   return p || fail(404, 'Project not found.');
 }
 
+// Short key from the project name: initials of several words (Customer Portal -> CP),
+// or the start of a single word (Inventory -> INVENT). Adds a number if it is taken (CP2, CP3...).
+export function generateIdentifier(name) {
+  const words = String(name).toUpperCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
+  let base = words.length > 1 ? words.map(w => w[0]).join('') : (words[0] || '');
+  base = base.replace(/^[0-9]+/, '').slice(0, 6);
+  if (base.length < 2) base = words.join('').replace(/^[0-9]+/, '').slice(0, 6); // e.g. "3D Viewer" -> DVIEWE
+  if (base.length < 2) base = 'PRJ';
+  let key = base;
+  for (let n = 2; get('SELECT id FROM projects WHERE identifier = ?', key); n++) key = `${base.slice(0, 10 - String(n).length)}${n}`;
+  return key;
+}
+
 const STATUSES = ['not_set', 'on_track', 'at_risk', 'off_track', 'finished', 'discontinued'];
 
 export function projectStats(ids) {
@@ -72,7 +85,7 @@ function projectFields(b) {
 r.post('/projects', (req, res) => {
   need(req, 'projects.create');
   const b = req.body;
-  const identifier = requireText(b.identifier, 'Short key').toUpperCase();
+  const identifier = b.identifier ? String(b.identifier).trim().toUpperCase() : generateIdentifier(requireText(b.name, 'Project name'));
   if (!/^[A-Z][A-Z0-9]{1,9}$/.test(identifier)) fail(400, 'Short key must be 2–10 letters or digits and start with a letter, e.g. CRM.');
   if (get('SELECT id FROM projects WHERE identifier = ?', identifier)) fail(400, 'Another project already uses this short key.');
   const f = projectFields(b);

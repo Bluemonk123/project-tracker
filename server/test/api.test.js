@@ -261,3 +261,17 @@ test('key people: active, broken and unmapped links', async () => {
   const port = (await admin.get('/reports/portfolio')).data;
   assert.ok(port.totals.team_gaps >= 1);
 });
+
+test('short key is generated from the project name when not given', async () => {
+  let r = await admin.post('/projects', { name: 'Customer Portal' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.identifier, 'CP');
+  r = await admin.post('/projects', { name: 'Customer Portal' });
+  assert.equal(r.data.identifier, 'CP2');
+  r = await admin.post('/projects', { name: 'Inventory' });
+  assert.equal(r.data.identifier, 'INVENT');
+  r = await admin.post('/projects', { name: '3D Viewer' });
+  assert.match(r.data.identifier, /^[A-Z][A-Z0-9]{1,9}$/);
+  r = await admin.post('/projects', { name: 'X' });
+  assert.match(r.data.identifier, /^[A-Z][A-Z0-9]{1,9}$/);
+});

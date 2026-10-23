@@ -4,18 +4,10 @@ import { api } from '../api.js';
 import { useApp } from '../context.jsx';
 import { Modal, Field, ColorPicker, UserSelect, MultiUserPicker, useAsync, COLORS } from '../components/ui.jsx';
 
-const suggestKey = (name) => {
-  const words = name.toUpperCase().replace(/[^A-Z0-9 ]/g, '').split(/\s+/).filter(Boolean);
-  if (!words.length) return '';
-  const k = words.length > 1 ? words.map(w => w[0]).join('') : words[0];
-  return k.slice(0, 6).replace(/^[0-9]+/, '');
-};
-
 export default function NewProjectModal({ onClose }) {
   const { projects, reloadProjects, user } = useApp();
   const nav = useNavigate();
-  const [f, setF] = useState({ name: '', identifier: '', description: '', color: COLORS[projects.length % COLORS.length], manager_id: user.id, am_id: null, ba_id: null, dt_ids: [], start_date: '', end_date: '', parent_id: '' });
-  const [keyTouched, setKeyTouched] = useState(false);
+  const [f, setF] = useState({ name: '', description: '', color: COLORS[projects.length % COLORS.length], manager_id: user.id, am_id: null, ba_id: null, dt_ids: [], start_date: '', end_date: '', parent_id: '' });
   const [busy, run] = useAsync();
   const set = (k, v) => setF(s => ({ ...s, [k]: v }));
   const submit = async () => {
@@ -30,11 +22,7 @@ export default function NewProjectModal({ onClose }) {
       <div className="form-grid">
         <Field label="Project name" className="span-2">
           <input type="text" value={f.name} required placeholder="e.g. Customer Portal"
-            onChange={(e) => { set('name', e.target.value); if (!keyTouched) set('identifier', suggestKey(e.target.value)); }} />
-        </Field>
-        <Field label="Short key" hint="2–10 letters. Work items are numbered with it, like CRM-12.">
-          <input type="text" value={f.identifier} required maxLength={10} style={{ textTransform: 'uppercase' }}
-            onChange={(e) => { setKeyTouched(true); set('identifier', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '')); }} />
+            onChange={(e) => set('name', e.target.value)} />
         </Field>
         <Field label="Project Manager (PM)"><UserSelect value={f.manager_id} onChange={(v) => set('manager_id', v)} placeholder="Not mapped yet" /></Field>
         <Field label="Account Manager (AM)"><UserSelect value={f.am_id} onChange={(v) => set('am_id', v)} placeholder="Not mapped yet" /></Field>
