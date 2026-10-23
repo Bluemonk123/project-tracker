@@ -42,16 +42,20 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if not exist node_modules (
-  echo Installing components for the first time. This takes a minute...
+node scripts\check.js need-install
+if errorlevel 1 (
+  echo Installing components. This takes a minute the first time...
   call npm install --no-audit --no-fund
   if errorlevel 1 ( echo npm install failed. Check the internet connection and try again. & pause & exit /b 1 )
+  node scripts\check.js stamp-install
 )
 
-if not exist client\dist\index.html (
+node scripts\check.js need-build
+if errorlevel 1 (
   echo Building the web interface...
   call npm run build
   if errorlevel 1 ( echo Build failed. & pause & exit /b 1 )
+  node scripts\check.js stamp-build
 )
 
 call npm start

@@ -89,7 +89,16 @@ Everything lives in the **`data`** folder next to `start.bat`:
 
 ## Updating
 
-If you installed with Git, double-click **`update.bat`** (or run `git pull && npm install && npm run build`), then restart. If you used the ZIP, download the new ZIP, unzip it into a new folder, copy your `data` folder across, and run `start.bat`. The database is upgraded automatically; your data is never overwritten by an update.
+**Windows:** close the Project Tracker window and double-click **`update.bat`**. It:
+
+1. downloads the latest version from GitHub (no Git or admin rights needed),
+2. saves a copy of your database to `data\backups\before-update`,
+3. replaces the program files while leaving `data`, `node_modules` and a portable `node-v…` folder alone,
+4. starts the app, which reinstalls and rebuilds itself if anything changed.
+
+**Mac / Linux:** `git pull` (or download the new ZIP and copy your `data` folder across), then `./start.sh`.
+
+`start.bat` / `start.sh` always check whether the code changed since the last build and rebuild only when needed, so you never have to delete anything by hand. Your data is never overwritten by an update; the database is upgraded automatically on start.
 
 ## Start automatically when the laptop starts (Windows)
 

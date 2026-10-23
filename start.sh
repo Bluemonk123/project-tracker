@@ -12,12 +12,14 @@ node -e "const [a,b]=process.versions.node.split('.').map(Number);process.exit(a
   exit 1
 }
 
-if [ ! -d node_modules ]; then
-  echo "Installing components for the first time. This takes a minute..."
+if ! node scripts/check.js need-install; then
+  echo "Installing components. This takes a minute the first time..."
   npm install --no-audit --no-fund
+  node scripts/check.js stamp-install
 fi
-if [ ! -f client/dist/index.html ]; then
+if ! node scripts/check.js need-build; then
   echo "Building the web interface..."
   npm run build
+  node scripts/check.js stamp-build
 fi
 exec npm start
