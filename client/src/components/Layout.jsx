@@ -91,6 +91,12 @@ function ThemeToggle() {
 export default function Layout() {
   const { user, me, projects, can, isAdmin, appName, reload } = useApp();
   const [navOpen, setNavOpen] = useState(false);
+  // Desktop: collapse the sidebar to an icon rail (remembered per browser). Phone: slide-in menu.
+  const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem('pt-sidebar') === 'collapsed'; } catch { return false; } });
+  useEffect(() => { try { localStorage.setItem('pt-sidebar', collapsed ? 'collapsed' : 'expanded'); } catch { /* ignore */ } }, [collapsed]);
+  const isPhone = () => window.matchMedia('(max-width: 860px)').matches;
+  const toggleMenu = () => (isPhone() ? setNavOpen(o => !o) : setCollapsed(c => !c));
+  const menuOpen = typeof window !== 'undefined' && isPhone() ? navOpen : !collapsed;
   const [newProject, setNewProject] = useState(false);
   const loc = useLocation();
   const nav = useNavigate();
@@ -99,18 +105,18 @@ export default function Layout() {
   const showReports = can('reports.view');
 
   return (
-    <div className="shell">
+    <div className={`shell${collapsed ? ' collapsed' : ''}`}>
       <aside className={`sidebar${navOpen ? ' open' : ''}`} aria-label="Main navigation">
-        <Link to="/" className="brand" style={{ textDecoration: 'none' }}><BrandMark />{appName}</Link>
+        <Link to="/" className="brand" style={{ textDecoration: 'none' }} title={appName}><BrandMark /><span className="nav-text">{appName}</span></Link>
         <nav className="nav-group">
-          <NavLink to="/" end className="nav-link"><Icon name="home" />My page</NavLink>
-          {showReports && <NavLink to="/overview" className="nav-link"><Icon name="chart" />Manager overview</NavLink>}
-          <NavLink to="/work-packages" className="nav-link"><Icon name="list" />All work</NavLink>
-          <NavLink to="/board" className="nav-link"><Icon name="board" />Kanban board</NavLink>
-          <NavLink to="/meetings" className="nav-link"><Icon name="chat" />Meetings</NavLink>
-          <NavLink to="/time" className="nav-link"><Icon name="clock" />Time</NavLink>
-          <NavLink to="/teams" className="nav-link"><Icon name="users" />Teams</NavLink>
-          <NavLink to="/notifications" className="nav-link"><Icon name="bell" />Notifications{me?.unread > 0 && <span className="count">{me.unread}</span>}</NavLink>
+          <NavLink to="/" end className="nav-link" title="My page"><Icon name="home" /><span className="nav-text">My page</span></NavLink>
+          {showReports && <NavLink to="/overview" className="nav-link" title="Manager overview"><Icon name="chart" /><span className="nav-text">Manager overview</span></NavLink>}
+          <NavLink to="/work-packages" className="nav-link" title="All work"><Icon name="list" /><span className="nav-text">All work</span></NavLink>
+          <NavLink to="/board" className="nav-link" title="Kanban board"><Icon name="board" /><span className="nav-text">Kanban board</span></NavLink>
+          <NavLink to="/meetings" className="nav-link" title="Meetings"><Icon name="chat" /><span className="nav-text">Meetings</span></NavLink>
+          <NavLink to="/time" className="nav-link" title="Time"><Icon name="clock" /><span className="nav-text">Time</span></NavLink>
+          <NavLink to="/teams" className="nav-link" title="Teams"><Icon name="users" /><span className="nav-text">Teams</span></NavLink>
+          <NavLink to="/notifications" className="nav-link" title="Notifications"><Icon name="bell" /><span className="nav-text">Notifications</span>{me?.unread > 0 && <span className="count">{me.unread}</span>}</NavLink>
         </nav>
         <nav className="nav-group" aria-label="Projects">
           <div className="nav-heading">
@@ -118,24 +124,25 @@ export default function Layout() {
             {can('projects.create') && <button type="button" onClick={() => setNewProject(true)} aria-label="New project" title="New project"><Icon name="plus" size={14} /></button>}
           </div>
           {projects.map(p => (
-            <NavLink key={p.id} to={`/projects/${p.identifier}`} className="nav-link nav-project">
+            <NavLink key={p.id} to={`/projects/${p.identifier}`} className="nav-link nav-project" title={p.name}>
               <span className="stripe" style={{ background: p.color }} />
-              <span className="ellipsis">{p.name}</span>
+              <span className="ellipsis nav-text">{p.name}</span>
               <span className="pkey">{p.identifier}</span>
             </NavLink>
           ))}
-          <NavLink to="/projects" end className="nav-link quiet"><Icon name="folder" />All projects</NavLink>
+          <NavLink to="/projects" end className="nav-link quiet" title="All projects"><Icon name="folder" /><span className="nav-text">All projects</span></NavLink>
         </nav>
         <div className="sidebar-foot">
           {isAdmin || can('admin.users') || can('admin.roles') || can('admin.settings') ? (
-            <NavLink to="/admin" className="nav-link"><Icon name="settings" />Administration</NavLink>
+            <NavLink to="/admin" className="nav-link" title="Administration"><Icon name="settings" /><span className="nav-text">Administration</span></NavLink>
           ) : null}
         </div>
       </aside>
       {navOpen && <div className="modal-backdrop" style={{ zIndex: 80, background: 'rgba(0,0,0,.3)' }} onClick={() => setNavOpen(false)} />}
       <div className="main">
         <header className="topbar">
-          <button type="button" className="icon-btn menu-btn" onClick={() => setNavOpen(true)} aria-label="Open menu"><Icon name="menu" /></button>
+          <button type="button" className="icon-btn menu-btn" onClick={toggleMenu} aria-expanded={menuOpen}
+            aria-label={menuOpen ? 'Collapse menu' : 'Expand menu'} title={menuOpen ? 'Collapse menu' : 'Expand menu'}><Icon name="menu" /></button>
           <GlobalSearch />
           <div className="topbar-actions">
             <Link to="/notifications" className="icon-btn" aria-label={`Notifications${me?.unread ? `, ${me.unread} unread` : ''}`}>
