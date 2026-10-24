@@ -235,7 +235,7 @@ function EnumModal({ table, row, onClose, onSaved }) {
       {table === 'statuses' && <>
         <label className="check"><input type="checkbox" checked={f.is_closed} onChange={(e) => setF({ ...f, is_closed: e.target.checked })} />Counts as closed (finished or rejected)</label>
         <label className="check"><input type="checkbox" checked={f.is_default} onChange={(e) => setF({ ...f, is_default: e.target.checked })} />Default for new work packages</label>
-        <Field label="Kanban board column" hint="Which column of the Kanban board shows work in this status. Dragging a card into a column sets it to the first status of that column.">
+        <Field label="Project Board column" hint="Which column of the Project Board shows work in this status. Dragging a card into a column sets it to the first status of that column.">
           <select value={f.board_column || (f.is_closed ? 'closed' : 'develop')} onChange={(e) => setF({ ...f, board_column: e.target.value })}>
             {Object.entries(BOARD_COLUMN_NAMES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>

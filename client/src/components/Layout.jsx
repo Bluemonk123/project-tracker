@@ -111,12 +111,12 @@ export default function Layout() {
         <nav className="nav-group">
           <NavLink to="/" end className="nav-link" title="My page"><Icon name="home" /><span className="nav-text">My page</span></NavLink>
           {showReports && <NavLink to="/overview" className="nav-link" title="Manager overview"><Icon name="chart" /><span className="nav-text">Manager overview</span></NavLink>}
+          <NavLink to="/board" className="nav-link" title="Project Board"><Icon name="board" /><span className="nav-text">Project Board</span></NavLink>
           <NavLink to="/work-packages" className="nav-link" title="All work"><Icon name="list" /><span className="nav-text">All work</span></NavLink>
-          <NavLink to="/board" className="nav-link" title="Kanban board"><Icon name="board" /><span className="nav-text">Kanban board</span></NavLink>
           <NavLink to="/meetings" className="nav-link" title="Meetings"><Icon name="chat" /><span className="nav-text">Meetings</span></NavLink>
           <NavLink to="/time" className="nav-link" title="Time"><Icon name="clock" /><span className="nav-text">Time</span></NavLink>
           <NavLink to="/teams" className="nav-link" title="Teams"><Icon name="users" /><span className="nav-text">Teams</span></NavLink>
-          <NavLink to="/notifications" className="nav-link" title="Notifications"><Icon name="bell" /><span className="nav-text">Notifications</span>{me?.unread > 0 && <span className="count">{me.unread}</span>}</NavLink>
+          <NavLink to="/notifications" className="nav-link" title="Alerts"><Icon name="bell" /><span className="nav-text">Alerts</span>{me?.unread > 0 && <span className="count">{me.unread}</span>}</NavLink>
         </nav>
         <nav className="nav-group" aria-label="Projects">
           <div className="nav-heading">
@@ -145,7 +145,7 @@ export default function Layout() {
             aria-label={menuOpen ? 'Collapse menu' : 'Expand menu'} title={menuOpen ? 'Collapse menu' : 'Expand menu'}><Icon name="menu" /></button>
           <GlobalSearch />
           <div className="topbar-actions">
-            <Link to="/notifications" className="icon-btn" aria-label={`Notifications${me?.unread ? `, ${me.unread} unread` : ''}`}>
+            <Link to="/notifications" className="icon-btn" aria-label={`Alerts${me?.unread ? `, ${me.unread} unread` : ''}`}>
               <Icon name="bell" />{me?.unread > 0 && <span className="badge-dot">{me.unread > 99 ? '99+' : me.unread}</span>}
             </Link>
             <Popover trigger={({ toggle }) => (

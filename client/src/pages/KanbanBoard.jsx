@@ -101,7 +101,7 @@ export default function KanbanBoard({ project }) {
   return (
     <div className="content wide kb">
       <div className="kb-head">
-        {!project && <h1>Kanban board</h1>}
+        {!project && <h1>Project Board</h1>}
         <div className="kb-filters" role="group" aria-label="Board filters">
           <div className="kb-range">
             <button className="btn icon sm" onClick={() => shift(-1)} aria-label="Previous period"><Icon name="chevronLeft" /></button>

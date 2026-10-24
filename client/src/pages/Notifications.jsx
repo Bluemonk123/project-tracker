@@ -28,14 +28,14 @@ export default function Notifications() {
   return (
     <div className="content" style={{ maxWidth: 900 }}>
       <div className="page-head">
-        <div className="grow"><h1>Notifications</h1><p>Assignments, mentions, comments on things you watch, and meeting invitations.</p></div>
+        <div className="grow"><h1>Alerts</h1><p>Assignments, mentions, comments on things you watch, and meeting invitations.</p></div>
         <div className="head-actions">
           <div className="subtabs"><button className={unreadOnly ? 'active' : ''} onClick={() => setUnreadOnly(true)}>Unread</button><button className={!unreadOnly ? 'active' : ''} onClick={() => setUnreadOnly(false)}>All</button></div>
           <button className="btn" disabled={busy} onClick={markAll}>Mark all as read</button>
         </div>
       </div>
       <ErrorBox error={error} />
-      {loading && !data ? <Loading /> : !data.length ? <div className="panel"><Empty title={unreadOnly ? "You're all caught up" : 'No notifications yet'}>New assignments, mentions and meeting invitations appear here.</Empty></div> : (
+      {loading && !data ? <Loading /> : !data.length ? <div className="panel"><Empty title={unreadOnly ? "You're all caught up" : 'No alerts yet'}>New assignments, mentions and meeting invitations appear here.</Empty></div> : (
         <div className="panel">
           {data.map(n => (
             <div key={n.id} className={`notif${n.read_at ? '' : ' unread'}`} role="button" tabIndex={0} style={{ cursor: 'pointer' }}
