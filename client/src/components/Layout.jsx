@@ -5,6 +5,7 @@ import { Avatar, Popover } from './ui.jsx';
 import { useApp } from '../context.jsx';
 import { api, qs } from '../api.js';
 import NewProjectModal from '../pages/NewProjectModal.jsx';
+import ConnectionStatus from './ConnectionStatus.jsx';
 
 function BrandMark() {
   return <img className="brand-mark" src="/logo-tile.png" alt="" width="30" height="30" />;
@@ -144,6 +145,7 @@ export default function Layout() {
             aria-label={menuOpen ? 'Collapse menu' : 'Expand menu'} title={menuOpen ? 'Collapse menu' : 'Expand menu'}><Icon name="menu" /></button>
           <GlobalSearch />
           <div className="topbar-actions">
+            <ConnectionStatus />
             <Link to="/notifications" className="icon-btn" aria-label={`Alerts${me?.unread ? `, ${me.unread} unread` : ''}`}>
               <Icon name="bell" />{me?.unread > 0 && <span className="badge-dot">{me.unread > 99 ? '99+' : me.unread}</span>}
             </Link>

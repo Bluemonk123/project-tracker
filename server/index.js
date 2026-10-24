@@ -25,6 +25,8 @@ export function createApp() {
   app.use(loadUser);
 
   const api = express.Router();
+  // Lightweight check used by the Connected / Disconnected indicator in the top bar
+  api.get('/health', (_req, res) => { res.setHeader('Cache-Control', 'no-store'); res.json({ ok: true, time: new Date().toISOString() }); });
   api.use(authRoutes); // setup, login, logout, me (individual routes guard themselves)
   api.use(requireAuth);
   api.use(adminRoutes);

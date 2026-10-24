@@ -620,3 +620,20 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
   .shell.collapsed .nav-project .pkey { margin: 0; font-size: 10px; font-weight: 650; max-width: 34px; overflow: hidden; text-overflow: ellipsis; color: var(--on-spruce); }
   .shell.collapsed .nav-project:hover .pkey, .shell.collapsed .nav-project.active .pkey { color: var(--spruce); }
 }
+
+/* ---------- connection status (top bar) ----------
+   A tinted pill with strong green / red so the state is easy to spot on the white top bar. */
+.conn { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; padding: 5px 12px 5px 9px; border-radius: 999px; margin-right: 8px;
+  font-size: 12px; font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1; border: 1.5px solid transparent; }
+.conn.ok { color: #0E7A36; background: #E2F6E9; border-color: #9FDDB6; }
+.conn.down { color: #C4262E; background: #FDE6E6; border-color: #F3A9AC; animation: conn-pulse 1.6s ease-in-out infinite; }
+.conn.ok:hover { background: #D2F0DC; }
+.conn.down:hover { background: #FBD6D7; }
+@keyframes conn-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(196, 38, 46, 0.35); } 50% { box-shadow: 0 0 0 5px rgba(196, 38, 46, 0); } }
+:root[data-theme="dark"] .conn.ok { color: #5DD68C; background: #12301E; border-color: #23573A; }
+:root[data-theme="dark"] .conn.down { color: #FF7B7B; background: #3A1718; border-color: #6B2B2E; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .conn.ok { color: #5DD68C; background: #12301E; border-color: #23573A; }
+  :root:not([data-theme="light"]) .conn.down { color: #FF7B7B; background: #3A1718; border-color: #6B2B2E; }
+}
+@media (max-width: 860px) { .conn-text { display: none; } .conn { padding: 5px 7px; } }
