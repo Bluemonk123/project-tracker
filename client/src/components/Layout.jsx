@@ -116,7 +116,6 @@ export default function Layout() {
           <NavLink to="/meetings" className="nav-link" title="Meetings"><Icon name="chat" /><span className="nav-text">Meetings</span></NavLink>
           <NavLink to="/time" className="nav-link" title="Time"><Icon name="clock" /><span className="nav-text">Time</span></NavLink>
           <NavLink to="/teams" className="nav-link" title="Teams"><Icon name="users" /><span className="nav-text">Teams</span></NavLink>
-          <NavLink to="/notifications" className="nav-link" title="Alerts"><Icon name="bell" /><span className="nav-text">Alerts</span>{me?.unread > 0 && <span className="count">{me.unread}</span>}</NavLink>
         </nav>
         <nav className="nav-group" aria-label="Projects">
           <div className="nav-heading">
