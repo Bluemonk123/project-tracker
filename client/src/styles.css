@@ -16,11 +16,11 @@
   --ink-3: #767B82;
   --line: #D9DEE5;
   --line-2: #E8EBEF;
-  --spruce: #0B3A7A;          /* sidebar: Bluemonk navy */
-  --spruce-2: #134889;
-  --spruce-3: #1D5AA3;
-  --on-spruce: #E7EEF8;
-  --on-spruce-2: #A3B9D8;
+  --spruce: #0A1F44;          /* sidebar: deep navy */
+  --spruce-2: #14305E;
+  --spruce-3: #1E3E73;
+  --on-spruce: #E6ECF5;
+  --on-spruce-2: #9AAAC4;
   --accent: #F39219;          /* buttons, selected items: brand orange */
   --accent-ink: #0B3A7A;      /* navy text on orange keeps 4.7:1 contrast */
   --accent-text: #B25F00;     /* orange darkened for links and text on white */
@@ -55,7 +55,7 @@
   :root:not([data-theme="light"]) {
     --paper: #10151C; --surface: #171D26; --surface-2: #1B222C; --sunken: #131921;
     --ink: #E8ECF1; --ink-2: #B7BEC8; --ink-3: #8A929C; --line: #2B333F; --line-2: #232A35;
-    --spruce: #071F42; --spruce-2: #0D2D5C; --spruce-3: #163C75;
+    --spruce: #07152F; --spruce-2: #10264B; --spruce-3: #1A355F;
     --accent: #F5A33A; --accent-ink: #071F42; --accent-text: #F5A33A; --accent-soft: #3A2A12;
     --signal: #F5A53D; --signal-soft: #3A2A12; --danger: #EB6B61; --danger-soft: #3D2120;
     --ok: #62C847; --ok-soft: #1A3317; --focus: #F5A33A;
@@ -66,7 +66,7 @@
 :root[data-theme="dark"] {
   --paper: #10151C; --surface: #171D26; --surface-2: #1B222C; --sunken: #131921;
   --ink: #E8ECF1; --ink-2: #B7BEC8; --ink-3: #8A929C; --line: #2B333F; --line-2: #232A35;
-  --spruce: #071F42; --spruce-2: #0D2D5C; --spruce-3: #163C75;
+  --spruce: #07152F; --spruce-2: #10264B; --spruce-3: #1A355F;
   --accent: #F5A33A; --accent-ink: #071F42; --accent-text: #F5A33A; --accent-soft: #3A2A12;
   --signal: #F5A53D; --signal-soft: #3A2A12; --danger: #EB6B61; --danger-soft: #3D2120;
   --ok: #62C847; --ok-soft: #1A3317; --focus: #F5A33A;
