@@ -348,3 +348,27 @@ CREATE TABLE IF NOT EXISTS saved_queries (
   is_public  INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Technologies used by a project, with where to look up new versions online (information only)
+CREATE TABLE IF NOT EXISTS project_technologies (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id   INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name         TEXT NOT NULL,
+  category     TEXT NOT NULL DEFAULT 'Other',
+  version_used TEXT,
+  source       TEXT NOT NULL DEFAULT 'none',
+  package_id   TEXT,
+  eol_slug     TEXT,
+  notes        TEXT,
+  position     INTEGER NOT NULL DEFAULT 0,
+  created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_tech_project ON project_technologies(project_id);
+
+CREATE TABLE IF NOT EXISTS tech_lookup_cache (
+  key        TEXT PRIMARY KEY,
+  data       TEXT NOT NULL,
+  fetched_at TEXT NOT NULL
+);

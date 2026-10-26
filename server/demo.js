@@ -2,6 +2,7 @@
 // Usage: npm run demo
 import { get, all, run, tx, hashPassword } from './db.js';
 import { setPosition } from './positions.js';
+import { CATALOG } from './techinfo.js';
 
 if (get('SELECT COUNT(*) AS n FROM projects').n > 0) {
   console.log('The database already has projects, so demo data was not added.');
@@ -146,6 +147,16 @@ tx(() => {
         run('INSERT INTO meeting_agenda_items(meeting_id, title, duration, position) VALUES(?,?,?,?)', mid, t, 15, i));
     }
 
+    const stacks = {
+      CRM: [['React', '18.2.0'], ['TypeScript', '5.3.3'], ['Node.js', '20.11.0'], ['Express', '4.18.2'], ['PostgreSQL', '15.4'], ['Redis', '7.2']],
+      HRMS: [['Angular', '16.2.0'], ['.NET', '8.0'], ['Entity Framework Core', '8.0.1'], ['SQL Server', '16.0']],
+      SALES: [['Flutter', '3.24.0'], ['Firebase JS SDK', '10.7.1'], ['Android', '14'], ['iOS', '17']],
+    };
+    (stacks[p.key] || []).forEach(([name, v], i) => {
+      const c = CATALOG.find(x => x.name === name);
+      run(`INSERT INTO project_technologies(project_id, name, category, version_used, source, package_id, eol_slug, position, created_by)
+           VALUES(?,?,?,?,?,?,?,?,?)`, pid, c.name, c.category, v, c.source, c.package_id, c.eol_slug, i, u[p.manager]);
+    });
     run('INSERT INTO wiki_pages(project_id, title, content, updated_by) VALUES(?,?,?,?)', pid, 'Overview',
       `# ${p.name}\n\n${p.desc}\n\n## Environments\n| Name | Address |\n|---|---|\n| Test | http://test-${p.key.toLowerCase()}.office.local |\n| Live | http://${p.key.toLowerCase()}.office.local |\n\n## Contacts\n- Project manager: ${p.manager}\n`, u[p.manager]);
     run('INSERT INTO news(project_id, title, body, author_id) VALUES(?,?,?,?)', pid, 'Sprint 7 started', 'Focus this sprint: the dashboard. Please log time daily.', u[p.manager]);

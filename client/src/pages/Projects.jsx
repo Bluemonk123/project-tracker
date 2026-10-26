@@ -20,6 +20,7 @@ export default function Projects() {
       <div className="page-head">
         <div className="grow"><h1>Projects</h1><p>One project per application or product. Open one to see its work, plan and meetings.</p></div>
         <div className="head-actions">
+          <Link className="btn" to="/technologies"><Icon name="layers" />Technologies</Link>
           {can('projects.create') && <button className="btn primary" onClick={() => setCreating(true)}><Icon name="plus" />New project</button>}
         </div>
       </div>

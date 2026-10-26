@@ -12,6 +12,7 @@ import wpRoutes from './routes/workpackages.js';
 import timeRoutes from './routes/time.js';
 import meetingRoutes from './routes/meetings.js';
 import miscRoutes from './routes/misc.js';
+import techRoutes from './routes/tech.js';
 
 const PORT = Number(process.env.PORT || 4000);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -35,6 +36,7 @@ export function createApp() {
   api.use(timeRoutes);
   api.use(meetingRoutes);
   api.use(miscRoutes);
+  api.use(techRoutes);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found.')));
   app.use('/api', api);
 

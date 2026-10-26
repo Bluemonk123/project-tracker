@@ -21,6 +21,7 @@ export default function ProjectLayout() {
     ['meetings', 'Meetings', has('meetings.view')],
     ['time', 'Time', has('time.log') || has('time.view_all')],
     ['wiki', 'Wiki', has('wiki.view')],
+    ['technologies', 'Technologies', true],
     ['members', 'Members', true],
     ['activity', 'Activity', has('wp.view')],
     ['settings', 'Settings', has('project.edit') || has('project.versions') || has('project.archive')],

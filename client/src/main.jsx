@@ -23,6 +23,8 @@ import Meetings from './pages/Meetings.jsx';
 import MeetingDetail from './pages/MeetingDetail.jsx';
 import Time from './pages/Time.jsx';
 import Wiki from './pages/project/Wiki.jsx';
+import Technologies from './pages/project/Technologies.jsx';
+import TechOverview from './pages/TechOverview.jsx';
 import Members from './pages/project/Members.jsx';
 import ProjectSettings from './pages/project/ProjectSettings.jsx';
 import Activity from './pages/project/Activity.jsx';
@@ -69,12 +71,14 @@ function Root() {
           <Route path="time" element={<InProject Component={Time} />} />
           <Route path="wiki" element={<WikiRoute />} />
           <Route path="wiki/:pageId" element={<WikiRoute />} />
+          <Route path="technologies" element={<InProject Component={Technologies} />} />
           <Route path="members" element={<InProject Component={Members} />} />
           <Route path="activity" element={<InProject Component={Activity} />} />
           <Route path="settings" element={<InProject Component={ProjectSettings} />} />
         </Route>
         <Route path="work-packages" element={<WorkPackages />} />
         <Route path="board" element={<KanbanBoard />} />
+        <Route path="technologies" element={<TechOverview />} />
         <Route path="wp/:id" element={<WpDetail />} />
         <Route path="meetings" element={<Meetings />} />
         <Route path="meetings/:id" element={<MeetingDetail />} />

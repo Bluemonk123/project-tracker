@@ -335,3 +335,28 @@ test('task links, attachment limits and assigning a non-member', async () => {
   for (const n of ['a.png', 'b.JPG', 'c.pdf', 'd.zip', 'e.webp']) assert.equal(await up(n), 201, n);
   assert.equal(await up('f.png'), 400);
 });
+
+test('project technologies: add, edit, list, permissions', async () => {
+  const p = (await admin.post('/projects', { name: 'Tech Test', identifier: 'TECH' })).data;
+  const cat = (await admin.get('/tech/catalog')).data;
+  assert.ok(cat.catalog.some(c => c.name === 'React' && c.source === 'npm'));
+  let r = await admin.post(`/projects/${p.id}/technologies`, { name: 'Internal SDK', category: 'Backend', version_used: '2.1', source: 'none', notes: 'Our own library' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const id = r.data.id;
+  assert.equal((await admin.post(`/projects/${p.id}/technologies`, { name: 'internal sdk' })).status, 400, 'duplicates refused');
+  assert.equal((await admin.post(`/projects/${p.id}/technologies`, { name: 'X', source: 'bogus' })).status, 400);
+  r = await admin.patch(`/technologies/${id}`, { version_used: '2.2' });
+  assert.equal(r.status, 200);
+  r = await admin.get(`/projects/${p.id}/technologies`);
+  assert.equal(r.data.rows.length, 1);
+  assert.equal(r.data.rows[0].version_used, '2.2');
+  assert.equal(r.data.rows[0].assessment.status, 'unknown');
+  assert.equal(r.data.can_edit, true);
+  // a developer who is not a project editor cannot change the list
+  await admin.post(`/projects/${p.id}/members`, { user_id: ids.dev, role_id: ids.devRole });
+  assert.equal((await dev.post(`/projects/${p.id}/technologies`, { name: 'Y' })).status, 403);
+  assert.equal((await dev.get(`/projects/${p.id}/technologies`)).data.can_edit, false);
+  r = await admin.get('/technologies');
+  assert.ok(r.data.rows.some(t => t.name === 'Internal SDK' && t.project_identifier === 'TECH'));
+  assert.equal((await admin.del(`/technologies/${id}`)).status, 200);
+});
