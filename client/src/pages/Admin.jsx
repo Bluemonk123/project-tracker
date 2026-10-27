@@ -270,6 +270,65 @@ function General() {
   );
 }
 
+const HOURS = [1, 2, 4, 6, 12, 24];
+const KEEP = [7, 14, 30, 60, 90, 365];
+
+// Copies into a folder on this computer: a OneDrive / Google Drive / Dropbox folder syncs them to other computers.
+function BackupCopy() {
+  const { data, error, loading, reload } = useLoad(() => api.get('/admin/backup-copy'), []);
+  const [f, setF] = useState(null);
+  const [busy, run] = useAsync();
+  if (loading && !data) return <section className="panel" style={{ maxWidth: 820 }}><Loading /></section>;
+  const v = f || { dir: data?.dir || '', hours: data?.hours || 4, keep_days: data?.keep_days || 30 };
+  const set = (k, x) => setF({ ...v, [k]: x });
+  const changed = !!f && (f.dir !== (data?.dir || '') || f.hours !== data?.hours || f.keep_days !== data?.keep_days);
+  const last = data?.last;
+  const win = data?.platform === 'win32';
+  const save = async () => {
+    const r = await run(() => api.put('/admin/backup-copy', v));
+    if (r) { setF(null); reload(); }
+  };
+  return (
+    <section className="panel" style={{ maxWidth: 820 }}>
+      <div className="panel-head"><h3>Copy backups to a folder</h3>
+        <div className="actions">{data?.dir && <button className="btn sm" disabled={busy} onClick={async () => { await run(() => api.post('/admin/backup-copy/run')); reload(); }}><Icon name="database" />{busy ? 'Copying…' : 'Copy now'}</button>}</div>
+      </div>
+      <ErrorBox error={error} />
+      <div className="panel-body stack">
+        <p className="small soft" style={{ margin: 0 }}>Every few hours the app saves a copy of the database and the uploaded files into a folder you choose on this computer. A folder on a <b>second drive or a USB drive</b> is safest, because the copies survive if this computer's own disk fails.</p>
+        <div className="form-grid three">
+          <Field label="Folder on this computer" className="span-2" hint={win ? 'Full path, e.g. D:\\Project Tracker Backups. The folder is created if needed.' : 'Full path, e.g. /Volumes/USB/Project Tracker Backups. The folder is created if needed.'}>
+            <input type="text" list="pt-copy-dirs" value={v.dir} placeholder="Full path of the folder; leave empty to turn off" onChange={(e) => set('dir', e.target.value)} />
+            <datalist id="pt-copy-dirs">{(data?.suggestions || []).map(d => <option key={d} value={d} />)}</datalist>
+          </Field>
+          <span />
+          <Field label="Copy every">
+            <select value={v.hours} onChange={(e) => set('hours', Number(e.target.value))}>{HOURS.map(h => <option key={h} value={h}>{h === 24 ? 'day' : `${h} hour${h > 1 ? 's' : ''}`}</option>)}</select>
+          </Field>
+          <Field label="Keep copies for">
+            <select value={v.keep_days} onChange={(e) => set('keep_days', Number(e.target.value))}>{KEEP.map(d => <option key={d} value={d}>{d === 365 ? '1 year' : `${d} days`}</option>)}</select>
+          </Field>
+          <Field label="&nbsp;"><button type="button" className="btn primary" disabled={busy || !changed} onClick={save}>{v.dir ? 'Save and copy now' : 'Save'}</button></Field>
+        </div>
+        {data?.suggestions?.length > 0 && !v.dir && (
+          <div className="row wrap small">Suggestions:
+            {data.suggestions.map(d => <button key={d} type="button" className="btn sm ghost" onClick={() => set('dir', d)}>{d}</button>)}
+          </div>
+        )}
+        {data?.dir && (
+          <div className="small">
+            <b>Last copy: </b>
+            {!last ? <span className="muted">not yet</span>
+              : last.ok ? <>{timeAgo(last.at.replace('T', ' ').slice(0, 19))}, {last.file} ({fmtSize(last.size)}){last.uploads_copied ? `, ${last.uploads_copied} new uploaded file${last.uploads_copied > 1 ? 's' : ''}` : ''}</>
+              : <span className="text-danger">failed {timeAgo(last.at.replace('T', ' ').slice(0, 19))}: {last.error}</span>}
+            <div className="xs muted" style={{ marginTop: 4 }}>Copies are made while the app is running. The folder also holds a “HOW TO RESTORE” note.</div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function Backups() {
   const { data, error, loading, reload } = useLoad(() => api.get('/admin/backups'), []);
   const [busy, run] = useAsync();
@@ -324,7 +383,7 @@ export default function Admin() {
           <EnumEditor table="priorities" title="Priorities" help="Lowest first." extra={(r) => (r.is_default ? 'Default' : '')} />
         </>} />
         <Route path="general" element={<General />} />
-        <Route path="backups" element={<Backups />} />
+        <Route path="backups" element={<div className="stack"><Backups /><BackupCopy /></div>} />
       </Routes>
     </div>
   );

@@ -401,3 +401,19 @@ test('stages: designer, developer and tester get the task as it moves', async ()
   r = await admin.get(`/work-packages?project_id=${p.id}&tester_id=${t.id}`);
   assert.deepEqual(r.data.rows.map(x => x.id), [wp.id]);
 });
+
+test('backup copies to a folder', async () => {
+  const dir = path.join(tmp, 'cloud', 'Project Tracker Backups');
+  fs.mkdirSync(path.dirname(dir), { recursive: true });
+  assert.equal((await dev.put('/admin/backup-copy', { dir })).status, 403);
+  assert.equal((await admin.put('/admin/backup-copy', { dir: 'not/absolute' })).status, 400);
+  let r = await admin.put('/admin/backup-copy', { dir, hours: 4, keep_days: 30 });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.last.ok, true, JSON.stringify(r.data.last));
+  const copies = fs.readdirSync(path.join(dir, 'database'));
+  assert.equal(copies.length, 1);
+  const zlib = await import('node:zlib');
+  const head = zlib.gunzipSync(fs.readFileSync(path.join(dir, 'database', copies[0]))).subarray(0, 15).toString();
+  assert.equal(head, 'SQLite format 3');
+  assert.ok(fs.existsSync(path.join(dir, 'HOW TO RESTORE.txt')));
+});
