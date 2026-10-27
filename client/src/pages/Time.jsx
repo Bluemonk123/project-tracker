@@ -7,6 +7,13 @@ import { Modal, Field, Loading, ErrorBox, Empty, Person, Key, useAsync, confirmD
 import { WpSearchSelect } from './NewWpModal.jsx';
 import { today, addDays, startOfWeek, fmtDay, fmtDate, fmtHours, DAY_NAMES, parseDate } from '../lib/format.js';
 
+// Time logged on a task defaults to its current stage: Design, Development or Testing.
+const STAGE_ACTIVITY = { design: 'Design', develop: 'Development', testing: 'Testing' };
+function stageActivity(wp, activities) {
+  const a = STAGE_ACTIVITY[wp?.board_column];
+  return a && activities.includes(a) ? a : null;
+}
+
 export function LogTimeModal({ wp, entry, projectId, onClose, onSaved, date }) {
   const { meta, projects } = useApp();
   const [f, setF] = useState({
@@ -14,7 +21,7 @@ export function LogTimeModal({ wp, entry, projectId, onClose, onSaved, date }) {
     wp_id: entry?.wp_id || wp?.id || null,
     spent_on: entry?.spent_on || date || today(),
     hours: entry?.hours ?? '',
-    activity: entry?.activity || meta.activities[0],
+    activity: entry?.activity || stageActivity(wp, meta.activities) || meta.activities[0],
     comment: entry?.comment || '',
   });
   const [busy, run] = useAsync();

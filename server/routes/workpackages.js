@@ -13,6 +13,7 @@ const BASE_SELECT = `
     s.name AS status_name, s.color AS status_color, s.is_closed, s.board_column,
     pr.name AS priority_name, pr.color AS priority_color, pr.position AS priority_position,
     a.name AS assignee_name, rs.name AS responsible_name, au.name AS author_name,
+    dz.name AS designer_name, dv.name AS developer_name, ts.name AS tester_name,
     v.name AS version_name, c.name AS category_name,
     par.subject AS parent_subject, p.identifier || '-' || par.number AS parent_key,
     (SELECT COUNT(*) FROM work_packages ch WHERE ch.parent_id = wp.id) AS children_count,
@@ -25,6 +26,9 @@ const BASE_SELECT = `
   LEFT JOIN users a ON a.id = wp.assignee_id
   LEFT JOIN users rs ON rs.id = wp.responsible_id
   LEFT JOIN users au ON au.id = wp.author_id
+  LEFT JOIN users dz ON dz.id = wp.designer_id
+  LEFT JOIN users dv ON dv.id = wp.developer_id
+  LEFT JOIN users ts ON ts.id = wp.tester_id
   LEFT JOIN versions v ON v.id = wp.version_id
   LEFT JOIN categories c ON c.id = wp.category_id
   LEFT JOIN work_packages par ON par.id = wp.parent_id`;
@@ -84,14 +88,17 @@ export function buildFilter(req, q) {
   inFilter('wp.assignee_id', q.assignee_id);
   inFilter('wp.responsible_id', q.responsible_id);
   inFilter('wp.author_id', q.author_id);
+  inFilter('wp.designer_id', q.designer_id);
+  inFilter('wp.developer_id', q.developer_id);
+  inFilter('wp.tester_id', q.tester_id);
   inFilter('wp.version_id', q.version_id);
   inFilter('wp.category_id', q.category_id);
   if (q.parent_id === 'none') where.push('wp.parent_id IS NULL');
   else inFilter('wp.parent_id', q.parent_id);
   if (q.watched === '1') { where.push('wp.id IN (SELECT wp_id FROM wp_watchers WHERE user_id = ?)'); params.push(req.user.id); }
   if (q.involved === '1') {
-    where.push('(wp.assignee_id = ? OR wp.responsible_id = ? OR wp.author_id = ?)');
-    params.push(req.user.id, req.user.id, req.user.id);
+    where.push('(wp.assignee_id = ? OR wp.responsible_id = ? OR wp.author_id = ? OR wp.designer_id = ? OR wp.developer_id = ? OR wp.tester_id = ?)');
+    params.push(...Array(6).fill(req.user.id));
   }
   if (q.overdue === '1') { where.push('wp.due_date < ? AND s.is_closed = 0'); params.push(todayISO()); }
   if (q.due_from) { where.push('wp.due_date >= ?'); params.push(q.due_from); }
@@ -195,7 +202,8 @@ r.get('/work-packages/export.csv', (req, res) => {
   const { where, params } = buildFilter(req, req.query);
   const rows = all(`${BASE_SELECT} WHERE ${where} ORDER BY ${orderBy(req.query.sort)} LIMIT 10000`, ...params);
   const cols = [['key', 'ID'], ['project_name', 'Project'], ['type_name', 'Type'], ['subject', 'Subject'], ['status_name', 'Status'],
-    ['priority_name', 'Priority'], ['assignee_name', 'Assignee'], ['responsible_name', 'Accountable'], ['version_name', 'Version'],
+    ['priority_name', 'Priority'], ['assignee_name', 'Assignee'], ['responsible_name', 'Accountable'],
+    ['designer_name', 'Designer'], ['developer_name', 'Developer'], ['tester_name', 'Tester'], ['version_name', 'Version'],
     ['start_date', 'Start date'], ['due_date', 'Due date'], ['estimated_hours', 'Estimated hours'], ['spent_hours', 'Spent hours'],
     ['done_ratio', '% done'], ['parent_key', 'Parent'], ['author_name', 'Author'], ['created_at', 'Created'], ['updated_at', 'Updated']];
   const esc = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
@@ -213,7 +221,7 @@ export function canEditWp(req, wp) {
   if (can(req, 'wp.edit', wp.project_id)) return true;
   if (can(req, 'wp.edit_own', wp.project_id)) {
     const me = req.user.id;
-    return wp.assignee_id === me || wp.author_id === me || wp.responsible_id === me;
+    return [wp.assignee_id, wp.author_id, wp.responsible_id, wp.designer_id, wp.developer_id, wp.tester_id].includes(me);
   }
   return false;
 }
@@ -256,6 +264,7 @@ function validateRefs(projectId, f, wpId = null) {
   if (f.category_id && !get('SELECT id FROM categories WHERE id = ? AND project_id = ?', f.category_id, projectId)) fail(400, 'That category belongs to another project.');
   if (f.assignee_id !== undefined) f.assignee_id = checkMemberOrNull(projectId, f.assignee_id, 'Assignee');
   if (f.responsible_id !== undefined) f.responsible_id = checkMemberOrNull(projectId, f.responsible_id, 'Accountable');
+  for (const [k, label] of Object.entries(STAGE_LABEL)) if (f[k] !== undefined) f[k] = checkMemberOrNull(projectId, f[k], label);
   if (f.parent_id) {
     const parent = get('SELECT id, project_id FROM work_packages WHERE id = ?', f.parent_id) || fail(400, 'Parent work package not found.');
     if (wpId) {
@@ -281,6 +290,9 @@ function readFields(b) {
     priority_id: intOrNull(b.priority_id) ?? undefined,
     assignee_id: intOrNull(b.assignee_id),
     responsible_id: intOrNull(b.responsible_id),
+    designer_id: intOrNull(b.designer_id),
+    developer_id: intOrNull(b.developer_id),
+    tester_id: intOrNull(b.tester_id),
     parent_id: intOrNull(b.parent_id),
     version_id: intOrNull(b.version_id),
     category_id: intOrNull(b.category_id),
@@ -300,15 +312,29 @@ function nextNumber(projectId) {
   return n;
 }
 
+// ---------- Stages: Design / Develop / Testing, each with its own person ----------
+export const STAGE_FIELD = { design: 'designer_id', develop: 'developer_id', testing: 'tester_id' };
+const STAGE_LABEL = { designer_id: 'Designer', developer_id: 'Developer', tester_id: 'Tester' };
+const STAGE_ROLE = { designer_id: 'designer', developer_id: 'developer', tester_id: 'tester' };
+const STAGE_NAME = { new: 'New', design: 'In Design', develop: 'In Develop', testing: 'In Testing', closed: 'Closed' };
+const stageOf = (statusId) => get('SELECT board_column FROM statuses WHERE id = ?', statusId)?.board_column || 'develop';
+function enterStage(wpId, stage, userId) {
+  run("UPDATE wp_stages SET left_at = datetime('now') WHERE wp_id = ? AND left_at IS NULL", wpId);
+  run('INSERT INTO wp_stages(wp_id, stage, user_id) VALUES(?,?,?)', wpId, stage, userId);
+}
+// Assigning anyone other than yourself to a task needs the assign permission.
+function assignsOthers(req, f, wp = {}) {
+  return ['assignee_id', 'responsible_id', ...Object.keys(STAGE_LABEL)]
+    .some(k => f[k] !== undefined && f[k] != null && f[k] !== (wp[k] ?? null) && f[k] !== req.user.id);
+}
+
 const watch = (wpId, userId) => userId && run('INSERT OR IGNORE INTO wp_watchers(wp_id, user_id) VALUES(?,?)', wpId, userId);
 
 export function createWp(req, projectId, body, { journalNote } = {}) {
   need(req, 'wp.create', projectId);
   const f = readFields(body);
   if (!f.subject) fail(400, 'Subject is required.');
-  if ((f.assignee_id && f.assignee_id !== req.user.id) || (f.responsible_id && f.responsible_id !== req.user.id)) {
-    if (!can(req, 'wp.assign', projectId) && !can(req, 'wp.edit', projectId)) fail(403, 'You can only assign work to yourself.');
-  }
+  if (assignsOthers(req, f) && !can(req, 'wp.assign', projectId) && !can(req, 'wp.edit', projectId)) fail(403, 'You can only assign work to yourself.');
   f.type_id ??= get('SELECT id FROM types ORDER BY position LIMIT 1').id;
   f.status_id ??= (get('SELECT id FROM statuses WHERE is_default = 1') || get('SELECT id FROM statuses ORDER BY position LIMIT 1')).id;
   f.priority_id ??= (get('SELECT id FROM priorities WHERE is_default = 1') || get('SELECT id FROM priorities ORDER BY position LIMIT 1')).id;
@@ -316,24 +342,35 @@ export function createWp(req, projectId, body, { journalNote } = {}) {
   if (t?.is_milestone && f.due_date && !f.start_date) f.start_date = f.due_date;
   if (t?.is_milestone && f.start_date && !f.due_date) f.due_date = f.start_date;
   validateRefs(projectId, f);
+  // A task that starts in Design / Develop / Testing goes to that stage's person unless someone else was chosen.
+  const stage = stageOf(f.status_id);
+  if (!f.assignee_id && f[STAGE_FIELD[stage]]) f.assignee_id = f[STAGE_FIELD[stage]];
   const st = get('SELECT done_ratio FROM statuses WHERE id = ?', f.status_id);
   if (st?.done_ratio != null && f.done_ratio == null) f.done_ratio = st.done_ratio;
   (body.links || []).forEach(cleanLink); // validate before saving anything
   return tx(() => {
     ensureMember(projectId, f.assignee_id);
     ensureMember(projectId, f.responsible_id);
+    for (const k of Object.keys(STAGE_LABEL)) ensureMember(projectId, f[k]);
     const number = nextNumber(projectId);
     const pos = get('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM work_packages WHERE project_id = ?', projectId).p;
     const { id } = run(`INSERT INTO work_packages(project_id, number, type_id, subject, description, status_id, priority_id, assignee_id,
-        responsible_id, author_id, parent_id, version_id, category_id, start_date, due_date, estimated_hours, done_ratio, position)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        responsible_id, author_id, parent_id, version_id, category_id, start_date, due_date, estimated_hours, done_ratio, position,
+        designer_id, developer_id, tester_id)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       projectId, number, f.type_id, f.subject, f.description || null, f.status_id, f.priority_id, f.assignee_id || null,
       f.responsible_id || null, req.user.id, f.parent_id || null, f.version_id || null, f.category_id || null,
-      f.start_date || null, f.due_date || null, f.estimated_hours ?? null, f.done_ratio ?? 0, f.position ?? pos);
+      f.start_date || null, f.due_date || null, f.estimated_hours ?? null, f.done_ratio ?? 0, f.position ?? pos,
+      f.designer_id || null, f.developer_id || null, f.tester_id || null);
+    enterStage(id, stage, req.user.id);
     run('INSERT INTO journals(wp_id, user_id, notes, changes) VALUES(?,?,?,?)', id, req.user.id, journalNote || null, JSON.stringify({ created: [null, true] }));
     addLinks(id, body.links, req.user.id);
     watch(id, req.user.id); watch(id, f.assignee_id); watch(id, f.responsible_id);
+    for (const k of Object.keys(STAGE_LABEL)) watch(id, f[k]);
     const wp = loadWp(id);
+    for (const k of Object.keys(STAGE_LABEL)) {
+      if (f[k] && f[k] !== f.assignee_id) notify([f[k]], { actorId: req.user.id, projectId, wpId: id, reason: 'stage', message: `${req.user.name} made you the ${STAGE_ROLE[k]} for ${wp.key}: ${wp.subject}` });
+    }
     if (f.assignee_id) notify([f.assignee_id], { actorId: req.user.id, projectId, wpId: id, reason: 'assigned', message: `${req.user.name} assigned you ${wp.key}: ${wp.subject}` });
     if (f.responsible_id) notify([f.responsible_id], { actorId: req.user.id, projectId, wpId: id, reason: 'accountable', message: `${req.user.name} made you accountable for ${wp.key}: ${wp.subject}` });
     notify(mentionedUserIds(f.description), { actorId: req.user.id, projectId, wpId: id, reason: 'mentioned', message: `${req.user.name} mentioned you in ${wp.key}: ${wp.subject}` });
@@ -372,6 +409,10 @@ r.get('/work-packages/:id', (req, res) => {
   const meetings = all(`SELECT m.id, m.title, m.starts_at FROM meetings m WHERE m.id IN (
                           SELECT meeting_id FROM meeting_agenda_items WHERE wp_id = ? UNION SELECT meeting_id FROM meeting_actions WHERE wp_id = ?)
                         ORDER BY m.starts_at DESC`, wp.id, wp.id);
+  const stages = all(`SELECT s.stage, s.entered_at, s.left_at, s.user_id, u.name AS user_name FROM wp_stages s
+                      LEFT JOIN users u ON u.id = s.user_id WHERE s.wp_id = ? ORDER BY s.entered_at, s.id`, wp.id);
+  const stage_hours = Object.fromEntries(all(`SELECT activity, SUM(hours) AS hours FROM time_entries WHERE wp_id = ? GROUP BY activity`, wp.id)
+    .map(x => [x.activity, x.hours]));
   const ancestors = [];
   let cur = wp.parent_id;
   for (let i = 0; cur && i < 20; i++) {
@@ -382,7 +423,7 @@ r.get('/work-packages/:id', (req, res) => {
     cur = a.parent_id;
   }
   res.json({
-    ...wp, children, relations, journals, watchers, attachments, links, time, meetings, ancestors, max_files: 5,
+    ...wp, children, relations, journals, watchers, attachments, links, time, meetings, ancestors, stages, stage_hours, max_files: 5,
     can: {
       edit: canEditWp(req, wp), assign: can(req, 'wp.assign', wp.project_id) || can(req, 'wp.edit', wp.project_id),
       delete: can(req, 'wp.delete', wp.project_id), comment: can(req, 'wp.comment', wp.project_id),
@@ -394,7 +435,7 @@ r.get('/work-packages/:id', (req, res) => {
 });
 
 const TRACKED = ['type_id', 'subject', 'description', 'status_id', 'priority_id', 'assignee_id', 'responsible_id', 'parent_id',
-  'version_id', 'category_id', 'start_date', 'due_date', 'estimated_hours', 'done_ratio'];
+  'version_id', 'category_id', 'start_date', 'due_date', 'estimated_hours', 'done_ratio', 'designer_id', 'developer_id', 'tester_id'];
 
 export function updateWp(req, wp, body) {
   if (!canEditWp(req, wp)) fail(403, 'You do not have permission to edit this work package.');
@@ -409,10 +450,20 @@ export function updateWp(req, wp, body) {
     f.version_id = null; f.category_id = null;
     if (!body.parent_id) f.parent_id = null;
   }
-  const changingPeople = (f.assignee_id !== undefined && f.assignee_id !== wp.assignee_id && f.assignee_id !== req.user.id)
-    || (f.responsible_id !== undefined && f.responsible_id !== wp.responsible_id && f.responsible_id !== req.user.id);
-  if (changingPeople && !can(req, 'wp.assign', wp.project_id) && !can(req, 'wp.edit', wp.project_id)) fail(403, 'You can only assign work to yourself.');
+  if (assignsOthers(req, f, wp) && !can(req, 'wp.assign', wp.project_id) && !can(req, 'wp.edit', wp.project_id)) fail(403, 'You can only assign work to yourself.');
   validateRefs(projectId, f, wp.id);
+  // Moving into Design / Develop / Testing hands the task to that stage's person (unless the assignee was chosen in the same change).
+  // Changing the person of the current stage moves the task to them if it was with the previous person.
+  const oldStage = wp.board_column || 'develop';
+  const newStage = f.status_id ? stageOf(f.status_id) : oldStage;
+  const stageField = STAGE_FIELD[newStage];
+  let autoAssigned = false;
+  if (stageField && f.assignee_id === undefined) {
+    const person = f[stageField] !== undefined ? f[stageField] : wp[stageField];
+    const handover = newStage !== oldStage
+      || (f[stageField] !== undefined && f[stageField] !== wp[stageField] && (wp.assignee_id == null || wp.assignee_id === wp[stageField]));
+    if (handover && person && person !== wp.assignee_id) { f.assignee_id = person; autoAssigned = true; }
+  }
   const start = f.start_date !== undefined ? f.start_date : wp.start_date;
   const due = f.due_date !== undefined ? f.due_date : wp.due_date;
   if (start && due && start > due) fail(400, 'Finish date must be on or after the start date.');
@@ -428,6 +479,7 @@ export function updateWp(req, wp, body) {
   return tx(() => {
     if (changes.assignee_id) ensureMember(projectId, changes.assignee_id[1]);
     if (changes.responsible_id) ensureMember(projectId, changes.responsible_id[1]);
+    for (const k of Object.keys(STAGE_LABEL)) if (changes[k]) ensureMember(projectId, changes[k][1]);
     if (keys.length) {
       if (projectId !== wp.project_id) {
         set.number = nextNumber(projectId);
@@ -441,10 +493,19 @@ export function updateWp(req, wp, body) {
       run('INSERT INTO journals(wp_id, user_id, notes, changes) VALUES(?,?,?,?)', wp.id, req.user.id, note,
         meaningful.length ? JSON.stringify(Object.fromEntries(meaningful.map(k => [k, changes[k]]))) : null);
     }
+    if (newStage !== oldStage) enterStage(wp.id, newStage, req.user.id);
     const fresh = loadWp(wp.id);
     if (changes.assignee_id && changes.assignee_id[1]) {
       watch(wp.id, changes.assignee_id[1]);
-      notify([changes.assignee_id[1]], { actorId: req.user.id, projectId, wpId: wp.id, reason: 'assigned', message: `${req.user.name} assigned you ${fresh.key}: ${fresh.subject}` });
+      notify([changes.assignee_id[1]], { actorId: req.user.id, projectId, wpId: wp.id, reason: 'assigned', message: autoAssigned
+        ? `${fresh.key} is now ${STAGE_NAME[newStage]} and with you (${req.user.name} moved it): ${fresh.subject}`
+        : `${req.user.name} assigned you ${fresh.key}: ${fresh.subject}` });
+    }
+    for (const k of Object.keys(STAGE_LABEL)) {
+      const to = changes[k]?.[1];
+      if (!to) continue;
+      watch(wp.id, to);
+      if (to !== changes.assignee_id?.[1]) notify([to], { actorId: req.user.id, projectId, wpId: wp.id, reason: 'stage', message: `${req.user.name} made you the ${STAGE_ROLE[k]} for ${fresh.key}: ${fresh.subject}` });
     }
     if (changes.responsible_id && changes.responsible_id[1]) {
       watch(wp.id, changes.responsible_id[1]);
@@ -469,7 +530,8 @@ r.patch('/work-packages/:id', (req, res) => {
 r.patch('/work-packages-bulk', (req, res) => {
   const ids = (req.body.ids || []).map(Number).filter(Boolean);
   if (!ids.length) fail(400, 'Select at least one work package.');
-  const allowed = ['status_id', 'priority_id', 'assignee_id', 'responsible_id', 'version_id', 'type_id', 'due_date', 'start_date', 'done_ratio'];
+  const allowed = ['status_id', 'priority_id', 'assignee_id', 'responsible_id', 'version_id', 'type_id', 'due_date', 'start_date', 'done_ratio',
+    'designer_id', 'developer_id', 'tester_id'];
   const changes = Object.fromEntries(Object.entries(req.body.changes || {}).filter(([k]) => allowed.includes(k)));
   if (!Object.keys(changes).length) fail(400, 'Choose what to change.');
   let updated = 0;

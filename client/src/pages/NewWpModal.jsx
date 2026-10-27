@@ -146,7 +146,7 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
   const taskType = meta.types.find(t => t.name === 'Task')?.id || meta.types[0]?.id;
   const [f, setF] = useState({
     type_id: taskType, subject: '', description: '', status_id: defStatus, priority_id: defPrio,
-    assignee_id: null, responsible_id: null, parent_id: null, version_id: '', start_date: '', due_date: '', estimated_hours: '',
+    assignee_id: null, responsible_id: null, designer_id: null, developer_id: null, tester_id: null, parent_id: null, version_id: '', start_date: '', due_date: '', estimated_hours: '',
     ...defaults,
   });
   const [files, setFiles] = useState([]);
@@ -162,6 +162,17 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
   const members = activeUsers.filter(u => memberIds.has(u.id));
   const others = activeUsers.filter(u => !memberIds.has(u.id));
   const isMilestone = meta.types.find(t => t.id === Number(f.type_id))?.is_milestone;
+  const personSelect = (field, empty = 'Unassigned') => (canAssign ? (
+    <select value={f[field] ?? ''} onChange={(e) => set(field, e.target.value ? Number(e.target.value) : null)}>
+      <option value="">{empty}</option>
+      <optgroup label="Project members">{members.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</optgroup>
+      {others.length > 0 && <optgroup label="Other employees">{others.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</optgroup>}
+    </select>
+  ) : (
+    <select value={f[field] ?? ''} onChange={(e) => set(field, e.target.value ? Number(e.target.value) : null)}>
+      <option value="">{empty}</option><option value={user.id}>Me</option>
+    </select>
+  ));
 
   const submit = async (another) => {
     setError(null);
@@ -226,21 +237,22 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
       </Field>
       <div className="form-grid three">
         <Field label="Assign employee" hint={!canAssign && info ? 'You can assign tasks to yourself only.' : others.length && canAssign ? 'People outside the project are added to it when assigned.' : undefined}>
-          {canAssign ? (
-            <select value={f.assignee_id ?? ''} onChange={(e) => set('assignee_id', e.target.value ? Number(e.target.value) : null)}>
-              <option value="">Unassigned</option>
-              <optgroup label="Project members">{members.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</optgroup>
-              {others.length > 0 && <optgroup label="Other employees">{others.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</optgroup>}
-            </select>
-          ) : (
-            <select value={f.assignee_id ?? ''} onChange={(e) => set('assignee_id', e.target.value ? Number(e.target.value) : null)}>
-              <option value="">Unassigned</option><option value={user.id}>Me</option>
-            </select>
-          )}
+          {personSelect('assignee_id')}
         </Field>
         {!isMilestone && <Field label="Start date"><input type="date" value={f.start_date || ''} onChange={(e) => set('start_date', e.target.value)} /></Field>}
         <Field label={isMilestone ? 'Date' : 'Due date'}><input type="date" value={f.due_date || ''} min={f.start_date || undefined} onChange={(e) => set('due_date', e.target.value)} /></Field>
       </div>
+      {!isMilestone && (
+        <fieldset className="stage-people">
+          <legend>Design, develop and test</legend>
+          <div className="form-grid three">
+            <Field label="Designer">{personSelect('designer_id', 'Nobody')}</Field>
+            <Field label="Developer">{personSelect('developer_id', 'Nobody')}</Field>
+            <Field label="Tester">{personSelect('tester_id', 'Nobody')}</Field>
+          </div>
+          <p className="xs muted">When the task moves to In Design, In Develop or In Testing, it is assigned to that person automatically and they are notified.</p>
+        </fieldset>
+      )}
       <button type="button" className="btn ghost sm" style={{ alignSelf: 'flex-start' }} onClick={() => setMore(m => !m)} aria-expanded={more}>
         <Icon name="chevronDown" />{more ? 'Fewer options' : 'More options (status, accountable, version, estimate, parent)'}
       </button>

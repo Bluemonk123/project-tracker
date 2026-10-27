@@ -147,6 +147,34 @@ function migrate() {
       setSetting('migration_board_v1', '1');
     });
   }
+
+  // Design / Develop / Testing: one person per stage on every work package.
+  const wpCols = all('PRAGMA table_info(work_packages)').map(c => c.name);
+  for (const c of ['designer_id', 'developer_id', 'tester_id']) {
+    if (!wpCols.includes(c)) db.exec(`ALTER TABLE work_packages ADD COLUMN ${c} INTEGER REFERENCES users(id) ON DELETE SET NULL`);
+  }
+  // Stage history for existing work, rebuilt from the status changes in the activity log.
+  if (getSetting('migration_stages_v1') === null) {
+    tx(() => {
+      const colOf = Object.fromEntries(all('SELECT id, board_column FROM statuses').map(s => [s.id, s.board_column || 'develop']));
+      for (const wp of all('SELECT id, status_id, author_id, created_at FROM work_packages WHERE id NOT IN (SELECT wp_id FROM wp_stages)')) {
+        const moves = [];
+        for (const j of all("SELECT user_id, changes, created_at FROM journals WHERE wp_id = ? AND changes LIKE '%status_id%' ORDER BY created_at, id", wp.id)) {
+          try { const c = JSON.parse(j.changes).status_id; if (c) moves.push({ from: c[0], to: c[1], at: j.created_at, by: j.user_id }); } catch { /* ignore */ }
+        }
+        let stage = colOf[moves.length ? moves[0].from : wp.status_id] || 'new';
+        let open = run('INSERT INTO wp_stages(wp_id, stage, user_id, entered_at) VALUES(?,?,?,?)', wp.id, stage, wp.author_id, wp.created_at).id;
+        for (const m of moves) {
+          const next = colOf[m.to] || stage;
+          if (next === stage) continue;
+          run('UPDATE wp_stages SET left_at = ? WHERE id = ?', m.at, open);
+          open = run('INSERT INTO wp_stages(wp_id, stage, user_id, entered_at) VALUES(?,?,?,?)', wp.id, next, m.by, m.at).id;
+          stage = next;
+        }
+      }
+      setSetting('migration_stages_v1', '1');
+    });
+  }
 }
 migrate();
 

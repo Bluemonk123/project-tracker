@@ -360,3 +360,44 @@ test('project technologies: add, edit, list, permissions', async () => {
   assert.ok(r.data.rows.some(t => t.name === 'Internal SDK' && t.project_identifier === 'TECH'));
   assert.equal((await admin.del(`/technologies/${id}`)).status, 200);
 });
+
+test('stages: designer, developer and tester get the task as it moves', async () => {
+  const meta = (await admin.get('/meta')).data;
+  const st = (n) => meta.statuses.find(s => s.name === n).id;
+  const tester = client();
+  const t = (await admin.post('/admin/users', { name: 'Tess Tester', email: 'tess@office.local', password: 'password1', global_role_id: ids.employee })).data;
+  await tester.post('/auth/login', { email: 'tess@office.local', password: 'password1' });
+  const p = (await admin.post('/projects', { name: 'Stage Test', identifier: 'STG' })).data;
+  await admin.post(`/projects/${p.id}/members`, { user_id: ids.dev, role_id: ids.devRole });
+  // starts in design with no assignee: goes to the designer (admin here)
+  let r = await admin.post('/work-packages', { project_id: p.id, subject: 'Login screen', status_id: st('In design'),
+    designer_id: (await admin.get('/auth/me')).data.user.id, developer_id: ids.dev, tester_id: t.id });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const wp = r.data;
+  assert.equal(wp.assignee_id, wp.designer_id);
+  assert.equal(wp.tester_name, 'Tess Tester');
+  assert.ok((await tester.get('/projects')).data.some(x => x.id === p.id), 'tester was added to the project');
+  // to develop: the developer gets it and is notified
+  r = await admin.patch(`/work-packages/${wp.id}`, { status_id: st('In progress') });
+  assert.equal(r.data.assignee_id, ids.dev);
+  // the developer (edit own only) moves it to testing: tester gets it
+  r = await dev.patch(`/work-packages/${wp.id}`, { status_id: st('In testing') });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.assignee_id, t.id);
+  const n = (await tester.get('/notifications?unread=1')).data;
+  assert.ok(n.some(x => x.wp_id === wp.id && /In Testing/.test(x.message)), JSON.stringify(n));
+  // an explicit assignee in the same change wins
+  r = await admin.patch(`/work-packages/${wp.id}`, { status_id: st('In progress'), assignee_id: null });
+  assert.equal(r.data.assignee_id, null);
+  // changing the person of the current stage hands it over when it was unassigned
+  r = await admin.patch(`/work-packages/${wp.id}`, { developer_id: t.id });
+  assert.equal(r.data.assignee_id, t.id);
+  // a developer cannot name someone else as tester
+  assert.equal((await dev.patch(`/work-packages/${wp.id}`, { tester_id: ids.out })).status, 403);
+  // stage history and filters
+  const d = (await admin.get(`/work-packages/${wp.id}`)).data;
+  assert.deepEqual(d.stages.map(s => s.stage), ['design', 'develop', 'testing', 'develop']);
+  assert.ok(d.stages.slice(0, -1).every(s => s.left_at) && !d.stages.at(-1).left_at);
+  r = await admin.get(`/work-packages?project_id=${p.id}&tester_id=${t.id}`);
+  assert.deepEqual(r.data.rows.map(x => x.id), [wp.id]);
+});

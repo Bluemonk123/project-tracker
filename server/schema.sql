@@ -195,6 +195,17 @@ CREATE TABLE IF NOT EXISTS wp_links (
 );
 CREATE INDEX IF NOT EXISTS idx_wp_links ON wp_links(wp_id);
 
+-- Which stage (board column) a work package was in and when: New, In Design, In Develop, In Testing, Closed
+CREATE TABLE IF NOT EXISTS wp_stages (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  wp_id      INTEGER NOT NULL REFERENCES work_packages(id) ON DELETE CASCADE,
+  stage      TEXT NOT NULL,
+  user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  entered_at TEXT NOT NULL DEFAULT (datetime('now')),
+  left_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_wp_stages ON wp_stages(wp_id, entered_at);
+
 CREATE TABLE IF NOT EXISTS wp_watchers (
   wp_id   INTEGER NOT NULL REFERENCES work_packages(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

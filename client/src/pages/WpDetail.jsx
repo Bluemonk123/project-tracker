@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useApp, useLoad } from '../context.jsx';
@@ -16,7 +16,69 @@ const FIELD_LABELS = {
   assignee_id: 'Assignee', responsible_id: 'Accountable', parent_id: 'Parent', version_id: 'Version', category_id: 'Category',
   start_date: 'Start date', due_date: 'Due date', estimated_hours: 'Estimated hours', done_ratio: '% done', project_id: 'Project',
   relation_added: 'Relation', attachment: 'File', link_added: 'Link',
+  designer_id: 'Designer', developer_id: 'Developer', tester_id: 'Tester',
 };
+
+// The five board stages. Design, Develop and Testing each have their own person and time activity.
+export const STAGES = [
+  { key: 'new', name: 'New', color: '#8FD9C4' },
+  { key: 'design', name: 'In Design', color: '#B79BDB', field: 'designer', role: 'Designer', activity: 'Design' },
+  { key: 'develop', name: 'In Develop', color: '#5BC8DE', field: 'developer', role: 'Developer', activity: 'Development' },
+  { key: 'testing', name: 'In Testing', color: '#F39219', field: 'tester', role: 'Tester', activity: 'Testing' },
+  { key: 'closed', name: 'Closed', color: '#C9CED6' },
+];
+const utc = (s) => new Date(`${s.replace(' ', 'T')}Z`).getTime();
+function fmtSpan(ms) {
+  const h = Math.round(ms / 36e5);
+  if (h < 1) return 'under 1 h';
+  if (h < 24) return `${h} h`;
+  const d = Math.floor(h / 24), r = h % 24;
+  return r ? `${d} d ${r} h` : `${d} d`;
+}
+
+function StageTracker({ wp }) {
+  const now = Date.now();
+  const per = {};
+  for (const s of wp.stages) {
+    const p = (per[s.stage] ||= { ms: 0, visits: 0 });
+    p.ms += (s.left_at ? utc(s.left_at) : now) - utc(s.entered_at);
+    p.visits += 1;
+  }
+  const current = wp.board_column || 'develop';
+  const curIdx = STAGES.findIndex(x => x.key === current);
+  const moves = wp.stages.slice(1).reverse();
+  return (
+    <>
+      <div className="stage-track">
+        {STAGES.map((st, i) => {
+          const p = per[st.key];
+          const hours = st.activity ? wp.stage_hours?.[st.activity] : null;
+          return (
+            <div key={st.key} className={`stage-step${st.key === current ? ' current' : ''}${!p && i > curIdx ? ' future' : ''}`} style={{ '--c': st.color }}>
+              <div className="name">{st.name}{st.key === current && <span className="now">Now</span>}</div>
+              {st.field && <div className="person">{wp[`${st.field}_id`] ? <Person id={wp[`${st.field}_id`]} name={wp[`${st.field}_name`]} /> : <span className="muted">No {st.role.toLowerCase()}</span>}</div>}
+              <div className="figs">
+                {p && st.key !== 'closed' && <div>{st.key === current ? 'For' : 'Took'} {fmtSpan(p.ms)}</div>}
+                {hours > 0 && <div>{fmtHours(hours)} logged</div>}
+                {p?.visits > 1 && <div>Came back {p.visits - 1}×</div>}
+                {!p && st.key !== 'closed' && <div>Not yet</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {moves.length > 0 && (
+        <ul className="stage-history">
+          {moves.slice(0, 6).map((m, i) => (
+            <li key={i} title={fmtDateTime(m.entered_at)}>
+              Moved to <b>{STAGES.find(x => x.key === m.stage)?.name || m.stage}</b> by {m.user_name || 'someone'}, {timeAgo(m.entered_at)}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
 const REL_LABEL = {
   out: { relates: 'Related to', blocks: 'Blocks', precedes: 'Precedes', duplicates: 'Duplicates' },
   in: { relates: 'Related to', blocks: 'Blocked by', precedes: 'Follows', duplicates: 'Duplicated by' },
@@ -30,7 +92,7 @@ function useLabeler(info) {
       case 'type_id': return meta.types.find(t => t.id === v)?.name ?? v;
       case 'status_id': return meta.statuses.find(t => t.id === v)?.name ?? v;
       case 'priority_id': return meta.priorities.find(t => t.id === v)?.name ?? v;
-      case 'assignee_id': case 'responsible_id': return userById(v)?.name ?? `user ${v}`;
+      case 'assignee_id': case 'responsible_id': case 'designer_id': case 'developer_id': case 'tester_id': return userById(v)?.name ?? `user ${v}`;
       case 'version_id': return info?.versions.find(x => x.id === v)?.name ?? `version ${v}`;
       case 'category_id': return info?.categories.find(x => x.id === v)?.name ?? `category ${v}`;
       case 'parent_id': return `#${v}`;
@@ -221,6 +283,11 @@ export default function WpDetail() {
             </div>
           ) : wp.description ? <Markdown text={wp.description} /> : <p className="muted small">{can.edit ? 'No description yet. Add details, acceptance criteria or links.' : 'No description.'}</p>}
 
+          {!isMilestone && <>
+            <div className="section-title">Stages <span className="xs muted" style={{ fontWeight: 400 }}>Moving the task to a stage assigns it to that stage's person</span></div>
+            <StageTracker wp={wp} />
+          </>}
+
           <div className="section-title">Child work packages <span className="muted">({wp.children.length})</span>
             {can.create && <span className="actions"><button className="btn sm ghost" onClick={() => setModal('child')}><Icon name="plus" />Add child</button></span>}
           </div>
@@ -323,6 +390,12 @@ export default function WpDetail() {
               </span>
               <span className="k">Accountable</span>
               <span className="v"><UserSelect value={wp.responsible_id} disabled={!can.edit || !can.assign} placeholder="Nobody" users={members.length ? members : undefined} onChange={(v) => update({ responsible_id: v })} /></span>
+              {!isMilestone && STAGES.filter(st => st.field).map(st => (
+                <Fragment key={st.key}>
+                  <span className="k">{st.role}</span>
+                  <span className="v"><UserSelect value={wp[`${st.field}_id`]} disabled={!can.edit || !can.assign} placeholder="Nobody" onChange={(v) => update({ [`${st.field}_id`]: v })} /></span>
+                </Fragment>
+              ))}
               <span className="k">Priority</span>
               <span className="v">{sel('priority_id', meta.priorities)}</span>
               <span className="k">Version</span>
@@ -381,7 +454,7 @@ export default function WpDetail() {
       </div>
       {modal === 'child' && <NewWpModal projectId={wp.project_id} title={`New child of ${wp.key}`} defaults={{ parent_id: wp.id, version_id: wp.version_id || '' }} onClose={() => setModal(null)} onCreated={() => reload()} />}
       {modal === 'copy' && <NewWpModal projectId={wp.project_id} title={`Duplicate ${wp.key}`} onClose={() => setModal(null)}
-        defaults={{ type_id: wp.type_id, subject: `${wp.subject} (copy)`, description: wp.description || '', priority_id: wp.priority_id, assignee_id: wp.assignee_id, responsible_id: wp.responsible_id, parent_id: wp.parent_id, version_id: wp.version_id || '', start_date: wp.start_date || '', due_date: wp.due_date || '', estimated_hours: wp.estimated_hours ?? '' }} />}
+        defaults={{ type_id: wp.type_id, subject: `${wp.subject} (copy)`, description: wp.description || '', priority_id: wp.priority_id, assignee_id: wp.assignee_id, responsible_id: wp.responsible_id, designer_id: wp.designer_id, developer_id: wp.developer_id, tester_id: wp.tester_id, parent_id: wp.parent_id, version_id: wp.version_id || '', start_date: wp.start_date || '', due_date: wp.due_date || '', estimated_hours: wp.estimated_hours ?? '' }} />}
       {modal === 'relation' && <AddRelation wp={wp} onDone={reload} onClose={() => setModal(null)} />}
       {modal === 'move' && <MoveModal wp={wp} onClose={() => setModal(null)} onDone={(r) => { setData(null); nav(`/wp/${r.id}`); reload(); }} />}
       {modal === 'time' && <LogTimeModal wp={wp} onClose={() => setModal(null)} onSaved={reload} />}

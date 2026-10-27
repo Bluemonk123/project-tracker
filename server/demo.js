@@ -87,6 +87,10 @@ tx(() => {
       run('INSERT INTO journals(wp_id, user_id, changes, created_at) VALUES(?,?,?,datetime(\'now\', ?))', id, u[p.manager], JSON.stringify({ created: [null, true] }), `-${10 - Math.min(n, 9)} days`);
       run('INSERT OR IGNORE INTO wp_watchers(wp_id, user_id) VALUES(?,?)', id, u[p.manager]);
       if (o.to) run('INSERT OR IGNORE INTO wp_watchers(wp_id, user_id) VALUES(?,?)', id, u[o.to]);
+      // designer / developer / tester, and the stage it has been in since it was created
+      if (o.type !== 'Milestone') run('UPDATE work_packages SET designer_id = ?, developer_id = ?, tester_id = ? WHERE id = ?', u[dev2], u[dev1], u[qa], id);
+      const stage = get('SELECT s.board_column FROM statuses s JOIN work_packages w ON w.status_id = s.id WHERE w.id = ?', id).board_column;
+      run(`INSERT INTO wp_stages(wp_id, stage, user_id, entered_at) VALUES(?,?,?,datetime('now', ?))`, id, stage, u[p.manager], `-${10 - Math.min(n, 9)} days`);
       return id;
     };
     const dev1 = p.members[0][0], dev2 = p.members[1][0], qa = p.members.find(m => m[1] === 'QA / Tester')[0];
@@ -108,6 +112,12 @@ tx(() => {
     wp({ type: 'Milestone', subject: 'Sprint 7 demo', start: 7, due: 7 });
     wp({ type: 'Milestone', subject: 'Release 2.0 go-live', start: 40, due: 40, version: 2 });
     run('INSERT INTO wp_relations(from_id, to_id, type) VALUES(?,?,?)', t2, t1, 'precedes');
+    // A full design → develop → test history, including one return from testing
+    run('DELETE FROM wp_stages WHERE wp_id = ?', t2);
+    const hist = [['new', p.manager, -12], ['design', dev2, -11.5], ['develop', dev1, -9], ['testing', dev1, -5], ['develop', qa, -4], ['testing', dev1, -2.6]];
+    hist.forEach(([st, who, d], i) => run(`INSERT INTO wp_stages(wp_id, stage, user_id, entered_at, left_at) VALUES(?,?,?,datetime('now', ?),
+        CASE WHEN ? IS NULL THEN NULL ELSE datetime('now', ?) END)`, t2, st, u[who], `${d * 24} hours`, hist[i + 1] ? 1 : null, hist[i + 1] ? `${hist[i + 1][2] * 24} hours` : null));
+    run('UPDATE work_packages SET assignee_id = ? WHERE id = ?', u[qa], t2);
     run('UPDATE projects SET wp_seq = ? WHERE id = ?', n, pid);
 
     // time entries for the last 10 working days
@@ -115,8 +125,9 @@ tx(() => {
       const date = new Date(); date.setDate(date.getDate() + d);
       if (date.getDay() === 0 || date.getDay() === 6) continue;
       for (const [m] of p.members.slice(0, 3)) {
+        const activity = m === qa ? 'Testing' : m === dev2 && d <= -9 ? 'Design' : 'Development';
         run('INSERT INTO time_entries(project_id, wp_id, user_id, spent_on, hours, activity) VALUES(?,?,?,?,?,?)',
-          pid, d > -5 ? t1 : t2, u[m], iso(date), [2, 3, 4, 2.5][Math.abs(d) % 4], 'Development');
+          pid, d > -5 ? t1 : t2, u[m], iso(date), [2, 3, 4, 2.5][Math.abs(d) % 4], activity);
       }
     }
 
