@@ -295,7 +295,7 @@ function BackupCopy() {
       </div>
       <ErrorBox error={error} />
       <div className="panel-body stack">
-        <p className="small soft" style={{ margin: 0 }}>Every few hours the app saves a copy of the database and the uploaded files into a folder you choose on this computer. A folder on a <b>second drive or a USB drive</b> is safest, because the copies survive if this computer's own disk fails.</p>
+        <p className="small soft" style={{ margin: 0 }}>Every few hours the app saves a copy of the database and the uploaded files into a folder. By default that is the <b>Backup copies</b> folder inside the app's own folder (next to start.bat); you can choose another. A folder on a <b>second drive or a USB drive</b> is safest, because the copies survive if this computer's own disk fails.</p>
         <div className="form-grid three">
           <Field label="Folder on this computer" className="span-2" hint={win ? 'Full path, e.g. D:\\Project Tracker Backups. The folder is created if needed.' : 'Full path, e.g. /Volumes/USB/Project Tracker Backups. The folder is created if needed.'}>
             <input type="text" list="pt-copy-dirs" value={v.dir} placeholder="Full path of the folder; leave empty to turn off" onChange={(e) => set('dir', e.target.value)} />
@@ -310,6 +310,9 @@ function BackupCopy() {
           </Field>
           <Field label="&nbsp;"><button type="button" className="btn primary" disabled={busy || !changed} onClick={save}>{v.dir ? 'Save and copy now' : 'Save'}</button></Field>
         </div>
+        {data?.default_dir && v.dir !== data.default_dir && (
+          <div className="row wrap small"><button type="button" className="btn sm" onClick={() => set('dir', data.default_dir)}><Icon name="folder" />Use the app's own folder</button><span className="muted">{data.default_dir}</span></div>
+        )}
         {data?.suggestions?.length > 0 && !v.dir && (
           <div className="row wrap small">Suggestions:
             {data.suggestions.map(d => <button key={d} type="button" className="btn sm ghost" onClick={() => set('dir', d)}>{d}</button>)}

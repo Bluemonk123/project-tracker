@@ -406,6 +406,8 @@ test('backup copies to a folder', async () => {
   const dir = path.join(tmp, 'cloud', 'Project Tracker Backups');
   fs.mkdirSync(path.dirname(dir), { recursive: true });
   assert.equal((await dev.put('/admin/backup-copy', { dir })).status, 403);
+  const def = (await admin.get('/admin/backup-copy')).data;
+  assert.ok(def.dir.endsWith('Backup copies') && def.dir === def.default_dir, 'defaults to the app folder');
   assert.equal((await admin.put('/admin/backup-copy', { dir: 'not/absolute' })).status, 400);
   let r = await admin.put('/admin/backup-copy', { dir, hours: 4, keep_days: 30 });
   assert.equal(r.status, 200, JSON.stringify(r.data));

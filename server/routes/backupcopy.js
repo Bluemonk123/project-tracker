@@ -10,14 +10,18 @@ import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
-import { db, getSetting, setSetting, BACKUP_DIR, UPLOAD_DIR } from '../db.js';
+import { db, getSetting, setSetting, BACKUP_DIR, UPLOAD_DIR, ROOT_DIR } from '../db.js';
+
+// Default: a "Backup copies" folder inside the app's own folder, next to start.bat.
+export const DEFAULT_DIR = path.join(ROOT_DIR, 'Backup copies');
 import { fail } from '../access.js';
 
 const KEY = 'backup_copy'; // JSON { dir, hours, keep_days }
 const LAST = 'backup_copy_last'; // JSON { at, ok, file, error, uploads_copied }
 
 export function copyConfig() {
-  try { return { hours: 4, keep_days: 30, dir: '', ...JSON.parse(getSetting(KEY) || '{}') }; } catch { return { hours: 4, keep_days: 30, dir: '' }; }
+  // Until an administrator changes it, copies go to DEFAULT_DIR every 4 hours.
+  try { return { hours: 4, keep_days: 30, dir: DEFAULT_DIR, ...JSON.parse(getSetting(KEY) || '{}') }; } catch { return { hours: 4, keep_days: 30, dir: DEFAULT_DIR }; }
 }
 function lastResult() { try { return JSON.parse(getSetting(LAST) || 'null'); } catch { return null; } }
 
@@ -115,7 +119,7 @@ export function scheduleCopies() {
 
 // Suggested folders: Documents on this computer, and the root of any other drive (a second disk or USB drive).
 function suggestions() {
-  const out = [path.join(os.homedir(), 'Documents', 'Project Tracker Backups')];
+  const out = [DEFAULT_DIR, path.join(os.homedir(), 'Documents', 'Project Tracker Backups')];
   if (process.platform === 'win32') {
     const appDrive = path.parse(BACKUP_DIR).root.toUpperCase();
     for (const l of 'DEFGHIJKLMNOPQRSTUVWXYZ') {
@@ -133,7 +137,7 @@ const adminOnly = (req) => { if (!req.user.is_admin) fail(403, 'Only administrat
 
 backupCopyRoutes.get('/admin/backup-copy', (req, res) => {
   adminOnly(req);
-  res.json({ ...copyConfig(), last: lastResult(), suggestions: suggestions(), platform: process.platform, running });
+  res.json({ ...copyConfig(), default_dir: DEFAULT_DIR, last: lastResult(), suggestions: suggestions(), platform: process.platform, running });
 });
 
 backupCopyRoutes.put('/admin/backup-copy', async (req, res) => {
