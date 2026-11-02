@@ -143,7 +143,43 @@ function TechModal({ project, tech, onClose, onSaved }) {
   );
 }
 
-export function TechTable({ rows, showProject, canEdit, onEdit, onDelete }) {
+// Version used, with an inline editor for people allowed to update it.
+function VersionCell({ t, canVersion, onSaved }) {
+  const [editing, setEditing] = useState(false);
+  const [v, setV] = useState(t.version_used || '');
+  const [busy, run] = useAsync();
+  const latest = t.info?.latest?.version;
+  const save = async (value = v) => {
+    const next = value.trim();
+    if (next === (t.version_used || '')) { setEditing(false); return; }
+    if (await run(() => api.patch(`/technologies/${t.id}`, { version_used: next || null }), `${t.name} version updated to ${next || 'not set'}`)) { setEditing(false); onSaved?.(); }
+  };
+  if (editing) {
+    return (
+      <div className="tech-version-edit">
+        <input type="text" value={v} autoFocus disabled={busy} aria-label={`Version of ${t.name} used`} placeholder="e.g. 18.2.0"
+          onChange={(e) => setV(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setV(t.version_used || ''); setEditing(false); } }} />
+        <div className="row" style={{ gap: 4 }}>
+          <button type="button" className="btn sm primary" disabled={busy} onClick={() => save()}>Save</button>
+          <button type="button" className="btn sm ghost" disabled={busy} onClick={() => { setV(t.version_used || ''); setEditing(false); }}>Cancel</button>
+        </div>
+        {latest && latest !== v.trim() && <button type="button" className="link-btn xs" disabled={busy} onClick={() => { setV(latest); save(latest); }}>Use latest ({latest})</button>}
+      </div>
+    );
+  }
+  return (
+    <div>
+      <span className="row" style={{ gap: 4 }}>
+        <span className="num">{t.version_used || <span className="muted">—</span>}</span>
+        {canVersion && <button type="button" className="icon-btn" title="Update the version used" aria-label={`Update the version of ${t.name} used`} onClick={() => { setV(t.version_used || ''); setEditing(true); }}><Icon name="edit" size={14} /></button>}
+      </span>
+      {t.version_updated_at && <div className="xs muted" title={`Version last changed ${t.version_updated_at} UTC`}>Updated {timeAgo(t.version_updated_at)}{t.version_updated_by_name ? ` by ${t.version_updated_by_name}` : ''}</div>}
+    </div>
+  );
+}
+
+export function TechTable({ rows, showProject, canEdit, canVersion, onEdit, onDelete, onSaved }) {
   const [open, setOpen] = useState({});
   const cols = 7 + (showProject ? 1 : 0);
   return (
@@ -166,7 +202,7 @@ export function TechTable({ rows, showProject, canEdit, onEdit, onDelete }) {
                   {t.notes && <div className="xs muted ellipsis" style={{ maxWidth: 360 }} title={t.notes}>{t.notes}</div>}
                 </td>
                 {showProject && <td><Link to={`/projects/${t.project_identifier}/technologies`} className="key" style={{ '--pc': t.project_color }}>{t.project_identifier}</Link> <span className="small soft">{t.project_name}</span></td>}
-                <td className="num" style={{ textAlign: 'left' }}>{t.version_used || <span className="muted">—</span>}</td>
+                <td><VersionCell t={t} canVersion={t.can_version ?? canVersion ?? canEdit} onSaved={onSaved} /></td>
                 <td>
                   {t.info?.latest ? <><b className="num">{t.info.latest.version}</b>{t.info.latest.date && <div className="xs muted">{fmtDate(t.info.latest.date, { year: true })}</div>}</>
                     : t.source === 'none' && !t.eol_slug ? <span className="xs muted">Not checked online</span>
@@ -202,7 +238,8 @@ export default function Technologies({ project }) {
   const [modal, setModal] = useState(null);
   const [, run] = useAsync();
   const rows = data?.rows || [];
-  const canEdit = !!data?.can_edit;
+  const canEdit = !!(data?.can_manage ?? data?.can_edit);
+  const canVersion = !!data?.can_version;
   const counts = useMemo(() => rows.reduce((m, t) => ({ ...m, [t.assessment.status]: (m[t.assessment.status] || 0) + 1 }), {}), [rows]);
   const del = async (t) => {
     if (await confirmDialog({ message: `Remove ${t.name} from ${project.name}?`, confirmLabel: 'Remove', danger: true })) {
@@ -214,7 +251,8 @@ export default function Technologies({ project }) {
       <div className="page-head">
         <div className="grow">
           <h2>Technologies</h2>
-          <p>The tech stack of {project.name}, with the latest versions checked online. For information only; nothing is changed automatically.</p>
+          <p>The tech stack of {project.name}, with the latest versions checked online. For information only; nothing is changed automatically.
+            {canVersion && !canEdit && ' You can update the version used with the pencil next to it.'}</p>
         </div>
         <div className="head-actions">
           {rows.length > 0 && <button className="btn" disabled={loading} onClick={checkNow}><Icon name="activity" />{loading ? 'Checking…' : 'Check for updates'}</button>}
@@ -237,7 +275,7 @@ export default function Technologies({ project }) {
         </Empty></div>
       ) : (
         <div className="panel">
-          <TechTable rows={rows} canEdit={canEdit} onEdit={(t) => setModal({ tech: t })} onDelete={del} />
+          <TechTable rows={rows} canEdit={canEdit} canVersion={canVersion} onEdit={(t) => setModal({ tech: t })} onDelete={del} onSaved={reload} />
         </div>
       )}
       <p className="xs muted" style={{ marginTop: 10 }}>

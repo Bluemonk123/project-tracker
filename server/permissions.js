@@ -33,6 +33,8 @@ export const PROJECT_PERMISSIONS = [
   { key: 'wiki.view',         group: 'Wiki',           label: 'View wiki' },
   { key: 'wiki.edit',         group: 'Wiki',           label: 'Edit wiki' },
   { key: 'files.upload',      group: 'Files',          label: 'Upload files' },
+  { key: 'tech.manage',       group: 'Technologies',   label: 'Add, edit and remove technologies' },
+  { key: 'tech.version',      group: 'Technologies',   label: 'Update the version used of technologies' },
 ];
 
 export const ALL_GLOBAL_KEYS = GLOBAL_PERMISSIONS.map(p => p.key);
@@ -60,7 +62,8 @@ export const DEFAULT_ROLES = [
     name: 'Team lead', scope: 'project', builtin: 0,
     description: 'Leads a team inside a project: assigns and reviews work.',
     permissions: ['project.view', 'wp.view', 'wp.create', 'wp.edit', 'wp.assign', 'wp.comment',
-      'time.log', 'time.view_all', 'meetings.view', 'meetings.manage', 'wiki.view', 'wiki.edit', 'files.upload', 'news.manage'],
+      'time.log', 'time.view_all', 'meetings.view', 'meetings.manage', 'wiki.view', 'wiki.edit', 'files.upload', 'news.manage',
+      'tech.manage', 'tech.version'],
   },
   {
     name: 'Account manager', scope: 'project', builtin: 0,
@@ -72,13 +75,13 @@ export const DEFAULT_ROLES = [
     name: 'Business analyst', scope: 'project', builtin: 0,
     description: 'Writes and maintains requirements, specs and acceptance criteria.',
     permissions: ['project.view', 'project.versions', 'wp.view', 'wp.create', 'wp.edit', 'wp.assign', 'wp.comment',
-      'time.log', 'meetings.view', 'meetings.manage', 'wiki.view', 'wiki.edit', 'files.upload'],
+      'time.log', 'meetings.view', 'meetings.manage', 'wiki.view', 'wiki.edit', 'files.upload', 'tech.version'],
   },
   {
     name: 'Developer', scope: 'project', builtin: 0,
     description: 'Works on tasks and logs time.',
     permissions: ['project.view', 'wp.view', 'wp.create', 'wp.edit_own', 'wp.comment',
-      'time.log', 'meetings.view', 'wiki.view', 'wiki.edit', 'files.upload'],
+      'time.log', 'meetings.view', 'wiki.view', 'wiki.edit', 'files.upload', 'tech.version'],
   },
   {
     name: 'QA / Tester', scope: 'project', builtin: 0,

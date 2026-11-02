@@ -37,7 +37,7 @@ export default function TechOverview() {
           {data?.rows?.length ? 'Change the filters above.' : 'Open a project and use its Technologies tab to list what it is built with.'}
         </Empty></div>
       ) : (
-        <div className="panel"><TechTable rows={rows} showProject canEdit={false} /></div>
+        <div className="panel"><TechTable rows={rows} showProject canEdit={false} onSaved={reload} /></div>
       )}
     </div>
   );

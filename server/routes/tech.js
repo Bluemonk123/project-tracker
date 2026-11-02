@@ -34,44 +34,60 @@ const withInfo = async (rows, refresh) => {
   return rows.map(t => { const info = results.get(keyOf(t)) || null; return { ...t, info, assessment: assess(t.version_used, info) }; });
 };
 
+// Who may do what: managing (add / edit / remove) needs tech.manage or project.edit;
+// updating only the version used also works with tech.version.
+const canManage = (req, pid) => can(req, 'tech.manage', pid) || can(req, 'project.edit', pid);
+const canVersion = (req, pid) => canManage(req, pid) || can(req, 'tech.version', pid);
+const ROWS_SQL = `SELECT t.*, vu.name AS version_updated_by_name FROM project_technologies t
+                  LEFT JOIN users vu ON vu.id = t.version_updated_by`;
+
 r.get('/projects/:pid/technologies', async (req, res, next) => {
   try {
     const p = resolveProject(req.params.pid);
     need(req, 'project.view', p.id);
-    const rows = all('SELECT * FROM project_technologies WHERE project_id = ? ORDER BY position, category, name COLLATE NOCASE', p.id);
-    res.json({ rows: await withInfo(rows, req.query.refresh === '1'), can_edit: can(req, 'project.edit', p.id) });
+    const rows = all(`${ROWS_SQL} WHERE t.project_id = ? ORDER BY t.position, t.category, t.name COLLATE NOCASE`, p.id);
+    const manage = canManage(req, p.id);
+    res.json({ rows: await withInfo(rows, req.query.refresh === '1'), can_edit: manage, can_manage: manage, can_version: canVersion(req, p.id) });
   } catch (e) { next(e); }
 });
 
 r.post('/projects/:pid/technologies', (req, res) => {
   const p = resolveProject(req.params.pid);
-  need(req, 'project.edit', p.id);
+  if (!canManage(req, p.id)) fail(403, 'You do not have permission to add technologies to this project.');
   const f = fields(req.body);
   if (!f.name) fail(400, 'Technology name is required.');
   if (get('SELECT id FROM project_technologies WHERE project_id = ? AND name = ? COLLATE NOCASE', p.id, f.name)) fail(400, `${f.name} is already listed for this project.`);
   const pos = get('SELECT COALESCE(MAX(position), 0) + 1 AS n FROM project_technologies WHERE project_id = ?', p.id).n;
-  const { id } = run(`INSERT INTO project_technologies(project_id, name, category, version_used, source, package_id, eol_slug, notes, position, created_by)
-                      VALUES(?,?,?,?,?,?,?,?,?,?)`, p.id, f.name, f.category || 'Other', f.version_used ?? null, f.source || 'none',
-    f.package_id ?? null, f.eol_slug ?? null, f.notes ?? null, pos, req.user.id);
+  const { id } = run(`INSERT INTO project_technologies(project_id, name, category, version_used, source, package_id, eol_slug, notes, position, created_by,
+                      version_updated_at, version_updated_by)
+                      VALUES(?,?,?,?,?,?,?,?,?,?,${f.version_used ? "datetime('now')" : 'NULL'},?)`, p.id, f.name, f.category || 'Other', f.version_used ?? null, f.source || 'none',
+    f.package_id ?? null, f.eol_slug ?? null, f.notes ?? null, pos, req.user.id, f.version_used ? req.user.id : null);
   res.status(201).json({ id });
 });
 
-function loadTech(req, id) {
-  const t = get('SELECT * FROM project_technologies WHERE id = ?', id) || fail(404, 'Technology not found.');
-  need(req, 'project.edit', t.project_id);
-  return t;
-}
+const loadTech = (id) => get('SELECT * FROM project_technologies WHERE id = ?', id) || fail(404, 'Technology not found.');
 
 r.patch('/technologies/:id', (req, res) => {
-  const t = loadTech(req, req.params.id);
+  const t = loadTech(req.params.id);
+  need(req, 'project.view', t.project_id);
   const f = fields(req.body);
   const keys = Object.keys(f).filter(k => f[k] !== undefined);
-  if (keys.length) run(`UPDATE project_technologies SET ${keys.map(k => `${k} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`, ...keys.map(k => f[k]), t.id);
+  const versionOnly = keys.every(k => k === 'version_used');
+  if (versionOnly ? !canVersion(req, t.project_id) : !canManage(req, t.project_id)) {
+    fail(403, versionOnly ? 'You do not have permission to update technology versions in this project.' : 'You can only update the version used of this technology.');
+  }
+  const set = keys.map(k => `${k} = ?`);
+  const vals = keys.map(k => f[k]);
+  if (keys.includes('version_used') && (f.version_used ?? null) !== (t.version_used ?? null)) {
+    set.push("version_updated_at = datetime('now')", 'version_updated_by = ?'); vals.push(req.user.id);
+  }
+  if (set.length) run(`UPDATE project_technologies SET ${set.join(', ')}, updated_at = datetime('now') WHERE id = ?`, ...vals, t.id);
   res.json({ ok: true });
 });
 
 r.delete('/technologies/:id', (req, res) => {
-  const t = loadTech(req, req.params.id);
+  const t = loadTech(req.params.id);
+  if (!canManage(req, t.project_id)) fail(403, 'You do not have permission to remove technologies from this project.');
   run('DELETE FROM project_technologies WHERE id = ?', t.id);
   res.json({ ok: true });
 });
@@ -90,9 +106,10 @@ r.get('/technologies', async (req, res, next) => {
   try {
     const ids = visibleProjectIds(req, 'project.view');
     if (!ids.length) return res.json({ rows: [] });
-    const rows = all(`SELECT t.*, p.name AS project_name, p.identifier AS project_identifier, p.color AS project_color
-                      FROM project_technologies t JOIN projects p ON p.id = t.project_id
-                      WHERE t.project_id IN (${ids.map(() => '?').join(',')}) ORDER BY t.name COLLATE NOCASE, p.name`, ...ids);
+    const rows = all(`SELECT t.*, vu.name AS version_updated_by_name, p.name AS project_name, p.identifier AS project_identifier, p.color AS project_color
+                      FROM project_technologies t JOIN projects p ON p.id = t.project_id LEFT JOIN users vu ON vu.id = t.version_updated_by
+                      WHERE t.project_id IN (${ids.map(() => '?').join(',')}) ORDER BY t.name COLLATE NOCASE, p.name`, ...ids)
+      .map(t => ({ ...t, can_version: canVersion(req, t.project_id) }));
     res.json({ rows: await withInfo(rows, req.query.refresh === '1') });
   } catch (e) { next(e); }
 });

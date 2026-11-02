@@ -356,6 +356,19 @@ test('project technologies: add, edit, list, permissions', async () => {
   await admin.post(`/projects/${p.id}/members`, { user_id: ids.dev, role_id: ids.devRole });
   assert.equal((await dev.post(`/projects/${p.id}/technologies`, { name: 'Y' })).status, 403);
   assert.equal((await dev.get(`/projects/${p.id}/technologies`)).data.can_edit, false);
+  // ...but can update the version used (Developer role has tech.version), and nothing else
+  assert.equal((await dev.get(`/projects/${p.id}/technologies`)).data.can_version, true);
+  r = await dev.patch(`/technologies/${id}`, { version_used: '2.3' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal((await dev.patch(`/technologies/${id}`, { version_used: '2.4', name: 'Renamed' })).status, 403);
+  assert.equal((await dev.patch(`/technologies/${id}`, { notes: 'x' })).status, 403);
+  assert.equal((await dev.del(`/technologies/${id}`)).status, 403);
+  const row = (await admin.get(`/projects/${p.id}/technologies`)).data.rows[0];
+  assert.equal(row.version_used, '2.3');
+  assert.equal(row.version_updated_by_name, 'Dev One');
+  assert.ok(row.version_updated_at);
+  // someone outside the project cannot
+  assert.ok([401, 403].includes((await outsider.patch(`/technologies/${id}`, { version_used: '9' })).status));
   r = await admin.get('/technologies');
   assert.ok(r.data.rows.some(t => t.name === 'Internal SDK' && t.project_identifier === 'TECH'));
   assert.equal((await admin.del(`/technologies/${id}`)).status, 200);
