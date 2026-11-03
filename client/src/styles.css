@@ -337,6 +337,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .popover-wrap { position: relative; display: inline-block; }
 .popover { position: absolute; top: calc(100% + 4px); right: 0; min-width: 220px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow-pop); padding: 6px; z-index: 50; }
 .popover.left { left: 0; right: auto; }
+.popover.up { top: auto; bottom: calc(100% + 4px); }
 .menu-item { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: 0; background: none; padding: 7px 10px; border-radius: 6px; cursor: pointer; color: var(--ink); font-size: var(--fs); text-decoration: none; }
 .menu-item:hover { background: var(--sunken); text-decoration: none; }
 .menu-item.danger { color: var(--danger); }

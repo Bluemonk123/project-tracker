@@ -76,6 +76,10 @@ r.patch('/technologies/:id', (req, res) => {
   if (versionOnly ? !canVersion(req, t.project_id) : !canManage(req, t.project_id)) {
     fail(403, versionOnly ? 'You do not have permission to update technology versions in this project.' : 'You can only update the version used of this technology.');
   }
+  if (f.name && f.name.toLowerCase() !== t.name.toLowerCase()
+    && get('SELECT id FROM project_technologies WHERE project_id = ? AND name = ? COLLATE NOCASE AND id <> ?', t.project_id, f.name, t.id)) {
+    fail(400, `${f.name} is already listed for this project.`);
+  }
   const set = keys.map(k => `${k} = ?`);
   const vals = keys.map(k => f[k]);
   if (keys.includes('version_used') && (f.version_used ?? null) !== (t.version_used ?? null)) {
@@ -109,7 +113,7 @@ r.get('/technologies', async (req, res, next) => {
     const rows = all(`SELECT t.*, vu.name AS version_updated_by_name, p.name AS project_name, p.identifier AS project_identifier, p.color AS project_color
                       FROM project_technologies t JOIN projects p ON p.id = t.project_id LEFT JOIN users vu ON vu.id = t.version_updated_by
                       WHERE t.project_id IN (${ids.map(() => '?').join(',')}) ORDER BY t.name COLLATE NOCASE, p.name`, ...ids)
-      .map(t => ({ ...t, can_version: canVersion(req, t.project_id) }));
+      .map(t => ({ ...t, can_version: canVersion(req, t.project_id), can_manage: canManage(req, t.project_id) }));
     res.json({ rows: await withInfo(rows, req.query.refresh === '1') });
   } catch (e) { next(e); }
 });

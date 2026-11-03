@@ -71,7 +71,7 @@ export function Releases({ info }) {
   );
 }
 
-function TechModal({ project, tech, onClose, onSaved }) {
+export function TechModal({ project, tech, onClose, onSaved }) {
   const { catalog, categories, sources } = useCatalog();
   const [f, setF] = useState({
     name: tech?.name || '', category: tech?.category || 'Frontend', version_used: tech?.version_used || '',
@@ -97,12 +97,12 @@ function TechModal({ project, tech, onClose, onSaved }) {
   };
   const src = sources.find(s => s.key === f.source);
   return (
-    <Modal title={tech ? `Edit ${tech.name}` : 'Add technology'} wide onClose={onClose} onSubmit={save} footer={<>
+    <Modal title={tech ? `Edit ${tech.name}${tech.project_name ? ` in ${tech.project_name}` : ''}` : 'Add technology'} wide onClose={onClose} onSubmit={save} footer={<>
       <button type="button" className="btn" onClick={onClose}>Cancel</button>
       <button className="btn primary" disabled={busy || !f.name.trim()}>{tech ? 'Save' : 'Add technology'}</button>
     </>}>
       <div className="form-grid three">
-        <Field label="Technology" className="span-2" hint="Pick from the list to fill in the rest, or type any name.">
+        <Field label={tech ? 'Name' : 'Technology'} className="span-2" hint={tech ? 'Change the name here to rename it.' : 'Pick from the list to fill in the rest, or type any name.'}>
           <input type="text" list="tech-catalog" value={f.name} onChange={(e) => pickName(e.target.value)} placeholder="e.g. React, Laravel, PostgreSQL" required />
           <datalist id="tech-catalog">{catalog.map(c => <option key={c.name} value={c.name}>{c.category}</option>)}</datalist>
         </Field>
@@ -181,13 +181,15 @@ function VersionCell({ t, canVersion, onSaved }) {
 
 export function TechTable({ rows, showProject, canEdit, canVersion, onEdit, onDelete, onSaved }) {
   const [open, setOpen] = useState({});
+  const editable = (t) => !!(t.can_manage ?? canEdit);
+  const anyEditable = rows.some(editable);
   const cols = 7 + (showProject ? 1 : 0);
   return (
     <div className="table-wrap">
       <table className="table">
         <thead><tr>
           <th style={{ width: 28 }} /><th>Technology</th>{showProject && <th>Project</th>}<th>Version used</th><th>Latest version</th>
-          <th className="hide-sm">Support</th><th>Status</th>{canEdit && <th />}
+          <th className="hide-sm">Support</th><th>Status</th>{anyEditable && <th />}
         </tr></thead>
         <tbody>
           {rows.map(t => (
@@ -210,12 +212,14 @@ export function TechTable({ rows, showProject, canEdit, canVersion, onEdit, onDe
                 </td>
                 <td className="hide-sm small soft">{supportText(t) || <span className="muted">—</span>}</td>
                 <td><StatusTag a={t.assessment} /></td>
-                {canEdit && (
+                {anyEditable && (
                   <td className="num">
-                    <MoreMenu>
-                      <button className="menu-item" onClick={() => onEdit(t)}><Icon name="edit" size={16} />Edit</button>
-                      <button className="menu-item danger" onClick={() => onDelete(t)}><Icon name="trash" size={16} />Remove</button>
-                    </MoreMenu>
+                    {editable(t) && (
+                      <MoreMenu label={`Actions for ${t.name}`}>
+                        <button className="menu-item" onClick={() => onEdit(t)}><Icon name="edit" size={16} />Edit or rename</button>
+                        <button className="menu-item danger" onClick={() => onDelete(t)}><Icon name="trash" size={16} />Delete</button>
+                      </MoreMenu>
+                    )}
                   </td>
                 )}
               </tr>
@@ -242,8 +246,8 @@ export default function Technologies({ project }) {
   const canVersion = !!data?.can_version;
   const counts = useMemo(() => rows.reduce((m, t) => ({ ...m, [t.assessment.status]: (m[t.assessment.status] || 0) + 1 }), {}), [rows]);
   const del = async (t) => {
-    if (await confirmDialog({ message: `Remove ${t.name} from ${project.name}?`, confirmLabel: 'Remove', danger: true })) {
-      if (await run(() => api.del(`/technologies/${t.id}`), 'Technology removed')) reload();
+    if (await confirmDialog({ title: `Delete ${t.name}?`, message: `${t.name} is removed from ${project.name}'s technologies.`, confirmLabel: 'Delete', danger: true })) {
+      if (await run(() => api.del(`/technologies/${t.id}`), `${t.name} deleted`)) reload();
     }
   };
   return (

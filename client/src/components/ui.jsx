@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import Icon from './Icon.jsx';
@@ -106,10 +106,25 @@ export function Popover({ trigger, children, align = 'right' }) {
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
   }, [open]);
+  // Open upwards when there is no room below (inside a scrolling table or near the bottom of the window).
+  const pop = useRef(null);
+  const [up, setUp] = useState(false);
+  useLayoutEffect(() => {
+    if (!open) { setUp(false); return; }
+    const el = pop.current;
+    if (!el) return;
+    let limit = window.innerHeight;
+    for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+      const st = getComputedStyle(p);
+      if (/(auto|scroll|hidden)/.test(st.overflow + st.overflowX + st.overflowY)) { limit = Math.min(limit, p.getBoundingClientRect().bottom); break; }
+    }
+    const r = el.getBoundingClientRect();
+    if (r.bottom > limit - 4 && ref.current.getBoundingClientRect().top - r.height > 8) setUp(true);
+  }, [open]);
   return (
     <span className="popover-wrap" ref={ref}>
       {trigger({ open, toggle: () => setOpen(o => !o) })}
-      {open && <div className={`popover ${align}`} onClick={(e) => { if (e.target.closest('.menu-item')) setOpen(false); }}>{children}</div>}
+      {open && <div ref={pop} className={`popover ${align}${up ? ' up' : ''}`} onClick={(e) => { if (e.target.closest('.menu-item')) setOpen(false); }}>{children}</div>}
     </span>
   );
 }

@@ -369,8 +369,15 @@ test('project technologies: add, edit, list, permissions', async () => {
   assert.ok(row.version_updated_at);
   // someone outside the project cannot
   assert.ok([401, 403].includes((await outsider.patch(`/technologies/${id}`, { version_used: '9' })).status));
+  // rename: allowed for managers, refused when the name is taken
+  const other = (await admin.post(`/projects/${p.id}/technologies`, { name: 'Other Lib' })).data.id;
+  assert.equal((await admin.patch(`/technologies/${other}`, { name: 'INTERNAL sdk' })).status, 400);
+  assert.equal((await admin.patch(`/technologies/${other}`, { name: 'Renamed Lib' })).status, 200);
   r = await admin.get('/technologies');
-  assert.ok(r.data.rows.some(t => t.name === 'Internal SDK' && t.project_identifier === 'TECH'));
+  assert.ok(r.data.rows.some(t => t.name === 'Internal SDK' && t.project_identifier === 'TECH' && t.can_manage === true));
+  assert.ok(r.data.rows.some(t => t.name === 'Renamed Lib'));
+  assert.equal((await dev.get('/technologies')).data.rows.find(t => t.id === id).can_manage, false);
+  assert.equal((await admin.del(`/technologies/${other}`)).status, 200);
   assert.equal((await admin.del(`/technologies/${id}`)).status, 200);
 });
 
