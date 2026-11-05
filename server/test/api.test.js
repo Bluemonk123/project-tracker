@@ -496,4 +496,21 @@ test('project board: brief, customer roles and documents', async () => {
   assert.equal(r.data.delivery.tasks, 1);
   assert.ok(Array.isArray(r.data.delivery.testing_status_ids) && r.data.delivery.testing_status_ids.length > 0);
   assert.equal((await dev.put(`/projects/${p.id}/board-info`, { board: { customer_demo: 'Yes' } })).status, 403);
+  // approvals: module with first and second approver
+  const me = (await admin.get('/auth/me')).data.user.id;
+  r = await admin.post(`/projects/${p.id}/approvals`, { module: 'Orders', first_approver_id: me, second_approver_id: ids.dev });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const apId = r.data.id;
+  assert.equal((await admin.post(`/projects/${p.id}/approvals`, { module: 'orders' })).status, 400, 'duplicate module');
+  assert.equal((await admin.post(`/projects/${p.id}/approvals`, { module: 'Same', first_approver_id: me, second_approver_id: me })).status, 400);
+  assert.equal((await admin.post(`/projects/${p.id}/approvals`, { module: '' })).status, 400);
+  assert.equal((await dev.post(`/projects/${p.id}/approvals`, { module: 'X' })).status, 403);
+  assert.ok((await dev.get('/notifications?unread=1')).data.some(n => /second approver for "Orders"/.test(n.message)));
+  assert.equal((await admin.patch(`/approvals/${apId}`, { module: 'Order management', second_approver_id: null })).status, 200);
+  r = await admin.get(`/projects/${p.id}/board-info`);
+  assert.equal(r.data.approvals[0].module, 'Order management');
+  assert.equal(r.data.approvals[0].first_approver_id, me);
+  assert.equal(r.data.approvals[0].second_approver_id, null);
+  assert.equal((await dev.del(`/approvals/${apId}`)).status, 403);
+  assert.equal((await admin.del(`/approvals/${apId}`)).status, 200);
 });

@@ -4,7 +4,7 @@ import { api } from '../api.js';
 import { useApp, useLoad } from '../context.jsx';
 import Icon from '../components/Icon.jsx';
 import { STATUS, POSITION_ORDER } from '../components/KeyPeople.jsx';
-import { Loading, ErrorBox, Empty, Field, Modal, Markdown, MarkdownEditor, Person, ProjectStatus, Popover, useAsync } from '../components/ui.jsx';
+import { Loading, ErrorBox, Empty, Field, Modal, Markdown, MarkdownEditor, Person, ProjectStatus, Popover, MoreMenu, UserSelect, confirmDialog, useAsync } from '../components/ui.jsx';
 import { fmtSize, timeAgo, fmtDateTime, fmtDate } from '../lib/format.js';
 
 // One tab per project: brief, customer, customer user roles and team on the left; the seven project documents on the right.
@@ -43,6 +43,7 @@ function ProjectSheet({ projectId }) {
       <ProjectDetails data={data} reload={reload} />
       <div className="stack">
         <Documents data={data} reload={reload} />
+        <Approvals data={data} reload={reload} />
         <ProjectTeam data={data} />
       </div>
     </div>
@@ -318,47 +319,126 @@ function LinksModal({ title, value, onClose, onSave }) {
   );
 }
 
+// Short codes for project roles, shown in the same chip style as PM / AM / BA / DT.
+const ROLE_CODE = { 'Project manager': 'PM', 'Team lead': 'TL', 'Account manager': 'AM', 'Business analyst': 'BA', Developer: 'DEV', 'QA / Tester': 'QA', Viewer: 'VW' };
+const roleCode = (name) => ROLE_CODE[name] || name.split(/[\s/]+/).filter(Boolean).map(w => w[0]).join('').slice(0, 3).toUpperCase();
+
+function TeamRow({ code, tone, icon, label, title, children }) {
+  return (
+    <div className="pb-kp">
+      <span className={`kp-chip ${tone}`} title={title}><b>{code}</b>{icon && <Icon name={icon} size={14} />}</span>
+      <span className="xs soft pb-kp-label">{label}</span>
+      <span className="pb-kp-people">{children}</span>
+    </div>
+  );
+}
+
 function ProjectTeam({ data }) {
   const { positions, members, project } = data;
+  const [open, setOpen] = useState(false);
   const byRole = {};
   for (const m of members) (byRole[m.role_name] ||= []).push(m);
   return (
-    <section className="panel">
-      <div className="panel-head"><h3>Project team <span className="pb-count">{members.length}</span></h3>
+    <section className={`panel pb-accordion${open ? ' open' : ''}`}>
+      <div className="panel-head">
+        <button type="button" className="pb-acc-toggle" aria-expanded={open} onClick={() => setOpen(o => !o)}>
+          <Icon name="chevronRight" size={16} className="pb-acc-chev" />
+          <h3>Project team <span className="pb-count">{members.length}</span></h3>
+        </button>
         <div className="actions"><Link className="btn sm ghost" to={`/projects/${project.identifier}/members`}>Members</Link></div>
       </div>
-      <div className="panel-body stack">
-        <div className="pb-keypeople">
-          {POSITION_ORDER.map(code => {
-            const slot = positions[code];
-            const st = STATUS[slot.status];
-            return (
-              <div key={code} className="pb-kp">
-                <span className={`kp-chip ${st.tone}`} title={st.label}><b>{code}</b><Icon name={st.icon} size={14} /></span>
-                <span className="xs soft pb-kp-label">{slot.label}</span>
-                <span className="pb-kp-people">
+      {open && (
+        <div className="panel-body">
+          <div className="pb-keypeople">
+            {POSITION_ORDER.map(code => {
+              const slot = positions[code];
+              const st = STATUS[slot.status];
+              return (
+                <TeamRow key={code} code={code} tone={st.tone} icon={st.icon} label={slot.label} title={st.label}>
                   {slot.status === 'active' ? slot.active.map(x => <Person key={x.user_id ?? x.id} id={x.user_id ?? x.id} name={x.name} />)
                     : slot.status === 'broken' ? <span className="text-danger small">{slot.removed[0]?.name} removed</span>
                     : <span className="muted small">Not mapped</span>}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-        {Object.keys(byRole).length > 0 && (
-          <div className="pb-members">
+                </TeamRow>
+              );
+            })}
             {Object.entries(byRole).map(([role, ms]) => (
-              <div key={role}>
-                <div className="xs soft" style={{ fontWeight: 600, marginBottom: 4 }}>{role}</div>
-                <div className="row wrap" style={{ gap: '6px 14px' }}>
-                  {ms.map(m => <Person key={m.id} id={m.user_id} name={m.name} />)}
-                </div>
-              </div>
+              <TeamRow key={role} code={roleCode(role)} tone="role" label={role} title={`Project role: ${role}`}>
+                {ms.map(m => <Person key={m.id} id={m.user_id} name={m.name} />)}
+              </TeamRow>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </section>
+  );
+}
+
+function Approvals({ data, reload }) {
+  const [modal, setModal] = useState(null);
+  const [, run] = useAsync();
+  const list = data.approvals;
+  const canEdit = data.can.brief;
+  const del = async (a) => {
+    if (await confirmDialog({ title: `Delete approvers for ${a.module}?`, message: 'The module and its approvers are removed from this list.', confirmLabel: 'Delete', danger: true })) {
+      if (await run(() => api.del(`/approvals/${a.id}`), 'Approval deleted')) reload();
+    }
+  };
+  const who = (id, name) => (id ? <Person id={id} name={name} /> : <span className="muted small">Not chosen</span>);
+  return (
+    <section className="panel">
+      <div className="panel-head"><h3>Approvals {list.length > 0 && <span className="pb-count">{list.length}</span>}</h3>
+        <div className="actions">{canEdit && <button type="button" className="btn sm" onClick={() => setModal({})}><Icon name="plus" size={15} />Add</button>}</div>
+      </div>
+      {!list.length ? (
+        <div className="panel-body muted small">No approvals yet.{canEdit && ' Choose Add to name a module and who approves it.'}</div>
+      ) : (
+        <div className="table-wrap">
+          <table className="table pb-approvals">
+            <thead><tr><th>Module name</th><th>First approver</th><th>Second approver</th>{canEdit && <th />}</tr></thead>
+            <tbody>
+              {list.map(a => (
+                <tr key={a.id}>
+                  <td><b>{a.module}</b></td>
+                  <td>{who(a.first_approver_id, a.first_approver_name)}</td>
+                  <td>{who(a.second_approver_id, a.second_approver_name)}</td>
+                  {canEdit && (
+                    <td className="num">
+                      <MoreMenu label={`Actions for ${a.module}`}>
+                        <button className="menu-item" onClick={() => setModal({ approval: a })}><Icon name="edit" size={16} />Edit</button>
+                        <button className="menu-item danger" onClick={() => del(a)}><Icon name="trash" size={16} />Delete</button>
+                      </MoreMenu>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {modal && <ApprovalModal projectId={data.project.id} approval={modal.approval} onClose={() => setModal(null)} onSaved={reload} />}
+    </section>
+  );
+}
+
+function ApprovalModal({ projectId, approval, onClose, onSaved }) {
+  const [f, setF] = useState({ module: approval?.module || '', first_approver_id: approval?.first_approver_id ?? null, second_approver_id: approval?.second_approver_id ?? null });
+  const [busy, run] = useAsync();
+  const save = async () => {
+    const r = await run(() => (approval ? api.patch(`/approvals/${approval.id}`, f) : api.post(`/projects/${projectId}/approvals`, f)), approval ? 'Approval saved' : `${f.module} added`);
+    if (r) { onSaved(); onClose(); }
+  };
+  return (
+    <Modal title={approval ? `Edit approval: ${approval.module}` : 'Add approval'} onClose={onClose} onSubmit={save} footer={<>
+      <button type="button" className="btn" onClick={onClose}>Cancel</button>
+      <button className="btn primary" disabled={busy || !f.module.trim()}>{approval ? 'Save' : 'Add'}</button>
+    </>}>
+      <div className="stack">
+        <Field label="Module name"><input type="text" value={f.module} maxLength={150} required autoFocus placeholder="e.g. Order management" onChange={(e) => setF({ ...f, module: e.target.value })} /></Field>
+        <Field label="First approver"><UserSelect value={f.first_approver_id} placeholder="Choose a person" onChange={(v) => setF({ ...f, first_approver_id: v })} /></Field>
+        <Field label="Second approver"><UserSelect value={f.second_approver_id} placeholder="Choose a person" onChange={(v) => setF({ ...f, second_approver_id: v })} /></Field>
+        <p className="xs muted" style={{ margin: 0 }}>Both approvers are notified when they are chosen.</p>
+      </div>
+    </Modal>
   );
 }
 

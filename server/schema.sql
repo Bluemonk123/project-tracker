@@ -393,3 +393,16 @@ CREATE TABLE IF NOT EXISTS project_customer_roles (
   position    INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_customer_roles ON project_customer_roles(project_id, position);
+
+-- Project Board: who approves each module (first and second approver)
+CREATE TABLE IF NOT EXISTS project_approvals (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id         INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  module             TEXT NOT NULL,
+  first_approver_id  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  second_approver_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_by         INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at         TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_project_approvals ON project_approvals(project_id, id);

@@ -8,6 +8,7 @@ import { get, all, run, tx, UPLOAD_DIR } from '../db.js';
 import { need, can, fail } from '../access.js';
 import { resolveProject, listMembers } from './projects.js';
 import { positionsFor } from '../positions.js';
+import { notify } from '../util.js';
 
 export const DOC_SLOTS = [
   { key: '01', name: 'Product Overview' },
@@ -103,6 +104,10 @@ r.get('/projects/:pid/board-info', (req, res) => {
     project: { id: p.id, name: p.name, identifier: p.identifier, color: p.color, status: p.status, description: p.description,
       customer_name: p.customer_name, start_date: p.start_date, end_date: p.end_date },
     customer_roles: roles,
+    approvals: all(`SELECT a.id, a.module, a.first_approver_id, a.second_approver_id, a.created_at,
+                       f.name AS first_approver_name, s2.name AS second_approver_name
+                     FROM project_approvals a LEFT JOIN users f ON f.id = a.first_approver_id LEFT JOIN users s2 ON s2.id = a.second_approver_id
+                     WHERE a.project_id = ? ORDER BY a.module COLLATE NOCASE, a.id`, p.id),
     board: readBoard(p),
     delivery: { tasks: counts.total || 0, open: counts.open || 0, testing: counts.testing || 0, testing_status_ids: testingIds, release: release || null },
     stack: {
@@ -166,6 +171,60 @@ r.post('/projects/:pid/documents/:slot', (req, res, next) => {
       } catch (e) { fs.rmSync(req.file.path, { force: true }); throw e; }
     } catch (e) { next(e); }
   });
+});
+
+// ---------- Approvals: module name with a first and second approver ----------
+function approvalFields(b) {
+  const module = String(b.module ?? '').trim();
+  if (!module) fail(400, 'Enter the module name.');
+  if (module.length > 150) fail(400, 'Module names must be 150 characters or fewer.');
+  const person = (v, label) => {
+    if (v === null || v === undefined || v === '') return null;
+    const u = get("SELECT id FROM users WHERE id = ? AND status = 'active'", Number(v));
+    if (!u) fail(400, `Choose an active user as ${label}.`);
+    return u.id;
+  };
+  const first = person(b.first_approver_id, 'first approver');
+  const second = person(b.second_approver_id, 'second approver');
+  if (first && first === second) fail(400, 'The first and second approver must be different people.');
+  return { module, first, second };
+}
+function tellApprovers(req, p, f, before = {}) {
+  const msg = (which) => `${req.user.name} made you the ${which} approver for "${f.module}" in ${p.name}`;
+  if (f.first && f.first !== before.first_approver_id) notify([f.first], { actorId: req.user.id, projectId: p.id, reason: 'approval', message: msg('first') });
+  if (f.second && f.second !== before.second_approver_id) notify([f.second], { actorId: req.user.id, projectId: p.id, reason: 'approval', message: msg('second') });
+}
+
+r.post('/projects/:pid/approvals', (req, res) => {
+  const p = resolveProject(req.params.pid);
+  if (!canBrief(req, p.id)) fail(403, 'You do not have permission to manage approvals in this project.');
+  const f = approvalFields(req.body || {});
+  if (get('SELECT id FROM project_approvals WHERE project_id = ? AND module = ? COLLATE NOCASE', p.id, f.module)) fail(400, `${f.module} already has approvers. Edit it instead.`);
+  const { id } = run('INSERT INTO project_approvals(project_id, module, first_approver_id, second_approver_id, created_by) VALUES(?,?,?,?,?)',
+    p.id, f.module, f.first, f.second, req.user.id);
+  tellApprovers(req, p, f);
+  res.status(201).json({ id });
+});
+
+function loadApproval(req) {
+  const a = get('SELECT * FROM project_approvals WHERE id = ?', req.params.id) || fail(404, 'Approval not found.');
+  if (!canBrief(req, a.project_id)) fail(403, 'You do not have permission to manage approvals in this project.');
+  return a;
+}
+
+r.patch('/approvals/:id', (req, res) => {
+  const a = loadApproval(req);
+  const f = approvalFields({ module: a.module, first_approver_id: a.first_approver_id, second_approver_id: a.second_approver_id, ...req.body });
+  if (get('SELECT id FROM project_approvals WHERE project_id = ? AND module = ? COLLATE NOCASE AND id <> ?', a.project_id, f.module, a.id)) fail(400, `${f.module} already has approvers.`);
+  run("UPDATE project_approvals SET module = ?, first_approver_id = ?, second_approver_id = ?, updated_at = datetime('now') WHERE id = ?", f.module, f.first, f.second, a.id);
+  tellApprovers(req, get('SELECT * FROM projects WHERE id = ?', a.project_id), f, a);
+  res.json({ ok: true });
+});
+
+r.delete('/approvals/:id', (req, res) => {
+  const a = loadApproval(req);
+  run('DELETE FROM project_approvals WHERE id = ?', a.id);
+  res.json({ ok: true });
 });
 
 export default r;
