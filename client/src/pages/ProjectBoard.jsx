@@ -42,8 +42,8 @@ function ProjectSheet({ projectId }) {
     <div className="pb-grid" style={{ '--pc': data.project.color }}>
       <ProjectDetails data={data} reload={reload} />
       <div className="stack">
-        <Documents data={data} reload={reload} />
         <Approvals data={data} reload={reload} />
+        <Documents data={data} reload={reload} />
         <ProjectTeam data={data} />
       </div>
     </div>
