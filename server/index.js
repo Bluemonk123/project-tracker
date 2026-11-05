@@ -13,6 +13,7 @@ import timeRoutes from './routes/time.js';
 import meetingRoutes from './routes/meetings.js';
 import miscRoutes from './routes/misc.js';
 import techRoutes from './routes/tech.js';
+import projectBoardRoutes from './routes/projectboard.js';
 import { backupCopyRoutes, scheduleCopies } from './routes/backupcopy.js';
 
 const PORT = Number(process.env.PORT || 4000);
@@ -39,6 +40,7 @@ export function createApp() {
   api.use(meetingRoutes);
   api.use(miscRoutes);
   api.use(techRoutes);
+  api.use(projectBoardRoutes);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found.')));
   app.use('/api', api);
 

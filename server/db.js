@@ -193,6 +193,26 @@ function migrate() {
       setSetting('migration_tech_perms_v1', '1');
     });
   }
+
+  // Project Board: customer name on projects, document slot on attachments, and who may edit / upload.
+  const projCols = all('PRAGMA table_info(projects)').map(c => c.name);
+  if (!projCols.includes('customer_name')) db.exec('ALTER TABLE projects ADD COLUMN customer_name TEXT');
+  const attCols = all('PRAGMA table_info(attachments)').map(c => c.name);
+  if (!attCols.includes('doc_slot')) db.exec('ALTER TABLE attachments ADD COLUMN doc_slot TEXT');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_attach_docs ON attachments(container_type, container_id, doc_slot)');
+  if (getSetting('migration_board_perms_v1') === null) {
+    tx(() => {
+      const grant = { 'Project manager': ['project.brief', 'project.documents'], 'Team lead': ['project.documents'],
+        'Account manager': ['project.brief', 'project.documents'], 'Business analyst': ['project.brief', 'project.documents'] };
+      for (const [name, keys] of Object.entries(grant)) {
+        const role = get("SELECT id, permissions FROM roles WHERE scope = 'project' AND name = ?", name);
+        if (!role) continue;
+        let perms = []; try { perms = JSON.parse(role.permissions) || []; } catch { /* ignore */ }
+        run('UPDATE roles SET permissions = ? WHERE id = ?', JSON.stringify([...new Set([...perms, ...keys])]), role.id);
+      }
+      setSetting('migration_board_perms_v1', '1');
+    });
+  }
 }
 migrate();
 

@@ -439,3 +439,41 @@ test('backup copies to a folder', async () => {
   assert.equal(head, 'SQLite format 3');
   assert.ok(fs.existsSync(path.join(dir, 'HOW TO RESTORE.txt')));
 });
+
+test('project board: brief, customer roles and documents', async () => {
+  const p = (await admin.post('/projects', { name: 'Board Info', identifier: 'PBI' })).data;
+  await admin.post(`/projects/${p.id}/members`, { user_id: ids.dev, role_id: ids.devRole });
+  let r = await admin.get(`/projects/${p.id}/board-info`);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.data.documents.map(d => d.key), ['01', '02', '03', '04', '05', '06', '07']);
+  assert.equal(r.data.documents[1].name, 'Business Requirements');
+  assert.equal(r.data.can.brief, true);
+  // save brief, customer and roles
+  r = await admin.put(`/projects/${p.id}/board-info`, { description: 'A portal.', customer_name: 'Acme Ltd',
+    customer_roles: [{ name: 'Admin', description: 'Runs it' }, { name: 'Agent' }] });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal((await admin.put(`/projects/${p.id}/board-info`, { customer_roles: [{ name: 'A' }, { name: 'a' }] })).status, 400);
+  r = await admin.get(`/projects/${p.id}/board-info`);
+  assert.equal(r.data.project.customer_name, 'Acme Ltd');
+  assert.equal(r.data.project.description, 'A portal.');
+  assert.deepEqual(r.data.customer_roles.map(x => x.name), ['Admin', 'Agent']);
+  assert.ok(r.data.members.some(m => m.user_id === ids.dev));
+  // upload two versions of document 02
+  const up = async (who, slot, name, body = 'x') => {
+    const fd = new FormData(); fd.append('file', new Blob([body]), name);
+    return (await fetch(`${base}/projects/${p.id}/documents/${slot}`, { method: 'POST', body: fd, headers: { cookie: who.cookie() } })).status;
+  };
+  assert.equal(await up(admin, '02', 'brd-v1.docx'), 201);
+  assert.equal(await up(admin, '02', 'brd-v2.docx', 'second'), 201);
+  assert.equal(await up(admin, '09', 'x.pdf'), 404);
+  // a developer can see and download but not upload or edit
+  assert.equal(await up(dev, '01', 'x.pdf'), 403);
+  assert.equal((await dev.put(`/projects/${p.id}/board-info`, { customer_name: 'X' })).status, 403);
+  r = await dev.get(`/projects/${p.id}/board-info`);
+  assert.equal(r.data.can.documents, false);
+  const d2 = r.data.documents[1];
+  assert.equal(d2.latest.filename, 'brd-v2.docx');
+  assert.equal(d2.versions.length, 2);
+  const file = await fetch(`${base}/attachments/${d2.latest.id}/download`, { headers: { cookie: dev.cookie() } });
+  assert.equal(await file.text(), 'second');
+});

@@ -14,6 +14,8 @@ export const GLOBAL_PERMISSIONS = [
 export const PROJECT_PERMISSIONS = [
   { key: 'project.view',      group: 'Project',        label: 'View project' },
   { key: 'project.edit',      group: 'Project',        label: 'Edit project details and status' },
+  { key: 'project.brief',     group: 'Project',        label: 'Edit project brief, customer and customer user roles' },
+  { key: 'project.documents', group: 'Project',        label: 'Upload project documents' },
   { key: 'project.members',   group: 'Project',        label: 'Manage project members' },
   { key: 'project.versions',  group: 'Project',        label: 'Manage versions and categories' },
   { key: 'project.archive',   group: 'Project',        label: 'Archive and delete project' },
@@ -63,19 +65,20 @@ export const DEFAULT_ROLES = [
     description: 'Leads a team inside a project: assigns and reviews work.',
     permissions: ['project.view', 'wp.view', 'wp.create', 'wp.edit', 'wp.assign', 'wp.comment',
       'time.log', 'time.view_all', 'meetings.view', 'meetings.manage', 'wiki.view', 'wiki.edit', 'files.upload', 'news.manage',
-      'tech.manage', 'tech.version'],
+      'tech.manage', 'tech.version', 'project.documents'],
   },
   {
     name: 'Account manager', scope: 'project', builtin: 0,
     description: 'Owns the client relationship: follows progress, meetings and time.',
     permissions: ['project.view', 'wp.view', 'wp.create', 'wp.comment', 'time.log', 'time.view_all',
-      'meetings.view', 'meetings.manage', 'wiki.view', 'files.upload', 'news.manage'],
+      'meetings.view', 'meetings.manage', 'wiki.view', 'files.upload', 'news.manage', 'project.brief', 'project.documents'],
   },
   {
     name: 'Business analyst', scope: 'project', builtin: 0,
     description: 'Writes and maintains requirements, specs and acceptance criteria.',
     permissions: ['project.view', 'project.versions', 'wp.view', 'wp.create', 'wp.edit', 'wp.assign', 'wp.comment',
-      'time.log', 'meetings.view', 'meetings.manage', 'wiki.view', 'wiki.edit', 'files.upload', 'tech.version'],
+      'time.log', 'meetings.view', 'meetings.manage', 'wiki.view', 'wiki.edit', 'files.upload', 'tech.version',
+      'project.brief', 'project.documents'],
   },
   {
     name: 'Developer', scope: 'project', builtin: 0,

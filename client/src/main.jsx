@@ -25,6 +25,7 @@ import Time from './pages/Time.jsx';
 import Wiki from './pages/project/Wiki.jsx';
 import Technologies from './pages/project/Technologies.jsx';
 import TechOverview from './pages/TechOverview.jsx';
+import ProjectBoard from './pages/ProjectBoard.jsx';
 import Members from './pages/project/Members.jsx';
 import ProjectSettings from './pages/project/ProjectSettings.jsx';
 import Activity from './pages/project/Activity.jsx';
@@ -78,6 +79,7 @@ function Root() {
         </Route>
         <Route path="work-packages" element={<WorkPackages />} />
         <Route path="board" element={<KanbanBoard />} />
+        <Route path="project-board" element={<ProjectBoard />} />
         <Route path="technologies" element={<TechOverview />} />
         <Route path="wp/:id" element={<WpDetail />} />
         <Route path="meetings" element={<Meetings />} />

@@ -2,6 +2,8 @@
 const P = {
   home: 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',
   grid: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
+  briefcase: 'M4 8h16v11H4zM9 8V5h6v3M4 13h16',
+  file: 'M6 3h8l4 4v14H6zM14 3v4h4M9 13h6M9 17h6',
   folder: 'M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z',
   list: 'M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01',
   check: 'M5 12.5 10 17 19 7',

@@ -1,6 +1,9 @@
 // Fills an empty database with sample people, projects, tasks and meetings so you can try the app.
 // Usage: npm run demo
-import { get, all, run, tx, hashPassword } from './db.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { get, all, run, tx, hashPassword, UPLOAD_DIR } from './db.js';
 import { setPosition } from './positions.js';
 import { CATALOG } from './techinfo.js';
 
@@ -50,18 +53,39 @@ tx(() => {
   const projects = [
     { name: 'Customer Portal', key: 'CRM', color: '#0070C0', status: 'on_track', manager: 'Priya',
       desc: 'Self-service portal where customers raise requests, track orders and download invoices.',
-      members: [['Rahul', 'Team lead'], ['Anita', 'Developer'], ['Vikram', 'Developer'], ['Meera', 'QA / Tester'], ['Sneha', 'Developer']] },
+      members: [['Rahul', 'Team lead'], ['Anita', 'Developer'], ['Vikram', 'Developer'], ['Meera', 'QA / Tester'], ['Sneha', 'Developer']],
+      customer: 'Northwind Retail Pvt Ltd',
+      roles: [['Customer', 'Raises requests, tracks orders, downloads invoices'], ['Support agent', 'Answers and closes customer requests'], ['Branch manager', 'Sees requests and orders for their branch'], ['Administrator', 'Manages users, settings and content']],
+      docs: ['01', '02', '03', '05'] },
     { name: 'HR Management System', key: 'HRMS', color: '#33B014', status: 'at_risk', manager: 'Priya',
       desc: 'Leave, attendance and payroll inputs for all employees.', status_explanation: 'Payroll integration is waiting on the vendor API.',
-      members: [['Vikram', 'Team lead'], ['Rahul', 'Developer'], ['Meera', 'QA / Tester'], ['Sneha', 'Developer']] },
+      members: [['Vikram', 'Team lead'], ['Rahul', 'Developer'], ['Meera', 'QA / Tester'], ['Sneha', 'Developer']],
+      customer: 'Internal (Human Resources)',
+      roles: [['Employee', 'Applies for leave, marks attendance'], ['Reporting manager', 'Approves leave and regularisation'], ['HR executive', 'Maintains employee records and payroll inputs']],
+      docs: ['01', '02'] },
     { name: 'Field Sales App', key: 'SALES', color: '#F39219', status: 'on_track', manager: 'Priya',
       desc: 'Android and iOS app for the field sales team: visits, orders and offline sync.',
-      members: [['Karan', 'Team lead'], ['Anita', 'Developer'], ['Meera', 'QA / Tester']] },
+      members: [['Karan', 'Team lead'], ['Anita', 'Developer'], ['Meera', 'QA / Tester']],
+      customer: 'Orbit Beverages Ltd',
+      roles: [['Sales representative', 'Plans visits and books orders, offline'], ['Area sales manager', 'Approves discounts, sees team performance']],
+      docs: ['01'] },
   ];
 
   for (const p of projects) {
     const pid = run(`INSERT INTO projects(name, identifier, description, color, status, status_explanation, manager_id, start_date, end_date, created_by)
                      VALUES(?,?,?,?,?,?,?,?,?,?)`, p.name, p.key, p.desc, p.color, p.status, p.status_explanation || null, u[p.manager], day(-45), day(75), adminId).id;
+    run('UPDATE projects SET customer_name = ?, description = ? WHERE id = ?', p.customer,
+      `${p.desc}\n\n**Goals**\n- Go live by the target end date\n- Replace the current manual process\n- Keep support requests answered within one working day`, pid);
+    p.roles.forEach(([name, d], i) => run('INSERT INTO project_customer_roles(project_id, name, description, position) VALUES(?,?,?,?)', pid, name, d, i));
+    const DOC_NAMES = { '01': 'Product Overview', '02': 'Business Requirements', '03': 'Personas and Journeys', '05': 'Technical Architecture' };
+    for (const slot of p.docs) {
+      const stored = crypto.randomBytes(16).toString('hex');
+      const body = `${p.name}\n${slot} ${DOC_NAMES[slot]}\n\nSample document created with the demo data.\n`;
+      fs.writeFileSync(path.join(UPLOAD_DIR, stored), body);
+      run(`INSERT INTO attachments(container_type, container_id, project_id, filename, stored_name, content_type, size, uploaded_by, doc_slot, created_at)
+           VALUES('project',?,?,?,?,?,?,?,?,datetime('now', ?))`, pid, pid, `${p.key}-${slot}-${DOC_NAMES[slot].replace(/ /g, '-')}.txt`, stored, 'text/plain',
+        Buffer.byteLength(body), u[p.manager], slot, `-${Number(slot) + 2} days`);
+    }
     run('INSERT INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', pid, adminId, role('Project manager', 'project'));
     run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', pid, u[p.manager], role('Project manager', 'project'));
     for (const [m, r] of p.members) run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', pid, u[m], role(r, 'project'));

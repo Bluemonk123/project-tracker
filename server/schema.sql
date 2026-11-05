@@ -383,3 +383,13 @@ CREATE TABLE IF NOT EXISTS tech_lookup_cache (
   data       TEXT NOT NULL,
   fetched_at TEXT NOT NULL
 );
+
+-- Project Board: the customer's own user roles in the application being built
+CREATE TABLE IF NOT EXISTS project_customer_roles (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,
+  description TEXT,
+  position    INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_customer_roles ON project_customer_roles(project_id, position);
