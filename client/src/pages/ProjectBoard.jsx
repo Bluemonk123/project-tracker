@@ -70,11 +70,12 @@ function ProjectSheet({ projectId }) {
             ) : <p className="muted small" style={{ margin: 0 }}>The kinds of users of the customer's application (e.g. Admin, Store manager, Field agent). None listed yet.</p>}
           </div>
         </section>
-
-        <ProjectTeam data={data} />
       </div>
 
-      <Documents data={data} reload={reload} />
+      <div className="stack">
+        <Documents data={data} reload={reload} />
+        <ProjectTeam data={data} />
+      </div>
       {editing && <EditBrief data={data} onClose={() => setEditing(false)} onSaved={reload} />}
     </div>
   );

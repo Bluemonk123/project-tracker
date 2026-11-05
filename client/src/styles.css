@@ -686,8 +686,6 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .pb-kp-people { display: flex; flex-wrap: wrap; gap: 4px 12px; min-width: 0; }
 @media (max-width: 560px) { .pb-kp { grid-template-columns: 62px minmax(0, 1fr); } .pb-kp-label { display: none; } }
 .pb-members { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; }
-.pb-docs { position: sticky; top: 72px; }
-@media (max-width: 1050px) { .pb-docs { position: static; } }
 .pb-doclist { list-style: none; margin: 0; padding: 0; }
 .pb-doc { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line); }
 .pb-doc:first-child { border-top: 0; }
