@@ -476,4 +476,24 @@ test('project board: brief, customer roles and documents', async () => {
   assert.equal(d2.versions.length, 2);
   const file = await fetch(`${base}/attachments/${d2.latest.id}/download`, { headers: { cookie: dev.cookie() } });
   assert.equal(await file.text(), 'second');
+  // go live, customer status, links, environments, personas, delivery figures
+  r = await admin.put(`/projects/${p.id}/board-info`, { board: { live_version: '2.1', customer_demo: 'Scheduled', customer_approval: 'Pending',
+    hosting: { staging: 'https://staging.example.com', production: '' }, environments: ['production', 'localhost', 'bogus'],
+    customer_details: { contact_person: 'Ravi', email: 'ravi@example.com' } },
+    customer_roles: [{ name: 'Store manager', pain_points: 'Too many calls', challenges: 'Slow network', touch_points: 'Email' }] });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal((await admin.put(`/projects/${p.id}/board-info`, { board: { customer_demo: 'Maybe' } })).status, 400);
+  assert.equal((await admin.put(`/projects/${p.id}/board-info`, { board: { repository: { staging: 'javascript:alert(1)' } } })).status, 400);
+  await admin.post('/work-packages', { project_id: p.id, subject: 'One' });
+  r = await admin.get(`/projects/${p.id}/board-info`);
+  const bd = r.data.board;
+  assert.equal(bd.live_version, '2.1'); assert.equal(bd.live_phase, null);
+  assert.equal(bd.customer_demo, 'Scheduled'); assert.equal(bd.customer_approval, 'Pending');
+  assert.deepEqual(bd.environments, ['localhost', 'production']);
+  assert.equal(bd.hosting.staging, 'https://staging.example.com');
+  assert.equal(bd.customer_details.contact_person, 'Ravi');
+  assert.equal(r.data.customer_roles[0].pain_points, 'Too many calls');
+  assert.equal(r.data.delivery.tasks, 1);
+  assert.ok(Array.isArray(r.data.delivery.testing_status_ids) && r.data.delivery.testing_status_ids.length > 0);
+  assert.equal((await dev.put(`/projects/${p.id}/board-info`, { board: { customer_demo: 'Yes' } })).status, 403);
 });

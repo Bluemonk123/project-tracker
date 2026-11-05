@@ -56,19 +56,27 @@ tx(() => {
       members: [['Rahul', 'Team lead'], ['Anita', 'Developer'], ['Vikram', 'Developer'], ['Meera', 'QA / Tester'], ['Sneha', 'Developer']],
       customer: 'Northwind Retail Pvt Ltd',
       roles: [['Customer', 'Raises requests, tracks orders, downloads invoices'], ['Support agent', 'Answers and closes customer requests'], ['Branch manager', 'Sees requests and orders for their branch'], ['Administrator', 'Manages users, settings and content']],
-      docs: ['01', '02', '03', '05'] },
+      docs: ['01', '02', '03', '05'],
+      board: { live_version: '1.4', live_phase: '1', customer_demo: 'Yes', customer_approval: 'Pending', customer_interaction: 'Yes',
+        customer_details: { contact_person: 'Rohan Mehta', designation: 'IT Head', email: 'rohan@northwind.example', phone: '+91 98200 00000' },
+        hosting: { staging: 'https://staging.portal.northwind.example', production: 'https://portal.northwind.example' },
+        repository: { staging: 'https://github.com/example/portal/tree/staging', production: 'https://github.com/example/portal' },
+        environments: ['localhost', 'staging', 'production'] } },
     { name: 'HR Management System', key: 'HRMS', color: '#33B014', status: 'at_risk', manager: 'Priya',
       desc: 'Leave, attendance and payroll inputs for all employees.', status_explanation: 'Payroll integration is waiting on the vendor API.',
       members: [['Vikram', 'Team lead'], ['Rahul', 'Developer'], ['Meera', 'QA / Tester'], ['Sneha', 'Developer']],
       customer: 'Internal (Human Resources)',
       roles: [['Employee', 'Applies for leave, marks attendance'], ['Reporting manager', 'Approves leave and regularisation'], ['HR executive', 'Maintains employee records and payroll inputs']],
-      docs: ['01', '02'] },
+      docs: ['01', '02'],
+      board: { customer_demo: 'Scheduled', customer_approval: 'Pending', customer_interaction: 'Pending', environments: ['localhost', 'staging'],
+        hosting: { staging: 'http://hrms-test.office.local', production: '' }, repository: { staging: '', production: '' } } },
     { name: 'Field Sales App', key: 'SALES', color: '#F39219', status: 'on_track', manager: 'Priya',
       desc: 'Android and iOS app for the field sales team: visits, orders and offline sync.',
       members: [['Karan', 'Team lead'], ['Anita', 'Developer'], ['Meera', 'QA / Tester']],
       customer: 'Orbit Beverages Ltd',
       roles: [['Sales representative', 'Plans visits and books orders, offline'], ['Area sales manager', 'Approves discounts, sees team performance']],
-      docs: ['01'] },
+      docs: ['01'],
+      board: { customer_demo: 'In Process', customer_approval: 'No', customer_interaction: 'Yes', environments: ['localhost'] } },
   ];
 
   for (const p of projects) {
@@ -76,7 +84,10 @@ tx(() => {
                      VALUES(?,?,?,?,?,?,?,?,?,?)`, p.name, p.key, p.desc, p.color, p.status, p.status_explanation || null, u[p.manager], day(-45), day(75), adminId).id;
     run('UPDATE projects SET customer_name = ?, description = ? WHERE id = ?', p.customer,
       `${p.desc}\n\n**Goals**\n- Go live by the target end date\n- Replace the current manual process\n- Keep support requests answered within one working day`, pid);
-    p.roles.forEach(([name, d], i) => run('INSERT INTO project_customer_roles(project_id, name, description, position) VALUES(?,?,?,?)', pid, name, d, i));
+    p.roles.forEach(([name, d], i) => run(`INSERT INTO project_customer_roles(project_id, name, description, pain_points, challenges, touch_points, position)
+        VALUES(?,?,?,?,?,?,?)`, pid, name, d, i === 0 ? 'Has to phone or email to find out where an order is.' : null,
+        i === 0 ? 'Uses the portal mostly on a phone, often on slow mobile data.' : null, i === 0 ? 'Order confirmation email, portal home page, WhatsApp updates' : null, i));
+    run('UPDATE projects SET board_data = ? WHERE id = ?', JSON.stringify(p.board), pid);
     const DOC_NAMES = { '01': 'Product Overview', '02': 'Business Requirements', '03': 'Personas and Journeys', '05': 'Technical Architecture' };
     for (const slot of p.docs) {
       const stored = crypto.randomBytes(16).toString('hex');
@@ -98,6 +109,8 @@ tx(() => {
     setPosition(pid, 'DT', p.members.filter(([m, r]) => m !== 'Sneha' && ['Developer', 'Team lead'].includes(r)).map(([m]) => u[m]), adminId);
     const v1 = run('INSERT INTO versions(project_id, name, status, start_date, due_date) VALUES(?,?,?,?,?)', pid, 'Sprint 7', 'open', day(-7), day(7)).id;
     const v2 = run('INSERT INTO versions(project_id, name, status, start_date, due_date) VALUES(?,?,?,?,?)', pid, 'Release 2.0', 'open', day(8), day(40)).id;
+    run('INSERT INTO versions(project_id, name, description, status, start_date, due_date) VALUES(?,?,?,?,?,?)', pid, 'Release 1.4', 
+      '## What is new\n- Faster search across requests and orders\n- Download invoices as PDF\n\n## Fixed\n- Login no longer times out on slow connections', 'closed', day(-30), day(-12));
 
     let n = 0;
     const wp = (o) => {

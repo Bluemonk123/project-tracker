@@ -197,6 +197,10 @@ function migrate() {
   // Project Board: customer name on projects, document slot on attachments, and who may edit / upload.
   const projCols = all('PRAGMA table_info(projects)').map(c => c.name);
   if (!projCols.includes('customer_name')) db.exec('ALTER TABLE projects ADD COLUMN customer_name TEXT');
+  // Project Board details (go live, customer status, hosting / repository links, environments) as JSON
+  if (!projCols.includes('board_data')) db.exec('ALTER TABLE projects ADD COLUMN board_data TEXT');
+  const roleCols = all('PRAGMA table_info(project_customer_roles)').map(c => c.name);
+  for (const c of ['pain_points', 'challenges', 'touch_points']) if (!roleCols.includes(c)) db.exec(`ALTER TABLE project_customer_roles ADD COLUMN ${c} TEXT`);
   const attCols = all('PRAGMA table_info(attachments)').map(c => c.name);
   if (!attCols.includes('doc_slot')) db.exec('ALTER TABLE attachments ADD COLUMN doc_slot TEXT');
   db.exec('CREATE INDEX IF NOT EXISTS idx_attach_docs ON attachments(container_type, container_id, doc_slot)');
