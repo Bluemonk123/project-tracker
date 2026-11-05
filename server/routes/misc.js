@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import multer from 'multer';
-import { get, all, run, tx, UPLOAD_DIR } from '../db.js';
+import { get, all, run, tx, UPLOAD_DIR, maxUploadMb } from '../db.js';
 import { need, can, fail, visibleProjectIds } from '../access.js';
 import { requireText, intOrNull, notify, mentionedUserIds, todayISO } from '../util.js';
 import { resolveProject, projectStats } from './projects.js';
@@ -83,16 +83,14 @@ r.get('/wiki/:id/versions', (req, res) => {
 });
 
 // ---------- attachments ----------
-const MAX_MB = Number(process.env.MAX_UPLOAD_MB || 25);
 export const MAX_WP_FILES = 5;
 export const WP_FILE_TYPES = /\.(jpe?g|png|gif|webp|heic|heif|bmp|pdf|zip)$/i;
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: UPLOAD_DIR,
-    filename: (_req, _file, cb) => cb(null, crypto.randomBytes(16).toString('hex')),
-  }),
-  limits: { fileSize: MAX_MB * 1024 * 1024 },
+// Built per request so a change to the upload limit in Administration applies straight away.
+const storage = multer.diskStorage({
+  destination: UPLOAD_DIR,
+  filename: (_req, _file, cb) => cb(null, crypto.randomBytes(16).toString('hex')),
 });
+const upload = { single: (field) => multer({ storage, limits: { fileSize: maxUploadMb() * 1024 * 1024 } }).single(field) };
 
 function containerProject(type, id) {
   const sql = {
@@ -109,7 +107,7 @@ function containerProject(type, id) {
 
 r.post('/attachments', (req, res, next) => {
   upload.single('file')(req, res, (err) => {
-    if (err) return next(Object.assign(new Error(err.code === 'LIMIT_FILE_SIZE' ? `Files must be ${MAX_MB} MB or smaller.` : err.message), { status: 400 }));
+    if (err) return next(Object.assign(new Error(err.code === 'LIMIT_FILE_SIZE' ? `Files must be ${maxUploadMb()} MB or smaller.` : err.message), { status: 400 }));
     try {
       if (!req.file) fail(400, 'Choose a file to upload.');
       const type = String(req.body.container_type);

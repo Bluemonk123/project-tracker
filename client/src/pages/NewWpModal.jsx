@@ -58,10 +58,11 @@ export function WpSearchSelect({ projectId, value, onChange, excludeId, placehol
 export const MAX_FILES = 5;
 export const FILE_ACCEPT = '.jpg,.jpeg,.png,.gif,.webp,.heic,.heif,.bmp,.pdf,.zip,image/*,application/pdf,application/zip';
 const FILE_OK = /\.(jpe?g|png|gif|webp|heic|heif|bmp|pdf|zip)$/i;
-const MAX_MB = 25;
 
 // Pick up to `max` photos / PDF / ZIP files (drag and drop or click)
 export function FilePicker({ files, onChange, max = MAX_FILES, onError }) {
+  const { meta } = useApp();
+  const MAX_MB = meta?.maxUploadMb || 25;
   const [over, setOver] = useState(false);
   const add = (list) => {
     const next = [...files];

@@ -121,7 +121,7 @@ Set these as environment variables if you need to change the defaults:
 |---|---|---|
 | `PORT` | `4000` | Port the app listens on |
 | `DATA_DIR` | `./data` | Where the database, uploads and backups are kept |
-| `MAX_UPLOAD_MB` | `25` | Largest file people can attach |
+| `MAX_UPLOAD_MB` | `25` | Largest file people can attach. Normally set in **Administration → General** instead; this variable overrides it |
 
 On Windows: `set PORT=8080` then `start.bat`, in the same Command Prompt window.
 

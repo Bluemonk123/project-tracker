@@ -253,16 +253,22 @@ function General() {
   const { meta, appName, reload, reloadMeta } = useApp();
   const [name, setName] = useState(appName);
   const [acts, setActs] = useState(meta.activities.join('\n'));
+  const [maxMb, setMaxMb] = useState(meta.maxUploadMb || 25);
   const [busy, run] = useAsync();
   const save = async (e) => {
     e.preventDefault();
-    if (await run(() => api.patch('/admin/settings', { app_name: name, time_activities: acts.split('\n') }), 'Settings saved')) { reload(); reloadMeta(); }
+    if (await run(() => api.patch('/admin/settings', { app_name: name, time_activities: acts.split('\n'), ...(meta.maxUploadFromEnv ? {} : { max_upload_mb: Number(maxMb) }) }), 'Settings saved')) { reload(); reloadMeta(); }
   };
   return (
     <form className="panel" onSubmit={save} style={{ maxWidth: 640 }}>
       <div className="panel-head"><h3>General</h3></div>
       <div className="panel-body stack">
         <Field label="Application name" hint="Shown in the sidebar, sign-in page and browser tab."><input type="text" value={name} onChange={(e) => setName(e.target.value)} required /></Field>
+        <Field label="Largest file people can upload (MB)" hint={meta.maxUploadFromEnv
+          ? `Set to ${meta.maxUploadMb} MB by the MAX_UPLOAD_MB setting on this computer, so it cannot be changed here.`
+          : 'Applies to task attachments, project documents, wiki and meeting files. Default 25 MB. Bigger files take more disk space on this computer.'}>
+          <input type="number" min={1} max={2048} step={1} value={maxMb} disabled={meta.maxUploadFromEnv} onChange={(e) => setMaxMb(e.target.value)} style={{ maxWidth: 140 }} required />
+        </Field>
         <Field label="Time tracking activities" hint="One per line. People pick one when logging time."><textarea rows={8} value={acts} onChange={(e) => setActs(e.target.value)} /></Field>
       </div>
       <div className="modal-foot"><button className="btn primary" disabled={busy}>Save settings</button></div>

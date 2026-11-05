@@ -229,3 +229,11 @@ export function backupNow(label = 'manual') {
   db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
   return file;
 }
+
+// Largest file people can upload, in MB: the MAX_UPLOAD_MB environment variable if set,
+// otherwise Administration -> General, otherwise 25.
+export const UPLOAD_LIMIT_FROM_ENV = !!process.env.MAX_UPLOAD_MB;
+export function maxUploadMb() {
+  const n = Number(process.env.MAX_UPLOAD_MB || getSetting('max_upload_mb') || 25);
+  return Number.isFinite(n) && n > 0 ? n : 25;
+}

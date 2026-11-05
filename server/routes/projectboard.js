@@ -4,7 +4,7 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import multer from 'multer';
-import { get, all, run, tx, UPLOAD_DIR } from '../db.js';
+import { get, all, run, tx, UPLOAD_DIR, maxUploadMb } from '../db.js';
 import { need, can, fail } from '../access.js';
 import { resolveProject, listMembers } from './projects.js';
 import { positionsFor } from '../positions.js';
@@ -72,11 +72,8 @@ function mergeBoard(cur, b) {
 const canBrief = (req, pid) => can(req, 'project.edit', pid) || can(req, 'project.brief', pid);
 const canDocs = (req, pid) => can(req, 'project.edit', pid) || can(req, 'project.documents', pid);
 
-const MAX_MB = Number(process.env.MAX_UPLOAD_MB || 25);
-const upload = multer({
-  storage: multer.diskStorage({ destination: UPLOAD_DIR, filename: (_q, _f, cb) => cb(null, crypto.randomBytes(16).toString('hex')) }),
-  limits: { fileSize: MAX_MB * 1024 * 1024 },
-});
+const storage = multer.diskStorage({ destination: UPLOAD_DIR, filename: (_q, _f, cb) => cb(null, crypto.randomBytes(16).toString('hex')) });
+const upload = { single: (field) => multer({ storage, limits: { fileSize: maxUploadMb() * 1024 * 1024 } }).single(field) };
 
 const r = Router();
 
@@ -118,7 +115,7 @@ r.get('/projects/:pid/board-info', (req, res) => {
     positions: positionsFor([p.id]).get(p.id),
     members: listMembers(p.id).filter(m => m.status !== 'locked'),
     documents,
-    max_mb: MAX_MB,
+    max_mb: maxUploadMb(),
     can: { brief: canBrief(req, p.id), documents: canDocs(req, p.id) },
   });
 });
@@ -158,7 +155,7 @@ r.put('/projects/:pid/board-info', (req, res) => {
 r.post('/projects/:pid/documents/:slot', (req, res, next) => {
   upload.single('file')(req, res, (err) => {
     try {
-      if (err) fail(400, err.code === 'LIMIT_FILE_SIZE' ? `Files must be ${MAX_MB} MB or smaller.` : err.message);
+      if (err) fail(400, err.code === 'LIMIT_FILE_SIZE' ? `Files must be ${maxUploadMb()} MB or smaller.` : err.message);
       if (!req.file) fail(400, 'Choose a file to upload.');
       try {
         const p = resolveProject(req.params.pid);

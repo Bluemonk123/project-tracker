@@ -513,4 +513,11 @@ test('project board: brief, customer roles and documents', async () => {
   assert.equal(r.data.approvals[0].second_approver_id, null);
   assert.equal((await dev.del(`/approvals/${apId}`)).status, 403);
   assert.equal((await admin.del(`/approvals/${apId}`)).status, 200);
+  // upload limit from Administration applies straight away
+  assert.equal((await admin.patch('/admin/settings', { max_upload_mb: 0 })).status, 400);
+  assert.equal((await admin.patch('/admin/settings', { max_upload_mb: 1 })).status, 200);
+  assert.equal((await admin.get('/meta')).data.maxUploadMb, 1);
+  assert.equal(await up(admin, '07', 'big.zip', 'x'.repeat(1.5 * 1024 * 1024)), 400);
+  assert.equal(await up(admin, '07', 'small.zip', 'x'.repeat(1000)), 201);
+  await admin.patch('/admin/settings', { max_upload_mb: 25 });
 });

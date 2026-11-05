@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
-import { get, all, run, tx, hashPassword, getSetting, setSetting, backupNow, BACKUP_DIR } from '../db.js';
+import { get, all, run, tx, hashPassword, getSetting, setSetting, backupNow, BACKUP_DIR, maxUploadMb, UPLOAD_LIMIT_FROM_ENV } from '../db.js';
 import { need, fail, parseList } from '../access.js';
 import { GLOBAL_PERMISSIONS, PROJECT_PERMISSIONS, ALL_GLOBAL_KEYS, ALL_PROJECT_KEYS } from '../permissions.js';
 import { requireText, updateSet } from '../util.js';
@@ -17,6 +17,8 @@ r.get('/meta', (_req, res) => {
     roles: all('SELECT id, name, scope, description, builtin FROM roles ORDER BY scope, position, id'),
     activities: parseList(getSetting('time_activities')),
     appName: getSetting('app_name', 'Project Tracker'),
+    maxUploadMb: maxUploadMb(),
+    maxUploadFromEnv: UPLOAD_LIMIT_FROM_ENV,
   });
 });
 
@@ -204,6 +206,11 @@ for (const [table, cols] of Object.entries(ENUMS)) {
 r.patch('/admin/settings', (req, res) => {
   need(req, 'admin.settings');
   if (req.body.app_name !== undefined) setSetting('app_name', requireText(req.body.app_name, 'Application name'));
+  if (req.body.max_upload_mb !== undefined) {
+    const n = Number(req.body.max_upload_mb);
+    if (!Number.isInteger(n) || n < 1 || n > 2048) fail(400, 'The upload limit must be a whole number of MB between 1 and 2048.');
+    setSetting('max_upload_mb', String(n));
+  }
   if (Array.isArray(req.body.time_activities)) {
     const list = req.body.time_activities.map(s => String(s).trim()).filter(Boolean);
     if (!list.length) fail(400, 'Keep at least one time activity.');
