@@ -117,9 +117,12 @@ r.get('/projects/:pid/board-info', (req, res) => {
     project: { id: p.id, name: p.name, identifier: p.identifier, color: p.color, status: p.status, description: p.description,
       customer_name: p.customer_name, start_date: p.start_date, end_date: p.end_date },
     customer_roles: roles,
+    me: req.user.id,
     approvals: all(`SELECT a.id, a.module, a.first_approver_id, a.second_approver_id, a.created_at,
-                       f.name AS first_approver_name, s2.name AS second_approver_name
+                       f.name AS first_approver_name, s2.name AS second_approver_name,
+                       a.first_done_at, fd.name AS first_done_by_name, a.second_done_at, sd.name AS second_done_by_name
                      FROM project_approvals a LEFT JOIN users f ON f.id = a.first_approver_id LEFT JOIN users s2 ON s2.id = a.second_approver_id
+                     LEFT JOIN users fd ON fd.id = a.first_done_by LEFT JOIN users sd ON sd.id = a.second_done_by
                      WHERE a.project_id = ? ORDER BY a.module COLLATE NOCASE, a.id`, p.id),
     board: readBoard(p),
     release_notes: releaseNotes(p.id),
@@ -311,7 +314,29 @@ r.patch('/approvals/:id', (req, res) => {
   const f = approvalFields({ module: a.module, first_approver_id: a.first_approver_id, second_approver_id: a.second_approver_id, ...req.body });
   if (get('SELECT id FROM project_approvals WHERE project_id = ? AND module = ? COLLATE NOCASE AND id <> ?', a.project_id, f.module, a.id)) fail(400, `${f.module} already has approvers.`);
   run("UPDATE project_approvals SET module = ?, first_approver_id = ?, second_approver_id = ?, updated_at = datetime('now') WHERE id = ?", f.module, f.first, f.second, a.id);
+  // a new person has not approved yet
+  if (f.first !== a.first_approver_id) run('UPDATE project_approvals SET first_done_at = NULL, first_done_by = NULL WHERE id = ?', a.id);
+  if (f.second !== a.second_approver_id) run('UPDATE project_approvals SET second_done_at = NULL, second_done_by = NULL WHERE id = ?', a.id);
   tellApprovers(req, get('SELECT * FROM projects WHERE id = ?', a.project_id), f, a);
+  res.json({ ok: true });
+});
+
+// Mark an approver's approval as done (green tick), or undo it. The approver themselves or a project lead may do this.
+r.post('/approvals/:id/done', (req, res) => {
+  const a = get('SELECT * FROM project_approvals WHERE id = ?', req.params.id) || fail(404, 'Approval not found.');
+  const which = req.body?.which;
+  if (!['first', 'second'].includes(which)) fail(400, 'Say which approver: first or second.');
+  const approver = a[`${which}_approver_id`];
+  if (!approver) fail(400, `Choose the ${which} approver first.`);
+  if (req.user.id !== approver && !canBrief(req, a.project_id)) fail(403, `Only ${which === 'first' ? 'the first' : 'the second'} approver or a project lead can mark this done.`);
+  const done = req.body?.done !== false;
+  if (done) run(`UPDATE project_approvals SET ${which}_done_at = datetime('now'), ${which}_done_by = ? WHERE id = ?`, req.user.id, a.id);
+  else run(`UPDATE project_approvals SET ${which}_done_at = NULL, ${which}_done_by = NULL WHERE id = ?`, a.id);
+  // when the first approver is done, let the second approver know it is their turn
+  if (done && which === 'first' && a.second_approver_id && !a.second_done_at && a.second_approver_id !== req.user.id) {
+    const p = get('SELECT id, name FROM projects WHERE id = ?', a.project_id);
+    notify([a.second_approver_id], { actorId: req.user.id, projectId: p.id, reason: 'approval', message: `"${a.module}" in ${p.name} is approved by the first approver and waits for you` });
+  }
   res.json({ ok: true });
 });
 

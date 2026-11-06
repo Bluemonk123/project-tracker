@@ -388,7 +388,28 @@ function Approvals({ data, reload }) {
       if (await run(() => api.del(`/approvals/${a.id}`), 'Approval deleted')) reload();
     }
   };
-  const who = (id, name) => (id ? <Person id={id} name={name} /> : <span className="muted small">Not chosen</span>);
+  const mark = async (a, which, done) => {
+    if (!done && !(await confirmDialog({ title: 'Undo approval?', message: `${a[`${which}_approver_name`]}'s approval of ${a.module} goes back to not done.`, confirmLabel: 'Undo' }))) return;
+    if (await run(() => api.post(`/approvals/${a.id}/done`, { which, done }), done ? `${a.module}: approved by ${a[`${which}_approver_name`]}` : 'Approval undone')) reload();
+  };
+  const who = (a, which) => {
+    const id = a[`${which}_approver_id`];
+    if (!id) return <span className="muted small">Not chosen</span>;
+    const doneAt = a[`${which}_done_at`];
+    const allowed = canEdit || id === data.me;
+    return (
+      <span className="pb-approver">
+        <Person id={id} name={a[`${which}_approver_name`]} />
+        {doneAt ? (
+          <button type="button" className="pb-tick" disabled={!allowed} onClick={() => mark(a, which, false)}
+            title={`Approved ${fmtDateTime(doneAt)}${a[`${which}_done_by_name`] ? ` (marked by ${a[`${which}_done_by_name`]})` : ''}${allowed ? '. Click to undo.' : ''}`}
+            aria-label={`${a[`${which}_approver_name`]} approved ${a.module}`}><Icon name="check" size={14} /></button>
+        ) : allowed ? (
+          <button type="button" className="btn xs pb-done" onClick={() => mark(a, which, true)} aria-label={`Mark ${a[`${which}_approver_name`]}'s approval of ${a.module} done`}>Done</button>
+        ) : <span className="xs muted">Pending</span>}
+      </span>
+    );
+  };
   return (
     <section className="panel">
       <div className="panel-head"><h3>Approvals {list.length > 0 && <span className="pb-count">{list.length}</span>}</h3>
@@ -404,8 +425,8 @@ function Approvals({ data, reload }) {
               {list.map(a => (
                 <tr key={a.id}>
                   <td><b>{a.module}</b></td>
-                  <td>{who(a.first_approver_id, a.first_approver_name)}</td>
-                  <td>{who(a.second_approver_id, a.second_approver_name)}</td>
+                  <td>{who(a, 'first')}</td>
+                  <td>{who(a, 'second')}</td>
                   {canEdit && (
                     <td className="num">
                       <MoreMenu label={`Actions for ${a.module}`}>

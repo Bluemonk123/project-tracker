@@ -201,6 +201,11 @@ function migrate() {
   if (!projCols.includes('board_data')) db.exec('ALTER TABLE projects ADD COLUMN board_data TEXT');
   const roleCols = all('PRAGMA table_info(project_customer_roles)').map(c => c.name);
   for (const c of ['pain_points', 'challenges', 'touch_points']) if (!roleCols.includes(c)) db.exec(`ALTER TABLE project_customer_roles ADD COLUMN ${c} TEXT`);
+  // Approvals: when each approver marked it done, and who clicked Done
+  const apCols = all('PRAGMA table_info(project_approvals)').map(c => c.name);
+  for (const c of ['first_done_at TEXT', 'first_done_by INTEGER', 'second_done_at TEXT', 'second_done_by INTEGER']) {
+    if (!apCols.includes(c.split(' ')[0])) db.exec(`ALTER TABLE project_approvals ADD COLUMN ${c}`);
+  }
   const attCols = all('PRAGMA table_info(attachments)').map(c => c.name);
   if (!attCols.includes('doc_slot')) db.exec('ALTER TABLE attachments ADD COLUMN doc_slot TEXT');
   db.exec('CREATE INDEX IF NOT EXISTS idx_attach_docs ON attachments(container_type, container_id, doc_slot)');

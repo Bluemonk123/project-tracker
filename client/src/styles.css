@@ -756,3 +756,9 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .pb-rn-files li { display: flex; align-items: center; gap: 6px; font-size: 12.5px; min-width: 0; }
 .pb-rn-files .pb-fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .btn.icon.xs { width: 24px; height: 24px; padding: 0; }
+.pb-approver { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn.xs.pb-done { height: 24px; padding: 0 9px; font-size: 12px; }
+.pb-tick { width: 24px; height: 24px; border-radius: 50%; border: 0; display: inline-grid; place-items: center; background: #2E9E1F; color: #fff; cursor: pointer; padding: 0; }
+.pb-tick svg { stroke-width: 3; }
+.pb-tick:disabled { cursor: default; }
+.pb-tick:not(:disabled):hover { background: #23801A; }

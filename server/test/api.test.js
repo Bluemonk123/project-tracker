@@ -512,6 +512,19 @@ test('project board: brief, customer roles and documents', async () => {
   assert.equal(r.data.approvals[0].module, 'Order management');
   assert.equal(r.data.approvals[0].first_approver_id, me);
   assert.equal(r.data.approvals[0].second_approver_id, null);
+  // Done: the approver themselves or a project lead; changing the approver resets it
+  await admin.patch(`/approvals/${apId}`, { second_approver_id: ids.dev });
+  assert.equal((await dev.post(`/approvals/${apId}/done`, { which: 'first' })).status, 403, 'dev is not the first approver');
+  assert.equal((await admin.post(`/approvals/${apId}/done`, { which: 'first' })).status, 200);
+  assert.ok((await dev.get('/notifications?unread=1')).data.some(n => /waits for you/.test(n.message)));
+  assert.equal((await dev.post(`/approvals/${apId}/done`, { which: 'second' })).status, 200);
+  let ap = (await admin.get(`/projects/${p.id}/board-info`)).data.approvals[0];
+  assert.ok(ap.first_done_at && ap.second_done_at);
+  assert.equal(ap.second_done_by_name, 'Dev One');
+  assert.equal((await dev.post(`/approvals/${apId}/done`, { which: 'second', done: false })).status, 200);
+  await admin.patch(`/approvals/${apId}`, { first_approver_id: ids.dev, second_approver_id: me });
+  ap = (await admin.get(`/projects/${p.id}/board-info`)).data.approvals[0];
+  assert.equal(ap.first_done_at, null, 'new approver starts not done');
   assert.equal((await dev.del(`/approvals/${apId}`)).status, 403);
   assert.equal((await admin.del(`/approvals/${apId}`)).status, 200);
   // upload limit from Administration applies straight away
