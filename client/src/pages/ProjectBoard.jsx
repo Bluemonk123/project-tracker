@@ -24,7 +24,7 @@ export default function ProjectBoard() {
           {list.map(p => (
             <button key={p.id} type="button" role="tab" aria-selected={p.id === current.id} className={p.id === current.id ? 'active' : ''}
               style={{ '--pc': p.color }} onClick={() => setParams({ p: p.identifier }, { replace: true })}>
-              <span className="pb-dot" />{p.name}<span className="pb-key">{p.identifier}</span>
+              <span className="pb-dot" />{p.name}
             </button>
           ))}
         </div>
