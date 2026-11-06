@@ -382,7 +382,23 @@ function Approvals({ data, reload }) {
   const [modal, setModal] = useState(null);
   const [, run] = useAsync();
   const list = data.approvals;
+  const sections = data.approval_sections;
   const canEdit = data.can.brief;
+  // the newest section starts open; the others closed
+  const [openIds, setOpenIds] = useState(() => new Set(sections[0] ? [sections[0].id] : []));
+  const seen = useRef(new Set(sections.map(x => x.id)));
+  useEffect(() => { // open a section as soon as it is created
+    const fresh = sections.filter(x => !seen.current.has(x.id));
+    fresh.forEach(x => seen.current.add(x.id));
+    if (fresh.length) setOpenIds(o => new Set([...o, ...fresh.map(x => x.id)]));
+  }, [sections]);
+  const toggle = (id) => setOpenIds(o => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const delSection = async (sc, n) => {
+    if (await confirmDialog({ title: `Delete section ${sc.name}?`, confirmLabel: 'Delete', danger: true,
+      message: n ? `The section and its ${n} approval${n > 1 ? 's' : ''} are removed. This cannot be undone.` : 'The empty section is removed.' })) {
+      if (await run(() => api.del(`/approval-sections/${sc.id}`), 'Section deleted')) reload();
+    }
+  };
   const del = async (a) => {
     if (await confirmDialog({ title: `Delete approvers for ${a.module}?`, message: 'The module and its approvers are removed from this list.', confirmLabel: 'Delete', danger: true })) {
       if (await run(() => api.del(`/approvals/${a.id}`), 'Approval deleted')) reload();
@@ -410,51 +426,101 @@ function Approvals({ data, reload }) {
       </span>
     );
   };
+  const table = (rows) => (
+    <div className="table-wrap">
+      <table className="table pb-approvals">
+        <thead><tr><th>Module name</th><th>First approver</th><th>Second approver</th>{canEdit && <th />}</tr></thead>
+        <tbody>
+          {rows.map(a => (
+            <tr key={a.id}>
+              <td><b>{a.module}</b></td>
+              <td>{who(a, 'first')}</td>
+              <td>{who(a, 'second')}</td>
+              {canEdit && (
+                <td className="num">
+                  <MoreMenu label={`Actions for ${a.module}`}>
+                    <button className="menu-item" onClick={() => setModal({ approval: a })}><Icon name="edit" size={16} />Edit</button>
+                    <button className="menu-item danger" onClick={() => del(a)}><Icon name="trash" size={16} />Delete</button>
+                  </MoreMenu>
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
   return (
     <section className="panel">
       <div className="panel-head"><h3>Approvals {list.length > 0 && <span className="pb-count">{list.length}</span>}</h3>
-        <div className="actions">{canEdit && <button type="button" className="btn sm" onClick={() => setModal({})}><Icon name="plus" size={15} />Add</button>}</div>
+        <div className="actions">{canEdit && <button type="button" className="btn sm" onClick={() => setModal({ section: true })}><Icon name="plus" size={15} />Add section</button>}</div>
       </div>
-      {!list.length ? (
-        <div className="panel-body muted small">No approvals yet.{canEdit && ' Choose Add to name a module and who approves it.'}</div>
-      ) : (
-        <div className="table-wrap">
-          <table className="table pb-approvals">
-            <thead><tr><th>Module name</th><th>First approver</th><th>Second approver</th>{canEdit && <th />}</tr></thead>
-            <tbody>
-              {list.map(a => (
-                <tr key={a.id}>
-                  <td><b>{a.module}</b></td>
-                  <td>{who(a, 'first')}</td>
-                  <td>{who(a, 'second')}</td>
-                  {canEdit && (
-                    <td className="num">
-                      <MoreMenu label={`Actions for ${a.module}`}>
-                        <button className="menu-item" onClick={() => setModal({ approval: a })}><Icon name="edit" size={16} />Edit</button>
-                        <button className="menu-item danger" onClick={() => del(a)}><Icon name="trash" size={16} />Delete</button>
-                      </MoreMenu>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {modal && <ApprovalModal projectId={data.project.id} approval={modal.approval} onClose={() => setModal(null)} onSaved={reload} />}
+      {!sections.length ? (
+        <div className="panel-body muted small">No approval sections yet.{canEdit && ' Choose Add section (for example "Phase 1" or "UAT sign-off"), then add modules and their approvers to it.'}</div>
+      ) : sections.map(sc => {
+        const rows = list.filter(a => a.section_id === sc.id);
+        const need = rows.reduce((n, a) => n + (a.first_approver_id ? 1 : 0) + (a.second_approver_id ? 1 : 0), 0);
+        const done = rows.reduce((n, a) => n + (a.first_done_at ? 1 : 0) + (a.second_done_at ? 1 : 0), 0);
+        const isOpen = openIds.has(sc.id);
+        return (
+          <div key={sc.id} className={`pb-ap-section${isOpen ? ' open' : ''}`}>
+            <div className="pb-ap-head">
+              <button type="button" className="pb-acc-toggle" aria-expanded={isOpen} onClick={() => toggle(sc.id)}>
+                <Icon name="chevronRight" size={15} className="pb-acc-chev" />
+                <span className="pb-ap-name">{sc.name}</span>
+                <span className="pb-count">{rows.length}</span>
+                {need > 0 && <span className={`xs pb-ap-progress${done === need ? ' all' : ''}`}>{done === need ? <><Icon name="check" size={12} /> All approved</> : `${done} of ${need} approved`}</span>}
+              </button>
+              {canEdit && (
+                <div className="actions">
+                  <button type="button" className="btn xs ghost" onClick={() => { setOpenIds(o => new Set([...o, sc.id])); setModal({ sectionId: sc.id }); }}><Icon name="plus" size={13} />Add approver</button>
+                  <MoreMenu label={`More for section ${sc.name}`}>
+                    <button className="menu-item" onClick={() => setModal({ section: sc })}><Icon name="edit" size={16} />Rename section</button>
+                    <button className="menu-item danger" onClick={() => delSection(sc, rows.length)}><Icon name="trash" size={16} />Delete section</button>
+                  </MoreMenu>
+                </div>
+              )}
+            </div>
+            {isOpen && (rows.length ? table(rows)
+              : <div className="pb-ap-empty xs muted">No approvers in this section yet.{canEdit && ' Choose Add approver.'}</div>)}
+          </div>
+        );
+      })}
+      {modal?.section && <SectionModal projectId={data.project.id} section={modal.section === true ? null : modal.section} onClose={() => setModal(null)} onSaved={reload} />}
+      {modal && !modal.section && <ApprovalModal projectId={data.project.id} approval={modal.approval} sectionId={modal.sectionId}
+        sectionName={sections.find(x => x.id === (modal.approval?.section_id ?? modal.sectionId))?.name} onClose={() => setModal(null)} onSaved={reload} />}
     </section>
   );
 }
 
-function ApprovalModal({ projectId, approval, onClose, onSaved }) {
-  const [f, setF] = useState({ module: approval?.module || '', first_approver_id: approval?.first_approver_id ?? null, second_approver_id: approval?.second_approver_id ?? null });
+function SectionModal({ projectId, section, onClose, onSaved }) {
+  const [name, setName] = useState(section?.name || '');
   const [busy, run] = useAsync();
   const save = async () => {
-    const r = await run(() => (approval ? api.patch(`/approvals/${approval.id}`, f) : api.post(`/projects/${projectId}/approvals`, f)), approval ? 'Approval saved' : `${f.module} added`);
+    const r = await run(() => (section ? api.patch(`/approval-sections/${section.id}`, { name }) : api.post(`/projects/${projectId}/approval-sections`, { name })), section ? 'Section renamed' : `Section ${name} added`);
     if (r) { onSaved(); onClose(); }
   };
   return (
-    <Modal title={approval ? `Edit approval: ${approval.module}` : 'Add approval'} onClose={onClose} onSubmit={save} footer={<>
+    <Modal title={section ? `Rename section ${section.name}` : 'Add approval section'} onClose={onClose} onSubmit={save} footer={<>
+      <button type="button" className="btn" onClick={onClose}>Cancel</button>
+      <button className="btn primary" disabled={busy || !name.trim()}>{section ? 'Save' : 'Add section'}</button>
+    </>}>
+      <Field label="Section name" hint={section ? undefined : 'For example Phase 1, Phase 2 or UAT sign-off. The newest section is shown open.'}>
+        <input type="text" value={name} maxLength={120} required autoFocus onChange={(e) => setName(e.target.value)} />
+      </Field>
+    </Modal>
+  );
+}
+
+function ApprovalModal({ projectId, approval, sectionId, sectionName, onClose, onSaved }) {
+  const [f, setF] = useState({ module: approval?.module || '', first_approver_id: approval?.first_approver_id ?? null, second_approver_id: approval?.second_approver_id ?? null });
+  const [busy, run] = useAsync();
+  const save = async () => {
+    const r = await run(() => (approval ? api.patch(`/approvals/${approval.id}`, f) : api.post(`/projects/${projectId}/approvals`, { ...f, section_id: sectionId })), approval ? 'Approval saved' : `${f.module} added`);
+    if (r) { onSaved(); onClose(); }
+  };
+  return (
+    <Modal title={approval ? `Edit approval: ${approval.module}` : `Add approver${sectionName ? ` to ${sectionName}` : ''}`} onClose={onClose} onSubmit={save} footer={<>
       <button type="button" className="btn" onClick={onClose}>Cancel</button>
       <button className="btn primary" disabled={busy || !f.module.trim()}>{approval ? 'Save' : 'Add'}</button>
     </>}>

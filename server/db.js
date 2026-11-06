@@ -203,7 +203,7 @@ function migrate() {
   for (const c of ['pain_points', 'challenges', 'touch_points']) if (!roleCols.includes(c)) db.exec(`ALTER TABLE project_customer_roles ADD COLUMN ${c} TEXT`);
   // Approvals: when each approver marked it done, and who clicked Done
   const apCols = all('PRAGMA table_info(project_approvals)').map(c => c.name);
-  for (const c of ['first_done_at TEXT', 'first_done_by INTEGER', 'second_done_at TEXT', 'second_done_by INTEGER']) {
+  for (const c of ['first_done_at TEXT', 'first_done_by INTEGER', 'second_done_at TEXT', 'second_done_by INTEGER', 'section_id INTEGER']) {
     if (!apCols.includes(c.split(' ')[0])) db.exec(`ALTER TABLE project_approvals ADD COLUMN ${c}`);
   }
   const attCols = all('PRAGMA table_info(attachments)').map(c => c.name);

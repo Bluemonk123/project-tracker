@@ -527,6 +527,20 @@ test('project board: brief, customer roles and documents', async () => {
   assert.equal(ap.first_done_at, null, 'new approver starts not done');
   assert.equal((await dev.del(`/approvals/${apId}`)).status, 403);
   assert.equal((await admin.del(`/approvals/${apId}`)).status, 200);
+  // sections: approvals added without a section went into "Approvals"; new sections come first
+  r = await admin.get(`/projects/${p.id}/board-info`);
+  assert.deepEqual(r.data.approval_sections.map(x => x.name), ['Approvals']);
+  const sec = (await admin.post(`/projects/${p.id}/approval-sections`, { name: 'UAT sign-off' })).data.id;
+  assert.equal((await admin.post(`/projects/${p.id}/approval-sections`, { name: 'uat sign-off' })).status, 400);
+  assert.equal((await dev.post(`/projects/${p.id}/approval-sections`, { name: 'X' })).status, 403);
+  assert.equal((await admin.post(`/projects/${p.id}/approvals`, { module: 'Orders', section_id: sec, first_approver_id: me })).status, 201, 'same module allowed in another section');
+  assert.equal((await admin.post(`/projects/${p.id}/approvals`, { module: 'Orders', section_id: sec })).status, 400);
+  r = await admin.get(`/projects/${p.id}/board-info`);
+  assert.equal(r.data.approval_sections[0].name, 'UAT sign-off');
+  assert.equal(r.data.approvals.filter(x => x.section_id === sec).length, 1);
+  assert.equal((await admin.patch(`/approval-sections/${sec}`, { name: 'UAT sign-off v2' })).status, 200);
+  r = await admin.del(`/approval-sections/${sec}`);
+  assert.equal(r.data.approvals_removed, 1);
   // upload limit from Administration applies straight away
   assert.equal((await admin.patch('/admin/settings', { max_upload_mb: 0 })).status, 400);
   assert.equal((await admin.patch('/admin/settings', { max_upload_mb: 1 })).status, 200);

@@ -764,3 +764,15 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .pb-tick:disabled { cursor: default; }
 .pb-tick:not(:disabled):hover { background: #23801A; }
 .panel-head h3.no-caps { text-transform: none; letter-spacing: normal; font-weight: 620; }
+/* Approval sections (accordion) */
+.pb-ap-section { border-top: 1px solid var(--line); }
+.pb-ap-section:first-of-type { border-top: 0; }
+.pb-ap-head { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: var(--sunken); }
+.pb-ap-section.open .pb-ap-head { border-bottom: 1px solid var(--line); }
+.pb-ap-head .actions { margin-left: auto; display: flex; gap: 4px; align-items: center; }
+.pb-ap-section.open .pb-acc-chev { transform: rotate(90deg); }
+.pb-ap-name { font-weight: 650; font-size: var(--fs-sm); }
+.pb-ap-progress { color: var(--ink-3); display: inline-flex; align-items: center; gap: 3px; margin-left: 4px; }
+.pb-ap-progress.all { color: #23801A; font-weight: 600; }
+.pb-ap-empty { padding: 12px 16px; }
+.btn.xs.ghost { height: 26px; padding: 0 8px; font-size: 12px; }

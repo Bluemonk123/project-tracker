@@ -427,3 +427,13 @@ CREATE TABLE IF NOT EXISTS project_release_notes (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_release_notes ON project_release_notes(project_id, created_at);
+
+-- Project Board: approvals are grouped into sections (e.g. Phase 1, UAT sign-off)
+CREATE TABLE IF NOT EXISTS project_approval_sections (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_approval_sections ON project_approval_sections(project_id, created_at);

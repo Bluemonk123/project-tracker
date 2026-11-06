@@ -118,7 +118,8 @@ r.get('/projects/:pid/board-info', (req, res) => {
       customer_name: p.customer_name, start_date: p.start_date, end_date: p.end_date },
     customer_roles: roles,
     me: req.user.id,
-    approvals: all(`SELECT a.id, a.module, a.first_approver_id, a.second_approver_id, a.created_at,
+    approval_sections: approvalSections(req, p.id),
+    approvals: all(`SELECT a.id, a.section_id, a.module, a.first_approver_id, a.second_approver_id, a.created_at,
                        f.name AS first_approver_name, s2.name AS second_approver_name,
                        a.first_done_at, fd.name AS first_done_by_name, a.second_done_at, sd.name AS second_done_by_name
                      FROM project_approvals a LEFT JOIN users f ON f.id = a.first_approver_id LEFT JOIN users s2 ON s2.id = a.second_approver_id
@@ -270,7 +271,52 @@ r.post('/projects/:pid/documents/:slot', (req, res, next) => {
   });
 });
 
-// ---------- Approvals: module name with a first and second approver ----------
+// ---------- Approvals: sections, each with modules that have a first and second approver ----------
+// Approvals added before sections existed are put into a section called "Approvals".
+function approvalSections(req, projectId) {
+  if (get('SELECT 1 FROM project_approvals WHERE project_id = ? AND section_id IS NULL LIMIT 1', projectId)) {
+    const sid = run('INSERT INTO project_approval_sections(project_id, name, created_by) VALUES(?,?,?)', projectId, 'Approvals', req.user.id).id;
+    run('UPDATE project_approvals SET section_id = ? WHERE project_id = ? AND section_id IS NULL', sid, projectId);
+  }
+  return all(`SELECT s.id, s.name, s.created_at, u.name AS created_by_name FROM project_approval_sections s
+              LEFT JOIN users u ON u.id = s.created_by WHERE s.project_id = ? ORDER BY s.created_at DESC, s.id DESC`, projectId);
+}
+function sectionName(b) {
+  const name = String(b?.name ?? '').trim();
+  if (!name) fail(400, 'Enter the section name.');
+  if (name.length > 120) fail(400, 'Section names must be 120 characters or fewer.');
+  return name;
+}
+function loadSection(req) {
+  const sct = get('SELECT * FROM project_approval_sections WHERE id = ?', req.params.id) || fail(404, 'Section not found.');
+  if (!canBrief(req, sct.project_id)) fail(403, 'You do not have permission to manage approvals in this project.');
+  return sct;
+}
+r.post('/projects/:pid/approval-sections', (req, res) => {
+  const p = resolveProject(req.params.pid);
+  if (!canBrief(req, p.id)) fail(403, 'You do not have permission to manage approvals in this project.');
+  const name = sectionName(req.body);
+  if (get('SELECT 1 FROM project_approval_sections WHERE project_id = ? AND name = ? COLLATE NOCASE', p.id, name)) fail(400, `There is already a section called ${name}.`);
+  const { id } = run('INSERT INTO project_approval_sections(project_id, name, created_by) VALUES(?,?,?)', p.id, name, req.user.id);
+  res.status(201).json({ id });
+});
+r.patch('/approval-sections/:id', (req, res) => {
+  const sct = loadSection(req);
+  const name = sectionName(req.body);
+  if (get('SELECT 1 FROM project_approval_sections WHERE project_id = ? AND name = ? COLLATE NOCASE AND id <> ?', sct.project_id, name, sct.id)) fail(400, `There is already a section called ${name}.`);
+  run('UPDATE project_approval_sections SET name = ? WHERE id = ?', name, sct.id);
+  res.json({ ok: true });
+});
+r.delete('/approval-sections/:id', (req, res) => {
+  const sct = loadSection(req);
+  const n = get('SELECT COUNT(*) AS n FROM project_approvals WHERE section_id = ?', sct.id).n;
+  tx(() => {
+    run('DELETE FROM project_approvals WHERE section_id = ?', sct.id);
+    run('DELETE FROM project_approval_sections WHERE id = ?', sct.id);
+  });
+  res.json({ ok: true, approvals_removed: n });
+});
+
 function approvalFields(b) {
   const module = String(b.module ?? '').trim();
   if (!module) fail(400, 'Enter the module name.');
@@ -296,9 +342,15 @@ r.post('/projects/:pid/approvals', (req, res) => {
   const p = resolveProject(req.params.pid);
   if (!canBrief(req, p.id)) fail(403, 'You do not have permission to manage approvals in this project.');
   const f = approvalFields(req.body || {});
-  if (get('SELECT id FROM project_approvals WHERE project_id = ? AND module = ? COLLATE NOCASE', p.id, f.module)) fail(400, `${f.module} already has approvers. Edit it instead.`);
-  const { id } = run('INSERT INTO project_approvals(project_id, module, first_approver_id, second_approver_id, created_by) VALUES(?,?,?,?,?)',
-    p.id, f.module, f.first, f.second, req.user.id);
+  // the section it goes in: the one given, or the newest (created if there is none yet)
+  approvalSections(req, p.id);
+  let sid = req.body?.section_id ? Number(req.body.section_id) : null;
+  if (sid && !get('SELECT 1 FROM project_approval_sections WHERE id = ? AND project_id = ?', sid, p.id)) fail(400, 'Unknown section.');
+  if (!sid) sid = get('SELECT id FROM project_approval_sections WHERE project_id = ? ORDER BY created_at DESC, id DESC LIMIT 1', p.id)?.id
+    ?? run('INSERT INTO project_approval_sections(project_id, name, created_by) VALUES(?,?,?)', p.id, 'Approvals', req.user.id).id;
+  if (get('SELECT id FROM project_approvals WHERE section_id = ? AND module = ? COLLATE NOCASE', sid, f.module)) fail(400, `${f.module} is already in this section. Edit it instead.`);
+  const { id } = run('INSERT INTO project_approvals(project_id, section_id, module, first_approver_id, second_approver_id, created_by) VALUES(?,?,?,?,?,?)',
+    p.id, sid, f.module, f.first, f.second, req.user.id);
   tellApprovers(req, p, f);
   res.status(201).json({ id });
 });
@@ -312,7 +364,7 @@ function loadApproval(req) {
 r.patch('/approvals/:id', (req, res) => {
   const a = loadApproval(req);
   const f = approvalFields({ module: a.module, first_approver_id: a.first_approver_id, second_approver_id: a.second_approver_id, ...req.body });
-  if (get('SELECT id FROM project_approvals WHERE project_id = ? AND module = ? COLLATE NOCASE AND id <> ?', a.project_id, f.module, a.id)) fail(400, `${f.module} already has approvers.`);
+  if (get('SELECT id FROM project_approvals WHERE section_id IS ? AND module = ? COLLATE NOCASE AND id <> ?', a.section_id, f.module, a.id)) fail(400, `${f.module} is already in this section.`);
   run("UPDATE project_approvals SET module = ?, first_approver_id = ?, second_approver_id = ?, updated_at = datetime('now') WHERE id = ?", f.module, f.first, f.second, a.id);
   // a new person has not approved yet
   if (f.first !== a.first_approver_id) run('UPDATE project_approvals SET first_done_at = NULL, first_done_by = NULL WHERE id = ?', a.id);
