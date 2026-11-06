@@ -98,7 +98,7 @@ export default function Wiki({ project, pageId }) {
               <>
                 <div className="panel-head">
                   {editing ? <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} style={{ fontWeight: 600, maxWidth: 420 }} aria-label="Page title" />
-                    : <h3 style={{ fontSize: 17 }}>{p.title}</h3>}
+                    : <h3 className="no-caps" style={{ fontSize: 17 }}>{p.title}</h3>}
                   <div className="actions">
                     <span className="xs muted hide-sm">Edited by {p.updated_by_name} {timeAgo(p.updated_at)}</span>
                     {canEdit && !editing && <button className="btn sm" onClick={() => setEditing(true)}><Icon name="edit" />Edit</button>}
