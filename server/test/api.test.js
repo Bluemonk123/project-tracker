@@ -533,4 +533,28 @@ test('project board: brief, customer roles and documents', async () => {
   assert.equal(r.data.documents.at(-1).name, 'Test Cases');
   assert.equal(r.data.documents.at(-1).key, '07');
   assert.equal(r.data.documents.find(d => d.name === 'Design System').latest.filename, 'small.zip');
+  // release notes: document name + version, with files
+  r = await admin.post(`/projects/${p.id}/release-notes`, { name: 'Release notes', version: '1.4.0' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const rn = r.data.id;
+  assert.equal((await admin.post(`/projects/${p.id}/release-notes`, { name: 'release notes', version: '1.4.0' })).status, 400);
+  assert.equal((await admin.post(`/projects/${p.id}/release-notes`, { name: 'No version' })).status, 400);
+  assert.equal((await dev.post(`/projects/${p.id}/release-notes`, { name: 'X', version: '1' })).status, 403);
+  const upNote = async (who, body, name) => {
+    const fd = new FormData(); fd.append('file', new Blob([body]), name);
+    return fetch(`${base}/release-notes/${rn}/files`, { method: 'POST', body: fd, headers: { cookie: who.cookie() } });
+  };
+  assert.equal((await upNote(admin, 'notes v1', 'rn-1.4.0.pdf')).status, 201);
+  assert.equal((await upNote(admin, 'changelog', 'changelog.txt')).status, 201);
+  assert.equal((await upNote(dev, 'x', 'x.txt')).status, 403);
+  r = await dev.get(`/projects/${p.id}/board-info`);
+  const note = r.data.release_notes[0];
+  assert.equal(note.version, '1.4.0');
+  assert.deepEqual(note.files.map(f => f.filename).sort(), ['changelog.txt', 'rn-1.4.0.pdf']);
+  assert.ok(r.data.documents.every(d => d.versions.every(v => !v.doc_slot.startsWith('rn:'))), 'release note files stay out of documents');
+  assert.equal((await admin.del(`/release-notes/${rn}/files/${note.files[0].id}`)).status, 200);
+  assert.equal((await admin.patch(`/release-notes/${rn}`, { version: '1.4.1' })).status, 200);
+  r = await admin.del(`/release-notes/${rn}`);
+  assert.equal(r.data.files_removed, 1);
+  assert.equal((await admin.get(`/projects/${p.id}/board-info`)).data.release_notes.length, 0);
 });

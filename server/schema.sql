@@ -416,3 +416,14 @@ CREATE TABLE IF NOT EXISTS project_doc_slots (
   position   INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_doc_slots ON project_doc_slots(project_id, position);
+
+-- Project Board: release notes (document name + version, with uploaded files stored as attachments with doc_slot 'rn:<id>')
+CREATE TABLE IF NOT EXISTS project_release_notes (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  version    TEXT NOT NULL,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_release_notes ON project_release_notes(project_id, created_at);

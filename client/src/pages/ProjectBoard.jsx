@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useApp, useLoad } from '../context.jsx';
@@ -44,6 +44,7 @@ function ProjectSheet({ projectId }) {
       <div className="stack">
         <Approvals data={data} reload={reload} />
         <Documents data={data} reload={reload} />
+        <ReleaseNotes data={data} reload={reload} />
         <ProjectTeam data={data} />
       </div>
     </div>
@@ -70,6 +71,7 @@ function ProjectDetails({ data, reload }) {
   ) : <span className={`pb-tag ${TONE[board[key]] || 'muted'}`}>{board[key] || 'Not set'}</span>);
   const testingLink = `/projects/${p.identifier}/work-packages?status=${delivery.testing_status_ids.join(',') || 'open'}`;
   const r = delivery.release;
+  const latestNote = data.release_notes[0];
   return (
     <section className="panel pb-card">
       <div className="panel-head">
@@ -99,9 +101,12 @@ function ProjectDetails({ data, reload }) {
           <Link className="pb-count-link" to={testingLink}>{delivery.testing}<span> in testing</span></Link>
         </PbRow>
         <PbRow label="Release notes">
-          {r ? <button type="button" className="pb-count-link as-btn" onClick={() => setModal('release')}><Icon name="flag" size={14} />{r.name}</button>
+          {latestNote ? <>
+            <button type="button" className="pb-count-link as-btn" onClick={() => window.dispatchEvent(new Event('pb-open-release-notes'))}><Icon name="flag" size={14} />{latestNote.version}</button>
+            <span className="xs soft">{latestNote.name} · {timeAgo(latestNote.created_at)}</span>
+          </> : r ? <button type="button" className="pb-count-link as-btn" onClick={() => setModal('release')}><Icon name="flag" size={14} />{r.name}</button>
             : <span className="muted small">No release yet</span>}
-          {r && <span className="xs soft">{r.status === 'closed' ? 'Released' : r.status === 'locked' ? 'Locked' : 'Planned'}{r.due_date ? ` ${fmtDate(r.due_date, { year: true })}` : ''}</span>}
+          {!latestNote && r && <span className="xs soft">{r.status === 'closed' ? 'Released' : r.status === 'locked' ? 'Locked' : 'Planned'}{r.due_date ? ` ${fmtDate(r.due_date, { year: true })}` : ''}</span>}
         </PbRow>
       </PbGroup>
 
@@ -473,6 +478,143 @@ function Documents({ data, reload }) {
       </div>
       {modal && <DocNameModal projectId={data.project.id} doc={modal.doc} onClose={() => setModal(null)} onSaved={reload} />}
     </section>
+  );
+}
+
+// Release notes: document name + version, each with its uploaded files. Collapsed by default.
+function ReleaseNotes({ data, reload }) {
+  const { toast } = useApp();
+  const list = data.release_notes;
+  const canEdit = data.can.documents;
+  const [open, setOpen] = useState(false);
+  const [modal, setModal] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const [, run] = useAsync();
+  const fileInput = useRef(null);
+  const target = useRef(null);
+  useEffect(() => {
+    const show = () => { setOpen(true); setTimeout(() => document.getElementById('pb-release-notes')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); };
+    window.addEventListener('pb-open-release-notes', show);
+    return () => window.removeEventListener('pb-open-release-notes', show);
+  }, []);
+  const uploadTo = (note) => { target.current = note; fileInput.current?.click(); };
+  const onFile = async (file) => {
+    const note = target.current;
+    if (!file || !note) return;
+    if (file.size > data.max_mb * 1048576) { toast(`Files must be ${data.max_mb} MB or smaller.`, 'error'); return; }
+    setBusyId(note.id);
+    try {
+      await uploadFile(`/api/release-notes/${note.id}/files`, file);
+      toast(`${file.name} uploaded to ${note.name} ${note.version}`);
+      reload();
+    } catch (e) { toast(e.message, 'error'); }
+    setBusyId(null);
+    fileInput.current.value = '';
+  };
+  const delNote = async (n) => {
+    const k = n.files.length;
+    if (await confirmDialog({ title: `Delete ${n.name} ${n.version}?`, confirmLabel: 'Delete', danger: true,
+      message: k ? `It is removed together with its ${k} uploaded file${k > 1 ? 's' : ''}. This cannot be undone.` : 'It is removed from the list.' })) {
+      if (await run(() => api.del(`/release-notes/${n.id}`), 'Release note deleted')) reload();
+    }
+  };
+  const delFile = async (n, f) => {
+    if (await confirmDialog({ title: `Delete ${f.filename}?`, message: `The file is removed from ${n.name} ${n.version}. This cannot be undone.`, confirmLabel: 'Delete', danger: true })) {
+      if (await run(() => api.del(`/release-notes/${n.id}/files/${f.id}`), 'File deleted')) reload();
+    }
+  };
+  return (
+    <section id="pb-release-notes" className={`panel pb-accordion${open ? ' open' : ''}`}>
+      <div className="panel-head">
+        <button type="button" className="pb-acc-toggle" aria-expanded={open} onClick={() => setOpen(o => !o)}>
+          <Icon name="chevronRight" size={16} className="pb-acc-chev" />
+          <h3>Release notes {list.length > 0 && <span className="pb-count">{list.length}</span>}</h3>
+        </button>
+        <div className="actions">{canEdit && <button type="button" className="btn sm" onClick={() => { setOpen(true); setModal({}); }}><Icon name="plus" size={15} />Add</button>}</div>
+      </div>
+      {open && (!list.length ? <div className="panel-body muted small">No release notes yet.{canEdit && ' Choose Add to add a document name and version.'}</div> : (
+        <ul className="pb-doclist">
+          {list.map(n => (
+            <li key={n.id} className="pb-doc pb-rn">
+              <span className="pb-rn-ver" title="Version">{n.version}</span>
+              <div className="grow" style={{ minWidth: 0 }}>
+                <div className="pb-docname">{n.name}</div>
+                <div className="xs soft">Added {timeAgo(n.created_at)}{n.created_by_name ? ` by ${n.created_by_name}` : ''}</div>
+                {n.files.length ? (
+                  <ul className="pb-rn-files">
+                    {n.files.map(f => (
+                      <li key={f.id}>
+                        <Icon name="file" size={13} /><span className="pb-fname">{f.filename}</span>
+                        <span className="xs muted">· {fmtSize(f.size)} · {timeAgo(f.created_at)}</span>
+                        <a className="btn icon xs ghost" href={`/api/attachments/${f.id}/download`} download title={`Download ${f.filename}`} aria-label={`Download ${f.filename}`}><Icon name="download" size={14} /></a>
+                        {canEdit && <button type="button" className="btn icon xs ghost" title="Delete file" aria-label={`Delete ${f.filename}`} onClick={() => delFile(n, f)}><Icon name="trash" size={14} /></button>}
+                      </li>
+                    ))}
+                  </ul>
+                ) : <div className="xs muted" style={{ marginTop: 4 }}>No document uploaded yet</div>}
+              </div>
+              {canEdit && (
+                <div className="pb-docbtns">
+                  <button type="button" className="btn icon sm" disabled={busyId === n.id} onClick={() => uploadTo(n)} title="Upload a document" aria-label={`Upload to ${n.name} ${n.version}`}>
+                    {busyId === n.id ? <span className="spinner sm" /> : <Icon name="upload" />}
+                  </button>
+                  <MoreMenu label={`More for ${n.name} ${n.version}`}>
+                    <button className="menu-item" onClick={() => setModal({ note: n })}><Icon name="edit" size={16} />Edit name or version</button>
+                    <button className="menu-item danger" onClick={() => delNote(n)}><Icon name="trash" size={16} />Delete</button>
+                  </MoreMenu>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      ))}
+      <input ref={fileInput} type="file" hidden onChange={(e) => onFile(e.target.files?.[0])} />
+      {modal && <ReleaseNoteModal projectId={data.project.id} note={modal.note} maxMb={data.max_mb} onClose={() => setModal(null)} onSaved={reload} />}
+    </section>
+  );
+}
+
+async function uploadFile(url, file) {
+  const fd = new FormData(); fd.append('file', file);
+  const res = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(out.error || 'Upload failed.');
+  return out;
+}
+
+function ReleaseNoteModal({ projectId, note, maxMb, onClose, onSaved }) {
+  const { toast } = useApp();
+  const [f, setF] = useState({ name: note?.name || '', version: note?.version || '' });
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    if (file && file.size > maxMb * 1048576) { toast(`Files must be ${maxMb} MB or smaller.`, 'error'); return; }
+    setBusy(true);
+    try {
+      let id = note?.id;
+      if (note) await api.patch(`/release-notes/${note.id}`, f);
+      else id = (await api.post(`/projects/${projectId}/release-notes`, f)).id;
+      if (file) await uploadFile(`/api/release-notes/${id}/files`, file);
+      toast(note ? 'Release note saved' : `${f.name} ${f.version} added`);
+      onSaved(); onClose();
+    } catch (e) { toast(e.message, 'error'); onSaved(); }
+    setBusy(false);
+  };
+  return (
+    <Modal title={note ? `Edit ${note.name} ${note.version}` : 'Add release note'} onClose={onClose} onSubmit={save} footer={<>
+      <button type="button" className="btn" onClick={onClose}>Cancel</button>
+      <button className="btn primary" disabled={busy || !f.name.trim() || !f.version.trim()}>{busy ? 'Saving…' : note ? 'Save' : 'Add'}</button>
+    </>}>
+      <div className="form-grid">
+        <Field label="Document name" className="span-2"><input type="text" value={f.name} maxLength={150} required autoFocus placeholder="e.g. Release notes, Change log" onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+        <Field label="Version"><input type="text" value={f.version} maxLength={50} required placeholder="e.g. 1.4.0" onChange={(e) => setF({ ...f, version: e.target.value })} /></Field>
+        {!note && (
+          <Field label="Document (optional)" hint={`Any file type, up to ${maxMb} MB. You can upload more later.`}>
+            <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+          </Field>
+        )}
+      </div>
+    </Modal>
   );
 }
 

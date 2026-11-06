@@ -122,6 +122,7 @@ r.get('/projects/:pid/board-info', (req, res) => {
                      FROM project_approvals a LEFT JOIN users f ON f.id = a.first_approver_id LEFT JOIN users s2 ON s2.id = a.second_approver_id
                      WHERE a.project_id = ? ORDER BY a.module COLLATE NOCASE, a.id`, p.id),
     board: readBoard(p),
+    release_notes: releaseNotes(p.id),
     delivery: { tasks: counts.total || 0, open: counts.open || 0, testing: counts.testing || 0, testing_status_ids: testingIds, release: release || null },
     stack: {
       development: tech.filter(t => !['Database', 'Data', 'Infrastructure', 'DevOps', 'OS'].includes(t.category)),
@@ -164,6 +165,84 @@ r.put('/projects/:pid/board-info', (req, res) => {
       });
     }
   });
+  res.json({ ok: true });
+});
+
+// ---------- Release notes ----------
+function releaseNotes(projectId) {
+  const notes = all(`SELECT n.id, n.name, n.version, n.created_at, u.name AS created_by_name FROM project_release_notes n
+                     LEFT JOIN users u ON u.id = n.created_by WHERE n.project_id = ? ORDER BY n.created_at DESC, n.id DESC`, projectId);
+  const files = all(`SELECT a.id, a.doc_slot, a.filename, a.size, a.created_at, u.name AS uploaded_by_name FROM attachments a
+                     LEFT JOIN users u ON u.id = a.uploaded_by
+                     WHERE a.container_type = 'project' AND a.container_id = ? AND a.doc_slot LIKE 'rn:%' ORDER BY a.created_at DESC, a.id DESC`, projectId);
+  return notes.map(n => ({ ...n, files: files.filter(f => f.doc_slot === `rn:${n.id}`) }));
+}
+function noteFields(b) {
+  const name = String(b.name ?? '').trim();
+  const version = String(b.version ?? '').trim();
+  if (!name) fail(400, 'Enter the document name.');
+  if (!version) fail(400, 'Enter the version.');
+  if (name.length > 150 || version.length > 50) fail(400, 'The name or version is too long.');
+  return { name, version };
+}
+function loadNote(req) {
+  const n = get('SELECT * FROM project_release_notes WHERE id = ?', req.params.id) || fail(404, 'Release note not found.');
+  if (!canDocs(req, n.project_id)) fail(403, 'You do not have permission to change release notes.');
+  return n;
+}
+
+r.post('/projects/:pid/release-notes', (req, res) => {
+  const p = resolveProject(req.params.pid);
+  if (!canDocs(req, p.id)) fail(403, 'You do not have permission to add release notes.');
+  const f = noteFields(req.body || {});
+  if (get('SELECT 1 FROM project_release_notes WHERE project_id = ? AND name = ? COLLATE NOCASE AND version = ? COLLATE NOCASE', p.id, f.name, f.version)) {
+    fail(400, `${f.name} ${f.version} is already listed.`);
+  }
+  const { id } = run('INSERT INTO project_release_notes(project_id, name, version, created_by) VALUES(?,?,?,?)', p.id, f.name, f.version, req.user.id);
+  res.status(201).json({ id });
+});
+
+r.patch('/release-notes/:id', (req, res) => {
+  const n = loadNote(req);
+  const f = noteFields({ name: n.name, version: n.version, ...req.body });
+  run('UPDATE project_release_notes SET name = ?, version = ? WHERE id = ?', f.name, f.version, n.id);
+  res.json({ ok: true });
+});
+
+function removeFiles(where, ...params) {
+  const files = all(`SELECT id, stored_name FROM attachments WHERE ${where}`, ...params);
+  run(`DELETE FROM attachments WHERE ${where}`, ...params);
+  for (const f of files) fs.rmSync(path.join(UPLOAD_DIR, f.stored_name), { force: true });
+  return files.length;
+}
+
+r.delete('/release-notes/:id', (req, res) => {
+  const n = loadNote(req);
+  const removed = removeFiles("container_type = 'project' AND container_id = ? AND doc_slot = ?", n.project_id, `rn:${n.id}`);
+  run('DELETE FROM project_release_notes WHERE id = ?', n.id);
+  res.json({ ok: true, files_removed: removed });
+});
+
+r.post('/release-notes/:id/files', (req, res, next) => {
+  upload.single('file')(req, res, (err) => {
+    try {
+      if (err) fail(400, err.code === 'LIMIT_FILE_SIZE' ? `Files must be ${maxUploadMb()} MB or smaller.` : err.message);
+      if (!req.file) fail(400, 'Choose a file to upload.');
+      try {
+        const n = loadNote(req);
+        const name = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+        const { id } = run(`INSERT INTO attachments(container_type, container_id, project_id, filename, stored_name, content_type, size, uploaded_by, doc_slot)
+                            VALUES('project',?,?,?,?,?,?,?,?)`, n.project_id, n.project_id, name, req.file.filename, req.file.mimetype, req.file.size, req.user.id, `rn:${n.id}`);
+        res.status(201).json({ id, filename: name });
+      } catch (e) { fs.rmSync(req.file.path, { force: true }); throw e; }
+    } catch (e) { next(e); }
+  });
+});
+
+r.delete('/release-notes/:id/files/:fileId', (req, res) => {
+  const n = loadNote(req);
+  const removed = removeFiles("id = ? AND container_type = 'project' AND container_id = ? AND doc_slot = ?", Number(req.params.fileId), n.project_id, `rn:${n.id}`);
+  if (!removed) fail(404, 'File not found.');
   res.json({ ok: true });
 });
 

@@ -97,6 +97,17 @@ tx(() => {
            VALUES('project',?,?,?,?,?,?,?,?,datetime('now', ?))`, pid, pid, `${p.key}-${slot}-${DOC_NAMES[slot].replace(/ /g, '-')}.txt`, stored, 'text/plain',
         Buffer.byteLength(body), u[p.manager], slot, `-${Number(slot) + 2} days`);
     }
+    if (p.key === 'CRM') {
+      for (const [ver, days] of [['1.3.0', 40], ['1.4.0', 12]]) {
+        const rn = run(`INSERT INTO project_release_notes(project_id, name, version, created_by, created_at) VALUES(?,?,?,?,datetime('now', ?))`,
+          pid, 'Release notes', ver, u[p.manager], `-${days} days`).id;
+        const stored = crypto.randomBytes(16).toString('hex');
+        const body = `${p.name} release ${ver}\n\nSample release notes created with the demo data.\n`;
+        fs.writeFileSync(path.join(UPLOAD_DIR, stored), body);
+        run(`INSERT INTO attachments(container_type, container_id, project_id, filename, stored_name, content_type, size, uploaded_by, doc_slot, created_at)
+             VALUES('project',?,?,?,?,?,?,?,?,datetime('now', ?))`, pid, pid, `CRM-release-notes-${ver}.txt`, stored, 'text/plain', Buffer.byteLength(body), u[p.manager], `rn:${rn}`, `-${days} days`);
+      }
+    }
     run('INSERT INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', pid, adminId, role('Project manager', 'project'));
     run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', pid, u[p.manager], role('Project manager', 'project'));
     for (const [m, r] of p.members) run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', pid, u[m], role(r, 'project'));
