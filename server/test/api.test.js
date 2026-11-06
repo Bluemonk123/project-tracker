@@ -459,9 +459,10 @@ test('project board: brief, customer roles and documents', async () => {
   assert.deepEqual(r.data.customer_roles.map(x => x.name), ['Admin', 'Agent']);
   assert.ok(r.data.members.some(m => m.user_id === ids.dev));
   // upload two versions of document 02
+  const slotIds = Object.fromEntries(r.data.documents.map(d => [d.key, d.id]));
   const up = async (who, slot, name, body = 'x') => {
     const fd = new FormData(); fd.append('file', new Blob([body]), name);
-    return (await fetch(`${base}/projects/${p.id}/documents/${slot}`, { method: 'POST', body: fd, headers: { cookie: who.cookie() } })).status;
+    return (await fetch(`${base}/projects/${p.id}/documents/${slotIds[slot] ?? 99999}`, { method: 'POST', body: fd, headers: { cookie: who.cookie() } })).status;
   };
   assert.equal(await up(admin, '02', 'brd-v1.docx'), 201);
   assert.equal(await up(admin, '02', 'brd-v2.docx', 'second'), 201);
@@ -520,4 +521,16 @@ test('project board: brief, customer roles and documents', async () => {
   assert.equal(await up(admin, '07', 'big.zip', 'x'.repeat(1.5 * 1024 * 1024)), 400);
   assert.equal(await up(admin, '07', 'small.zip', 'x'.repeat(1000)), 201);
   await admin.patch('/admin/settings', { max_upload_mb: 25 });
+  // the document list can be renamed, added to and trimmed
+  assert.equal((await admin.post(`/projects/${p.id}/document-slots`, { name: 'Test Cases', detail: 'Regression' })).status, 201);
+  assert.equal((await admin.post(`/projects/${p.id}/document-slots`, { name: 'test cases' })).status, 400);
+  assert.equal((await dev.post(`/projects/${p.id}/document-slots`, { name: 'X' })).status, 403);
+  assert.equal((await admin.patch(`/document-slots/${slotIds['01']}`, { name: 'Product Vision' })).status, 200);
+  r = await admin.del(`/document-slots/${slotIds['02']}`);
+  assert.equal(r.data.files_removed, 2);
+  r = await admin.get(`/projects/${p.id}/board-info`);
+  assert.deepEqual(r.data.documents.map(d => `${d.key} ${d.name}`).slice(0, 2), ['01 Product Vision', '02 Personas & Journeys']);
+  assert.equal(r.data.documents.at(-1).name, 'Test Cases');
+  assert.equal(r.data.documents.at(-1).key, '07');
+  assert.equal(r.data.documents.find(d => d.name === 'Design System').latest.filename, 'small.zip');
 });

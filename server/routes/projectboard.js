@@ -3,6 +3,7 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import path from 'node:path';
 import multer from 'multer';
 import { get, all, run, tx, UPLOAD_DIR, maxUploadMb } from '../db.js';
 import { need, can, fail } from '../access.js';
@@ -19,7 +20,21 @@ export const DOC_SLOTS = [
   { key: '06', name: 'UAT & Disaster Recovery' },
   { key: '07', name: 'Design System' },
 ];
-const SLOT_KEYS = new Set(DOC_SLOTS.map(s => s.key));
+
+// Each project gets its own copy of the list the first time it is opened, so it can be renamed, added to and trimmed.
+// Files uploaded before that point are moved from the old fixed keys ('01'..'07') to the project's own entries.
+function ensureSlots(projectId) {
+  if (get('SELECT 1 FROM project_doc_slots WHERE project_id = ? LIMIT 1', projectId)) return;
+  if (get("SELECT 1 FROM settings WHERE key = ?", `doc_slots_seeded_${projectId}`)) return; // the list was emptied on purpose
+  tx(() => {
+    DOC_SLOTS.forEach((d, i) => {
+      const { id } = run('INSERT INTO project_doc_slots(project_id, name, detail, position) VALUES(?,?,?,?)', projectId, d.name, d.detail || null, i);
+      run("UPDATE attachments SET doc_slot = ? WHERE container_type = 'project' AND container_id = ? AND doc_slot = ?", String(id), projectId, d.key);
+    });
+    run("INSERT OR REPLACE INTO settings(key, value) VALUES(?, '1')", `doc_slots_seeded_${projectId}`);
+  });
+}
+const slotsOf = (projectId) => all('SELECT id, name, detail FROM project_doc_slots WHERE project_id = ? ORDER BY position, id', projectId);
 
 // ---------- Project Board details kept in projects.board_data ----------
 export const DEMO_OPTIONS = ['Yes', 'No', 'Scheduled', 'In Process'];
@@ -89,13 +104,14 @@ r.get('/projects/:pid/board-info', (req, res) => {
   const release = get(`SELECT id, name, description, status, due_date FROM versions WHERE project_id = ?
                        ORDER BY (status = 'closed') DESC, COALESCE(due_date, created_at) DESC, id DESC LIMIT 1`, p.id);
   const tech = all('SELECT name, category, version_used FROM project_technologies WHERE project_id = ? ORDER BY position, name COLLATE NOCASE', p.id);
+  ensureSlots(p.id);
   const files = all(`SELECT a.id, a.doc_slot, a.filename, a.size, a.content_type, a.created_at, a.uploaded_by, u.name AS uploaded_by_name
                      FROM attachments a LEFT JOIN users u ON u.id = a.uploaded_by
                      WHERE a.container_type = 'project' AND a.container_id = ? AND a.doc_slot IS NOT NULL
                      ORDER BY a.created_at DESC, a.id DESC`, p.id);
-  const documents = DOC_SLOTS.map(s => {
-    const versions = files.filter(f => f.doc_slot === s.key);
-    return { ...s, latest: versions[0] || null, versions };
+  const documents = slotsOf(p.id).map((s, i) => {
+    const versions = files.filter(f => f.doc_slot === String(s.id));
+    return { ...s, key: String(i + 1).padStart(2, '0'), latest: versions[0] || null, versions };
   });
   res.json({
     project: { id: p.id, name: p.name, identifier: p.identifier, color: p.color, status: p.status, description: p.description,
@@ -159,11 +175,13 @@ r.post('/projects/:pid/documents/:slot', (req, res, next) => {
       if (!req.file) fail(400, 'Choose a file to upload.');
       try {
         const p = resolveProject(req.params.pid);
-        if (!SLOT_KEYS.has(req.params.slot)) fail(404, 'Unknown document.');
+        ensureSlots(p.id);
+        const slot = get('SELECT id FROM project_doc_slots WHERE id = ? AND project_id = ?', Number(req.params.slot), p.id);
+        if (!slot) fail(404, 'Unknown document.');
         if (!canDocs(req, p.id)) fail(403, 'You do not have permission to upload project documents.');
         const name = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
         const { id } = run(`INSERT INTO attachments(container_type, container_id, project_id, filename, stored_name, content_type, size, uploaded_by, doc_slot)
-                            VALUES('project',?,?,?,?,?,?,?,?)`, p.id, p.id, name, req.file.filename, req.file.mimetype, req.file.size, req.user.id, req.params.slot);
+                            VALUES('project',?,?,?,?,?,?,?,?)`, p.id, p.id, name, req.file.filename, req.file.mimetype, req.file.size, req.user.id, String(slot.id));
         res.status(201).json({ id, filename: name });
       } catch (e) { fs.rmSync(req.file.path, { force: true }); throw e; }
     } catch (e) { next(e); }
@@ -222,6 +240,51 @@ r.delete('/approvals/:id', (req, res) => {
   const a = loadApproval(req);
   run('DELETE FROM project_approvals WHERE id = ?', a.id);
   res.json({ ok: true });
+});
+
+// ---------- The project's document list: add, rename, remove ----------
+function slotFields(b) {
+  const name = String(b.name ?? '').trim();
+  if (!name) fail(400, 'Enter the document name.');
+  if (name.length > 150) fail(400, 'Document names must be 150 characters or fewer.');
+  return { name, detail: String(b.detail ?? '').trim().slice(0, 200) || null };
+}
+function loadSlot(req) {
+  const s = get('SELECT * FROM project_doc_slots WHERE id = ?', req.params.id) || fail(404, 'Document not found.');
+  if (!canDocs(req, s.project_id)) fail(403, 'You do not have permission to change the project documents.');
+  return s;
+}
+const nameTaken = (pid, name, exceptId = 0) => get('SELECT 1 FROM project_doc_slots WHERE project_id = ? AND name = ? COLLATE NOCASE AND id <> ?', pid, name, exceptId);
+
+r.post('/projects/:pid/document-slots', (req, res) => {
+  const p = resolveProject(req.params.pid);
+  if (!canDocs(req, p.id)) fail(403, 'You do not have permission to change the project documents.');
+  ensureSlots(p.id);
+  const f = slotFields(req.body || {});
+  if (nameTaken(p.id, f.name)) fail(400, `${f.name} is already in the list.`);
+  const pos = (get('SELECT MAX(position) AS m FROM project_doc_slots WHERE project_id = ?', p.id).m ?? -1) + 1;
+  const { id } = run('INSERT INTO project_doc_slots(project_id, name, detail, position) VALUES(?,?,?,?)', p.id, f.name, f.detail, pos);
+  res.status(201).json({ id });
+});
+
+r.patch('/document-slots/:id', (req, res) => {
+  const s = loadSlot(req);
+  const f = slotFields({ name: s.name, detail: s.detail, ...req.body });
+  if (nameTaken(s.project_id, f.name, s.id)) fail(400, `${f.name} is already in the list.`);
+  run('UPDATE project_doc_slots SET name = ?, detail = ? WHERE id = ?', f.name, f.detail, s.id);
+  res.json({ ok: true });
+});
+
+// Removes the document and every version uploaded to it.
+r.delete('/document-slots/:id', (req, res) => {
+  const s = loadSlot(req);
+  const files = all("SELECT id, stored_name FROM attachments WHERE container_type = 'project' AND container_id = ? AND doc_slot = ?", s.project_id, String(s.id));
+  tx(() => {
+    run("DELETE FROM attachments WHERE container_type = 'project' AND container_id = ? AND doc_slot = ?", s.project_id, String(s.id));
+    run('DELETE FROM project_doc_slots WHERE id = ?', s.id);
+  });
+  for (const f of files) fs.rmSync(path.join(UPLOAD_DIR, f.stored_name), { force: true });
+  res.json({ ok: true, files_removed: files.length });
 });
 
 export default r;

@@ -444,20 +444,60 @@ function ApprovalModal({ projectId, approval, onClose, onSaved }) {
 
 function Documents({ data, reload }) {
   const done = data.documents.filter(d => d.latest).length;
+  const [modal, setModal] = useState(null);
+  const [, run] = useAsync();
+  const canEdit = data.can.documents;
+  const del = async (d) => {
+    const n = d.versions.length;
+    if (await confirmDialog({ title: `Delete ${d.name}?`, confirmLabel: 'Delete', danger: true,
+      message: n ? `It is removed from the list together with its ${n} uploaded file${n > 1 ? 's' : ''}. This cannot be undone.` : 'It is removed from the list.' })) {
+      if (await run(() => api.del(`/document-slots/${d.id}`), `${d.name} deleted`)) reload();
+    }
+  };
   return (
     <section className="panel pb-docs">
-      <div className="panel-head"><h3>Project documents</h3><span className="small soft">{done} of {data.documents.length} uploaded</span></div>
-      <ul className="pb-doclist">
-        {data.documents.map(d => <DocRow key={d.key} d={d} projectId={data.project.id} canUpload={data.can.documents} maxMb={data.max_mb} reload={reload} />)}
-      </ul>
+      <div className="panel-head"><h3>Project documents</h3>
+        <div className="actions">
+          <span className="small soft">{done} of {data.documents.length} uploaded</span>
+          {canEdit && <button type="button" className="btn sm" onClick={() => setModal({})}><Icon name="plus" size={15} />Add</button>}
+        </div>
+      </div>
+      {data.documents.length ? (
+        <ul className="pb-doclist">
+          {data.documents.map(d => <DocRow key={d.id} d={d} projectId={data.project.id} canUpload={canEdit} maxMb={data.max_mb} reload={reload}
+            onRename={() => setModal({ doc: d })} onDelete={() => del(d)} />)}
+        </ul>
+      ) : <div className="panel-body muted small">No documents in the list.{canEdit && ' Choose Add to create one.'}</div>}
       <div className="panel-body xs muted" style={{ borderTop: '1px solid var(--line)' }}>
         Uploading a file again keeps the earlier one as an older version. Any file type, up to {data.max_mb} MB.
       </div>
+      {modal && <DocNameModal projectId={data.project.id} doc={modal.doc} onClose={() => setModal(null)} onSaved={reload} />}
     </section>
   );
 }
 
-function DocRow({ d, projectId, canUpload, maxMb, reload }) {
+function DocNameModal({ projectId, doc, onClose, onSaved }) {
+  const [f, setF] = useState({ name: doc?.name || '', detail: doc?.detail || '' });
+  const [busy, run] = useAsync();
+  const save = async () => {
+    const r = await run(() => (doc ? api.patch(`/document-slots/${doc.id}`, f) : api.post(`/projects/${projectId}/document-slots`, f)), doc ? 'Document renamed' : `${f.name} added`);
+    if (r) { onSaved(); onClose(); }
+  };
+  return (
+    <Modal title={doc ? `Rename ${doc.name}` : 'Add document'} onClose={onClose} onSubmit={save} footer={<>
+      <button type="button" className="btn" onClick={onClose}>Cancel</button>
+      <button className="btn primary" disabled={busy || !f.name.trim()}>{doc ? 'Save' : 'Add'}</button>
+    </>}>
+      <div className="stack">
+        <Field label="Document name"><input type="text" value={f.name} maxLength={150} required autoFocus placeholder="e.g. Test Cases" onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+        <Field label="Details" hint="Optional, shown in brackets after the name, e.g. BRD, with Business Rules & SOPs."><input type="text" value={f.detail} maxLength={200} onChange={(e) => setF({ ...f, detail: e.target.value })} /></Field>
+        {!doc && <p className="xs muted" style={{ margin: 0 }}>It is added at the end of the list; numbers follow the order.</p>}
+      </div>
+    </Modal>
+  );
+}
+
+function DocRow({ d, projectId, canUpload, maxMb, reload, onRename, onDelete }) {
   const { toast } = useApp();
   const input = useRef(null);
   const [busy, setBusy] = useState(false);
@@ -468,7 +508,7 @@ function DocRow({ d, projectId, canUpload, maxMb, reload }) {
     setBusy(true);
     try {
       const fd = new FormData(); fd.append('file', file);
-      const res = await fetch(`/api/projects/${projectId}/documents/${d.key}`, { method: 'POST', body: fd, credentials: 'same-origin' });
+      const res = await fetch(`/api/projects/${projectId}/documents/${d.id}`, { method: 'POST', body: fd, credentials: 'same-origin' });
       const out = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(out.error || 'Upload failed.');
       toast(`${d.key} ${d.name} uploaded`);
@@ -508,6 +548,10 @@ function DocRow({ d, projectId, canUpload, maxMb, reload }) {
           <button type="button" className="btn icon sm" disabled={busy} onClick={() => input.current?.click()}
             title={l ? 'Upload a new version' : 'Upload'} aria-label={`Upload ${d.name}`}>{busy ? <span className="spinner sm" /> : <Icon name="upload" />}</button>
           <input ref={input} type="file" hidden onChange={(e) => pick(e.target.files?.[0])} />
+          <MoreMenu label={`More for ${d.name}`}>
+            <button className="menu-item" onClick={onRename}><Icon name="edit" size={16} />Rename</button>
+            <button className="menu-item danger" onClick={onDelete}><Icon name="trash" size={16} />Delete</button>
+          </MoreMenu>
         </>}
       </div>
     </li>

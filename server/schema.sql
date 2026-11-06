@@ -406,3 +406,13 @@ CREATE TABLE IF NOT EXISTS project_approvals (
   updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_project_approvals ON project_approvals(project_id, id);
+
+-- Project Board: the list of documents a project keeps (starts with the seven standard ones; can be renamed, added, removed)
+CREATE TABLE IF NOT EXISTS project_doc_slots (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  detail     TEXT,
+  position   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_doc_slots ON project_doc_slots(project_id, position);
