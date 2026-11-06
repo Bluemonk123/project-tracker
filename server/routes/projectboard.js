@@ -124,7 +124,7 @@ r.get('/projects/:pid/board-info', (req, res) => {
                        a.first_done_at, fd.name AS first_done_by_name, a.second_done_at, sd.name AS second_done_by_name
                      FROM project_approvals a LEFT JOIN users f ON f.id = a.first_approver_id LEFT JOIN users s2 ON s2.id = a.second_approver_id
                      LEFT JOIN users fd ON fd.id = a.first_done_by LEFT JOIN users sd ON sd.id = a.second_done_by
-                     WHERE a.project_id = ? ORDER BY a.module COLLATE NOCASE, a.id`, p.id),
+                     WHERE a.project_id = ? ORDER BY a.id`, p.id),
     board: readBoard(p),
     release_notes: releaseNotes(p.id),
     delivery: { tasks: counts.total || 0, open: counts.open || 0, testing: counts.testing || 0, testing_status_ids: testingIds, release: release || null },
