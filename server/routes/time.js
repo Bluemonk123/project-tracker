@@ -41,6 +41,31 @@ r.get('/time-entries', (req, res) => {
   res.json({ rows, total });
 });
 
+// Hours per task: estimate, everything logged, what was logged in the chosen period, and what is left.
+r.get('/time-entries/tasks', (req, res) => {
+  const q = req.query;
+  let ids = visibleProjectIds(req, 'wp.view');
+  if (q.project_id) { const p = resolveProject(q.project_id); need(req, 'wp.view', p.id); ids = [p.id]; }
+  if (!ids.length) return res.json({ rows: [], totals: { estimated: 0, logged: 0, period: 0 } });
+  const DATE = /^\d{4}-\d{2}-\d{2}$/;
+  const from = DATE.test(q.from || '') ? q.from : '0000-01-01';
+  const to = DATE.test(q.to || '') ? q.to : '9999-12-31';
+  const rows = all(`SELECT wp.id, p.identifier || '-' || wp.number AS key, wp.subject, wp.estimated_hours, p.name AS project_name, p.color AS project_color,
+                      s.name AS status_name, s.color AS status_color, s.is_closed, a.name AS assignee_name, wp.assignee_id,
+                      COALESCE(t.total, 0) AS logged, COALESCE(t.period, 0) AS period
+                    FROM work_packages wp JOIN projects p ON p.id = wp.project_id JOIN statuses s ON s.id = wp.status_id
+                    LEFT JOIN users a ON a.id = wp.assignee_id
+                    LEFT JOIN (SELECT wp_id, SUM(hours) AS total, SUM(CASE WHEN spent_on BETWEEN ? AND ? THEN hours ELSE 0 END) AS period
+                               FROM time_entries WHERE wp_id IS NOT NULL GROUP BY wp_id) t ON t.wp_id = wp.id
+                    WHERE wp.project_id IN (${ids.map(() => '?').join(',')})
+                      AND (wp.estimated_hours > 0 OR t.total > 0 ${q.all === '1' ? 'OR 1 = 1' : ''})
+                      ${/^\d+$/.test(q.assignee_id || '') ? 'AND wp.assignee_id = ' + Number(q.assignee_id) : ''}
+                    ORDER BY p.name, wp.number`, from, to, ...ids);
+  const totals = rows.reduce((t, r) => ({ estimated: t.estimated + (r.estimated_hours || 0), logged: t.logged + r.logged, period: t.period + r.period }),
+    { estimated: 0, logged: 0, period: 0 });
+  res.json({ rows, totals });
+});
+
 r.get('/time-entries/report', (req, res) => {
   const groups = { user: 'u.name', project: 'p.name', activity: 'te.activity', wp: "COALESCE(p2.identifier || '-' || wp.number || ' ' || wp.subject, '(no work package)')", day: 'te.spent_on', week: "strftime('%Y-W%W', te.spent_on)", month: "strftime('%Y-%m', te.spent_on)" };
   const rowsBy = groups[req.query.rows] || groups.user;

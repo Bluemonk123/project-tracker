@@ -184,6 +184,76 @@ function Report({ project }) {
   );
 }
 
+// Estimated vs logged hours per task, with totals; "period" is what was logged between the two dates.
+function TaskHours({ project }) {
+  const { projects, activeUsers } = useApp();
+  const first = `${today().slice(0, 8)}01`;
+  const [f, setF] = useState({ from: first, to: today(), project_id: '', assignee_id: '', q: '', open: false });
+  const set = (k, v) => setF(s => ({ ...s, [k]: v }));
+  const pid = project?.id || f.project_id || undefined;
+  const { data, loading, error } = useLoad(() => api.get('/time-entries/tasks' + qs({ from: f.from, to: f.to, project_id: pid, assignee_id: f.assignee_id || undefined })), [f.from, f.to, pid, f.assignee_id]);
+  const rows = (data?.rows || []).filter(r => (!f.open || !r.is_closed) && (!f.q || `${r.key} ${r.subject}`.toLowerCase().includes(f.q.toLowerCase())));
+  const leftOf = (r) => (!r.is_closed && r.estimated_hours > 0 ? Math.max(0, r.estimated_hours - r.logged) : 0);
+  const t = rows.reduce((a, r) => ({ est: a.est + (r.estimated_hours || 0), logged: a.logged + r.logged, period: a.period + r.period, left: a.left + leftOf(r) }), { est: 0, logged: 0, period: 0, left: 0 });
+  const H = (n) => (n ? fmtHours(n) : '—');
+  return (
+    <>
+      <div className="filterbar">
+        <label className="kb-field"><span>Period from</span><input type="date" value={f.from} max={f.to} onChange={(e) => e.target.value && set('from', e.target.value)} /></label>
+        <label className="kb-field"><span>To</span><input type="date" value={f.to} min={f.from} onChange={(e) => e.target.value && set('to', e.target.value)} /></label>
+        {!project && (
+          <select value={f.project_id} onChange={(e) => set('project_id', e.target.value)} aria-label="Project">
+            <option value="">All projects</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        )}
+        <select value={f.assignee_id} onChange={(e) => set('assignee_id', e.target.value)} aria-label="Assignee">
+          <option value="">Anyone assigned</option>{activeUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+        </select>
+        <input type="search" placeholder="Filter tasks" value={f.q} onChange={(e) => set('q', e.target.value)} />
+        <label className="check small th-open"><input type="checkbox" checked={f.open} onChange={(e) => set('open', e.target.checked)} /><span>Open tasks only</span></label>
+      </div>
+      <ErrorBox error={error} />
+      <div className="figures">
+        <div className="figure"><div className="n">{fmtHours(t.est)}</div><div className="l">Estimated</div></div>
+        <div className="figure"><div className="n">{fmtHours(t.logged)}</div><div className="l">Logged in total</div></div>
+        <div className="figure"><div className="n">{fmtHours(t.left)}</div><div className="l">Remaining on open tasks</div></div>
+        <div className="figure"><div className="n">{fmtHours(t.period)}</div><div className="l">Logged {fmtDate(f.from)} – {fmtDate(f.to)}</div></div>
+      </div>
+      {loading && !data ? <Loading /> : !rows.length ? <div className="panel"><Empty title="No task hours yet">Tasks appear here once they have estimated hours or time logged against them.</Empty></div> : (
+        <div className="panel table-wrap">
+          <table className="table">
+            <thead><tr><th>Task</th>{!project && <th>Project</th>}<th>Assigned to</th><th>Status</th>
+              <th className="num">Estimated</th><th className="num">Logged</th><th className="num">In period</th><th className="num">Remaining</th><th style={{ width: 140 }}>Used</th></tr></thead>
+            <tbody>
+              {rows.map(r => {
+                const est = r.estimated_hours || 0;
+                const over = est > 0 && r.logged > est;
+                const pct = est ? Math.min(100, (r.logged / est) * 100) : 0;
+                return (
+                  <tr key={r.id}>
+                    <td><Link to={`/wp/${r.id}`}><Key k={r.key} color={r.project_color} /></Link> {r.subject}</td>
+                    {!project && <td className="small">{r.project_name}</td>}
+                    <td>{r.assignee_id ? <Person id={r.assignee_id} name={r.assignee_name} /> : <span className="muted small">Unassigned</span>}</td>
+                    <td><span className="small" style={{ color: r.status_color }}>{r.status_name}</span></td>
+                    <td className="num">{H(est)}</td>
+                    <td className={`num${over ? ' text-danger' : ''}`}>{H(r.logged)}</td>
+                    <td className="num">{H(r.period)}</td>
+                    <td className="num">{!est ? '—' : over ? <span className="text-danger" title="Over the estimate">+{fmtHours(r.logged - est)}</span> : r.is_closed ? <span className="muted">Done</span> : fmtHours(est - r.logged)}</td>
+                    <td>{est > 0 ? <span className="pb-hours-bar" style={{ display: 'block' }} title={`${Math.round((r.logged / est) * 100)}% of the estimate`}><span className={over ? 'over' : ''} style={{ width: `${pct}%` }} /></span> : <span className="xs muted">No estimate</span>}</td>
+                  </tr>
+                );
+              })}
+              <tr className="group-row"><td colSpan={project ? 3 : 4}>Total ({rows.length} task{rows.length === 1 ? '' : 's'})</td>
+                <td className="num">{fmtHours(t.est)}</td><td className="num">{fmtHours(t.logged)}</td><td className="num">{fmtHours(t.period)}</td>
+                <td className="num">{fmtHours(t.left)}</td><td /></tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function Time({ project }) {
   const { activeUsers } = useApp();
   const [tab, setTab] = useState('week');
@@ -195,6 +265,7 @@ export default function Time({ project }) {
       <div className="row wrap" style={{ marginBottom: 16 }}>
         <div className="subtabs">
           <button className={tab === 'week' ? 'active' : ''} onClick={() => setTab('week')}>Timesheet</button>
+          <button className={tab === 'tasks' ? 'active' : ''} onClick={() => setTab('tasks')}>Task hours</button>
           <button className={tab === 'report' ? 'active' : ''} onClick={() => setTab('report')}>Report</button>
         </div>
         {tab === 'week' && canSeeOthers && (
@@ -203,7 +274,7 @@ export default function Time({ project }) {
           </select>
         )}
       </div>
-      {tab === 'week' ? <WeekView project={project} userFilter={person || undefined} /> : <Report project={project} />}
+      {tab === 'week' ? <WeekView project={project} userFilter={person || undefined} /> : tab === 'tasks' ? <TaskHours project={project} /> : <Report project={project} />}
     </div>
   );
 }

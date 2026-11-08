@@ -147,7 +147,7 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
   const taskType = meta.types.find(t => t.name === 'Task')?.id || meta.types[0]?.id;
   const [f, setF] = useState({
     type_id: taskType, subject: '', description: '', status_id: defStatus, priority_id: defPrio,
-    assignee_id: null, responsible_id: null, designer_id: null, developer_id: null, tester_id: null, parent_id: null, version_id: '', start_date: '', due_date: '', estimated_hours: '',
+    assignee_id: null, responsible_id: null, designer_id: null, developer_id: null, tester_id: null, parent_id: null, version_id: '', start_date: '', due_date: '', estimated_hours: '', log_hours: '',
     ...defaults,
   });
   const [files, setFiles] = useState([]);
@@ -178,13 +178,19 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
   const submit = async (another) => {
     setError(null);
     if (!f.subject.trim()) { setError(new Error('Task headline is required.')); return; }
-    const body = { ...f, project_id: projectId, version_id: f.version_id || null, estimated_hours: f.estimated_hours || null, links };
+    const logHours = Number(f.log_hours) || 0;
+    if (logHours < 0 || logHours > 24) { setError(new Error('Hours spent so far must be between 0 and 24 (log more days from the task afterwards).')); return; }
+    const { log_hours: _ignored, ...rest } = f;
+    const body = { ...rest, project_id: projectId, version_id: f.version_id || null, estimated_hours: f.estimated_hours || null, links };
     if (isMilestone) body.start_date = body.due_date;
     setBusy(true);
     let wp;
     try { wp = await api.post('/work-packages', body); }
     catch (e) { setError(e); setBusy(false); return; }
     const failed = [];
+    if (logHours > 0) {
+      try { await api.post('/time-entries', { wp_id: wp.id, hours: logHours }); } catch (e) { failed.push(`Hours not logged: ${e.message}`); }
+    }
     for (const file of files) {
       try { await api.upload(file, 'wp', wp.id); } catch (e) { failed.push(`${file.name}: ${e.message}`); }
     }
@@ -192,7 +198,7 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
     toast(`${wp.key} created${files.length ? ` with ${files.length - failed.length} file(s)` : ''}`);
     if (failed.length) toast(failed.join(' '), 'error');
     onCreated?.(wp);
-    if (another) { setF(s => ({ ...s, subject: '', description: '' })); setFiles([]); setLinks([]); }
+    if (another) { setF(s => ({ ...s, subject: '', description: '', log_hours: '' })); setFiles([]); setLinks([]); }
     else { onClose(); if (!onCreated) nav(`/wp/${wp.id}`); }
   };
 
@@ -244,6 +250,16 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
         <Field label={isMilestone ? 'Date' : 'Due date'}><input type="date" value={f.due_date || ''} min={f.start_date || undefined} onChange={(e) => set('due_date', e.target.value)} /></Field>
       </div>
       {!isMilestone && (
+        <div className="form-grid three">
+          <Field label="Estimated hours" hint="How long the task should take in total.">
+            <input type="number" min="0" step="0.5" value={f.estimated_hours} placeholder="e.g. 8" onChange={(e) => set('estimated_hours', e.target.value)} />
+          </Field>
+          <Field label="Hours spent so far" hint="Optional. Logged as your time for today.">
+            <input type="number" min="0" max="24" step="0.25" value={f.log_hours} placeholder="0" onChange={(e) => set('log_hours', e.target.value)} />
+          </Field>
+        </div>
+      )}
+      {!isMilestone && (
         <fieldset className="stage-people">
           <legend>Design, develop and test</legend>
           <div className="form-grid three">
@@ -255,7 +271,7 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
         </fieldset>
       )}
       <button type="button" className="btn ghost sm" style={{ alignSelf: 'flex-start' }} onClick={() => setMore(m => !m)} aria-expanded={more}>
-        <Icon name="chevronDown" />{more ? 'Fewer options' : 'More options (status, accountable, version, estimate, parent)'}
+        <Icon name="chevronDown" />{more ? 'Fewer options' : 'More options (status, accountable, version, parent)'}
       </button>
       {more && (
         <div className="form-grid three">
@@ -274,7 +290,6 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
               {(info?.versions || []).filter(v => v.status === 'open').map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
             </select>
           </Field>
-          {!isMilestone && <Field label="Estimated hours"><input type="number" min="0" step="0.5" value={f.estimated_hours} onChange={(e) => set('estimated_hours', e.target.value)} /></Field>}
           <Field label="Parent" className="span-2">
             <WpSearchSelect projectId={projectId} value={f.parent_id} onChange={(v) => set('parent_id', v)} placeholder="Optional: put this under a requirement or epic" />
           </Field>

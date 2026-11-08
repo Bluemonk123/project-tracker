@@ -17,7 +17,7 @@ It covers the same ground as OpenProject for day-to-day work:
 | Teams | Teams of people, added to a project in one step. Workload per person and per team |
 | Managers | A manager overview across every project: status, progress, overdue work, next release, next meeting, and who is carrying how much work |
 | Meetings | Daily stand-ups and weekly reviews as repeating series. Agendas (including linked work packages), stand-up updates (since last time, today, blockers) with a "fill from my work" button, attendance, outcomes, minutes, action items that become real work packages, and an automatic review summary of the week |
-| Time | Log time against tasks, a weekly timesheet, and reports by person, project, activity, day, week or month (CSV export) |
+| Time | Estimated hours on every task (and hours spent so far when creating it). Log time against tasks, a weekly timesheet, a **Task hours** view (estimated, logged, logged in a period, remaining, over-estimate) and reports by person, project, activity, day, week or month (CSV export). The Task Board shows logged / estimated hours on each card and column with a quick Log button and totals for the period; the Project Board shows the project's logged vs estimated hours |
 | Wiki | Markdown pages per project with sub-pages, version history and attachments, for specs and documentation |
 | Roles | Built-in roles plus your own custom roles with fine-grained permissions, both global (e.g. Manager sees every project) and per project (e.g. Developer, QA, Viewer) |
 | Other | In-app notifications, project announcements, global search, my page, dark mode, daily automatic backups |

@@ -585,3 +585,26 @@ test('project board: brief, customer roles and documents', async () => {
   assert.equal(r.data.files_removed, 1);
   assert.equal((await admin.get(`/projects/${p.id}/board-info`)).data.release_notes.length, 0);
 });
+
+test('hours: estimate on tasks, logged time on board, project board and task report', async () => {
+  const p = (await admin.post('/projects', { name: 'Hours Test', identifier: 'HRS' })).data;
+  const wp = (await admin.post('/work-packages', { project_id: p.id, subject: 'Build login', estimated_hours: 8 })).data;
+  const today = new Date().toISOString().slice(0, 10);
+  assert.equal((await admin.post('/time-entries', { wp_id: wp.id, hours: 3, spent_on: today })).status, 201);
+  assert.equal((await admin.post('/time-entries', { wp_id: wp.id, hours: 2, spent_on: '2020-01-06' })).status, 201);
+  // board: totals and hours in the range
+  let r = await admin.get(`/board?from=${today}&to=${today}&project_id=${p.id}`);
+  const row = r.data.rows.find(x => x.id === wp.id);
+  assert.equal(row.estimated_hours, 8); assert.equal(row.spent_hours, 5); assert.equal(row.range_hours, 3); assert.equal(row.can_log, true);
+  // project board figures
+  r = await admin.get(`/projects/${p.id}/board-info`);
+  assert.equal(r.data.hours.estimated, 8); assert.equal(r.data.hours.logged, 5); assert.equal(r.data.hours.logged_on_tasks, 5);
+  assert.equal(r.data.hours.over_estimate, 0);
+  await admin.post('/time-entries', { wp_id: wp.id, hours: 4, spent_on: today });
+  assert.equal((await admin.get(`/projects/${p.id}/board-info`)).data.hours.over_estimate, 1);
+  // task report with a period
+  r = await admin.get(`/time-entries/tasks?project_id=${p.id}&from=2020-01-01&to=2020-01-31`);
+  assert.equal(r.data.rows.length, 1);
+  assert.equal(r.data.rows[0].logged, 9); assert.equal(r.data.rows[0].period, 2);
+  assert.deepEqual(r.data.totals, { estimated: 8, logged: 9, period: 2 });
+});

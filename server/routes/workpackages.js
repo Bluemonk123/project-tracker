@@ -194,7 +194,13 @@ r.get('/board', (req, res) => {
   if (/^\d+$/.test(q.type_id || '')) { where.push('wp.type_id = ?'); params.push(Number(q.type_id)); }
   const rows = all(`${BASE_SELECT} WHERE ${where.join(' AND ')}
                     ORDER BY wp.due_date IS NULL, wp.due_date, pr.position DESC, wp.id LIMIT 2000`, ...params)
-    .map(w => ({ ...w, can_edit: canEditWp(req, w) }));
+    .map(w => ({ ...w, can_edit: canEditWp(req, w), can_log: can(req, 'time.log', w.project_id) }));
+  // hours logged on each task within the board's date range
+  if (rows.length) {
+    const inRange = new Map(all(`SELECT wp_id, SUM(hours) AS h FROM time_entries WHERE wp_id IN (${rows.map(() => '?').join(',')})
+                                 AND spent_on BETWEEN ? AND ? GROUP BY wp_id`, ...rows.map(w => w.id), q.from, q.to).map(x => [x.wp_id, x.h]));
+    for (const w of rows) w.range_hours = inRange.get(w.id) || 0;
+  }
   res.json({ columns, rows });
 });
 

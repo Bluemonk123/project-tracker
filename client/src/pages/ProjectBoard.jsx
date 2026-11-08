@@ -97,6 +97,9 @@ function ProjectDetails({ data, reload }) {
           <Link className="pb-count-link" to={`/projects/${p.identifier}/work-packages?status=all`}>{delivery.tasks}<span> task{delivery.tasks === 1 ? '' : 's'}</span></Link>
           <span className="xs soft">{delivery.open} open</span>
         </PbRow>
+        <PbRow label="Hours">
+          <HoursSummary hrs={data.hours} link={`/projects/${p.identifier}/time`} />
+        </PbRow>
         <PbRow label="UAT testing">
           <Link className="pb-count-link" to={testingLink}>{delivery.testing}<span> in testing</span></Link>
         </PbRow>
@@ -153,6 +156,22 @@ function ProjectDetails({ data, reload }) {
           onSave={(v) => saveBoard({ [modal]: v }, `${modal === 'hosting' ? 'Hosting' : 'Code repository'} links saved`)} />
       )}
     </section>
+  );
+}
+
+const fmtH = (n) => `${Math.round((n || 0) * 10) / 10} h`;
+function HoursSummary({ hrs, link }) {
+  const pct = hrs.estimated > 0 ? Math.min(100, (hrs.logged_on_tasks / hrs.estimated) * 100) : 0;
+  const over = hrs.estimated > 0 && hrs.logged_on_tasks > hrs.estimated;
+  return (
+    <div className="pb-hours">
+      <div className="pb-hours-nums">
+        <Link className="pb-count-link" to={link} title="Open the project's time">{fmtH(hrs.logged)}<span> logged</span></Link>
+        <span className="xs soft">of {fmtH(hrs.estimated)} estimated · {fmtH(hrs.remaining)} remaining on open tasks · {fmtH(hrs.logged_week)} this week</span>
+      </div>
+      {hrs.estimated > 0 && <span className="pb-hours-bar" title={`${Math.round(pct)}% of the estimate used`}><span className={over ? 'over' : ''} style={{ width: `${pct}%` }} /></span>}
+      {hrs.over_estimate > 0 && <span className="xs text-danger">{hrs.over_estimate} task{hrs.over_estimate > 1 ? 's' : ''} over estimate</span>}
+    </div>
   );
 }
 

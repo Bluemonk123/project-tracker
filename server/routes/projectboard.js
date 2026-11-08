@@ -127,6 +127,7 @@ r.get('/projects/:pid/board-info', (req, res) => {
                      WHERE a.project_id = ? ORDER BY a.id`, p.id),
     board: readBoard(p),
     release_notes: releaseNotes(p.id),
+    hours: projectHours(p.id),
     delivery: { tasks: counts.total || 0, open: counts.open || 0, testing: counts.testing || 0, testing_status_ids: testingIds, release: release || null },
     stack: {
       development: tech.filter(t => !['Database', 'Data', 'Infrastructure', 'DevOps', 'OS'].includes(t.category)),
@@ -171,6 +172,25 @@ r.put('/projects/:pid/board-info', (req, res) => {
   });
   res.json({ ok: true });
 });
+
+// ---------- Hours: estimated on tasks vs logged on the project ----------
+function projectHours(projectId) {
+  const est = get(`SELECT COALESCE(SUM(wp.estimated_hours), 0) AS estimated, COUNT(wp.estimated_hours) AS estimated_tasks,
+                     SUM(CASE WHEN s.is_closed = 0 THEN COALESCE(wp.estimated_hours, 0) ELSE 0 END) AS estimated_open
+                   FROM work_packages wp JOIN statuses s ON s.id = wp.status_id WHERE wp.project_id = ?`, projectId);
+  const monday = (() => { const d = new Date(); const day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
+  const logged = get(`SELECT COALESCE(SUM(hours), 0) AS total, COALESCE(SUM(CASE WHEN spent_on >= ? THEN hours ELSE 0 END), 0) AS week,
+                        COALESCE(SUM(CASE WHEN wp_id IS NOT NULL THEN hours ELSE 0 END), 0) AS on_tasks
+                      FROM time_entries WHERE project_id = ?`, monday, projectId);
+  // what is left: for open tasks only, estimate minus what was logged on them (never below zero)
+  const remaining = get(`SELECT COALESCE(SUM(MAX(0, wp.estimated_hours - COALESCE((SELECT SUM(hours) FROM time_entries te WHERE te.wp_id = wp.id), 0))), 0) AS r
+                         FROM work_packages wp JOIN statuses s ON s.id = wp.status_id WHERE wp.project_id = ? AND s.is_closed = 0 AND wp.estimated_hours > 0`, projectId).r;
+  const over = get(`SELECT COUNT(*) AS n FROM work_packages wp WHERE wp.project_id = ? AND wp.estimated_hours > 0
+                     AND (SELECT COALESCE(SUM(hours), 0) FROM time_entries te WHERE te.wp_id = wp.id) > wp.estimated_hours`, projectId).n;
+  return { estimated: est.estimated, estimated_tasks: est.estimated_tasks, logged: logged.total, logged_on_tasks: logged.on_tasks,
+    logged_week: logged.week, over_estimate: over, remaining };
+}
 
 // ---------- Release notes ----------
 function releaseNotes(projectId) {
