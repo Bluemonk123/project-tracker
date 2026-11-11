@@ -631,3 +631,33 @@ test('teams: member order and current / proposed roles', async () => {
   assert.deepEqual(after.map(x => x.id), [me, ids.dev]);
   assert.deepEqual(after.find(x => x.id === ids.dev).current_roles, ['Backend Developer', 'DevOps']);
 });
+
+test('occupancy per project member, totals on teams and a person\'s projects with PM / AM', async () => {
+  const me = (await admin.get('/auth/me')).data.user.id;
+  const a = (await admin.post('/projects', { name: 'Occ A', identifier: 'OCA', manager_id: me })).data;
+  const b = (await admin.post('/projects', { name: 'Occ B', identifier: 'OCB' })).data;
+  assert.equal((await admin.post(`/projects/${a.id}/members`, { user_id: ids.dev, role_id: ids.devRole, occupancy: 60 })).status, 201);
+  assert.equal((await admin.post(`/projects/${b.id}/members`, { user_id: ids.dev, role_id: ids.devRole, occupancy: 150 })).status, 400);
+  assert.equal((await admin.post(`/projects/${b.id}/members`, { user_id: ids.dev, role_id: ids.devRole })).status, 201);
+  const mb = (await admin.get(`/projects/${b.id}/members`)).data.find(m => m.user_id === ids.dev);
+  assert.equal(mb.occupancy, null);
+  assert.equal((await admin.patch(`/projects/${b.id}/members/${mb.id}`, { occupancy: 50 })).status, 200);
+  assert.equal((await dev.patch(`/projects/${b.id}/members/${mb.id}`, { occupancy: 10 })).status, 403);
+  // Project Board shows it
+  const info = (await admin.get(`/projects/${b.id}/board-info`)).data;
+  assert.equal(info.members.find(m => m.user_id === ids.dev).occupancy, 50);
+  assert.equal(info.can.members, true);
+  // Teams page: total across projects, project count
+  const t = (await admin.post('/teams', { name: 'Occ Team', member_ids: [ids.dev] })).data.id;
+  const m = (await admin.get('/teams')).data.find(x => x.id === t).members[0];
+  assert.ok(m.project_count >= 2);
+  assert.ok(m.occupancy >= 110, `total occupancy ${m.occupancy}`);
+  // the person's projects with PM and AM (names and emails)
+  await admin.put(`/projects/${a.id}/positions/AM`, { user_ids: [ids.dev] }).catch(() => {});
+  const r = await admin.get(`/users/${ids.dev}/projects`);
+  const pa = r.data.projects.find(x => x.id === a.id);
+  assert.equal(pa.occupancy, 60);
+  assert.equal(pa.pm[0].id, me);
+  assert.ok(pa.pm[0].email.includes('@'));
+  assert.ok(Array.isArray(pa.am));
+});

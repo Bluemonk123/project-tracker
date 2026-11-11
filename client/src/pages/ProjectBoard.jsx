@@ -6,6 +6,7 @@ import Icon from '../components/Icon.jsx';
 import { STATUS, POSITION_ORDER } from '../components/KeyPeople.jsx';
 import { Loading, ErrorBox, Empty, Field, Modal, Markdown, MarkdownEditor, Person, ProjectStatus, Popover, MoreMenu, UserSelect, confirmDialog, useAsync } from '../components/ui.jsx';
 import { fmtSize, timeAgo, fmtDateTime, fmtDate } from '../lib/format.js';
+import { OccupancySelect } from './project/Members.jsx';
 
 // One tab per project: brief, customer, customer user roles and team on the left; the seven project documents on the right.
 export default function ProjectBoard() {
@@ -45,7 +46,7 @@ function ProjectSheet({ projectId }) {
         <Approvals data={data} reload={reload} />
         <Documents data={data} reload={reload} />
         <ReleaseNotes data={data} reload={reload} />
-        <ProjectTeam data={data} />
+        <ProjectTeam data={data} reload={reload} />
       </div>
     </div>
   );
@@ -357,8 +358,10 @@ function TeamRow({ code, tone, icon, label, title, children }) {
   );
 }
 
-function ProjectTeam({ data }) {
+function ProjectTeam({ data, reload }) {
   const { positions, members, project } = data;
+  const [, run] = useAsync();
+  const setOcc = async (m, v) => { if (await run(() => api.patch(`/projects/${project.id}/members/${m.id}`, { occupancy: v }), `Occupancy of ${m.name}: ${v == null ? 'not set' : `${v}%`}`)) reload(); };
   const [open, setOpen] = useState(false);
   const byRole = {};
   for (const m of members) (byRole[m.role_name] ||= []).push(m);
@@ -389,6 +392,19 @@ function ProjectTeam({ data }) {
               <TeamRow key={role} code={roleCode(role)} tone="role" label={role} title={`Project role: ${role}`}>
                 {ms.map(m => <Person key={m.id} id={m.user_id} name={m.name} />)}
               </TeamRow>
+            ))}
+          </div>
+          <div className="pb-occ">
+            <div className="pb-occ-head"><span>Occupancy</span><span className="xs soft">Share of each person's time on this project</span></div>
+            {members.map(m => (
+              <div key={m.id} className="pb-occ-row">
+                <Person id={m.user_id} name={m.name} />
+                <span className="xs soft">{m.role_name}</span>
+                <span className="pb-occ-bar"><span style={{ width: `${m.occupancy || 0}%` }} /></span>
+                {data.can.members
+                  ? <OccupancySelect value={m.occupancy} label={`Occupancy of ${m.name}`} onChange={(v) => setOcc(m, v)} />
+                  : <b className="pb-occ-val">{m.occupancy == null ? '—' : `${m.occupancy}%`}</b>}
+              </div>
             ))}
           </div>
         </div>

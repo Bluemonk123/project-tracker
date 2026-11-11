@@ -7,6 +7,16 @@ import { Modal, Field, MultiUserPicker, Person, Empty, useAsync, confirmDialog }
 import { timeAgo } from '../../lib/format.js';
 import { KeyPeoplePanel } from '../../components/KeyPeople.jsx';
 
+// Share of a person's time spent on the project
+export const OCCUPANCY = [0, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 100];
+export function OccupancySelect({ value, onChange, label, disabled }) {
+  return (
+    <select className="occ-select" value={value ?? ''} disabled={disabled} aria-label={label} onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}>
+      <option value="">Not set</option>{OCCUPANCY.map(n => <option key={n} value={n}>{n}%</option>)}
+    </select>
+  );
+}
+
 function AddMembers({ project, onClose, onSaved }) {
   const { meta, activeUsers } = useApp();
   const teams = useLoad(() => api.get('/teams'), []);
@@ -15,10 +25,11 @@ function AddMembers({ project, onClose, onSaved }) {
   const [ids, setIds] = useState([]);
   const [teamId, setTeamId] = useState('');
   const [roleId, setRoleId] = useState(roles.find(r => r.name === 'Developer')?.id || roles[0]?.id);
+  const [occupancy, setOccupancy] = useState(null);
   const [busy, run] = useAsync();
   const existing = new Set(project.members.map(m => m.user_id));
   const save = async () => {
-    const body = mode === 'team' ? { team_id: Number(teamId), role_id: roleId } : { user_ids: ids, role_id: roleId };
+    const body = mode === 'team' ? { team_id: Number(teamId), role_id: roleId, occupancy } : { user_ids: ids, role_id: roleId, occupancy };
     const r = await run(() => api.post(`/projects/${project.id}/members`, body));
     if (r) { onSaved(r.added); onClose(); }
   };
@@ -41,6 +52,9 @@ function AddMembers({ project, onClose, onSaved }) {
         <select value={roleId} onChange={(e) => setRoleId(Number(e.target.value))}>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
       </Field>
       {roles.find(r => r.id === roleId)?.description && <p className="small soft" style={{ margin: 0 }}>{roles.find(r => r.id === roleId).description}</p>}
+      <Field label="Occupancy" hint="How much of their time goes to this project. Shown on the Project Board and the Teams page; you can change it per person later.">
+        <OccupancySelect value={occupancy} onChange={setOccupancy} label="Occupancy" />
+      </Field>
     </Modal>
   );
 }
@@ -63,7 +77,7 @@ export default function Members({ project, reloadProject }) {
         {!members.length ? <Empty title="No members yet">Add people or a whole team so they can see and work on this project.</Empty> : (
           <div className="table-wrap">
             <table className="table">
-              <thead><tr><th>Name</th><th className="hide-sm">Job title</th><th>Role</th><th className="num">Open work</th><th className="hide-sm">Added</th>{canManage && <th />}</tr></thead>
+              <thead><tr><th>Name</th><th className="hide-sm">Job title</th><th>Role</th><th>Occupancy</th><th className="num">Open work</th><th className="hide-sm">Added</th>{canManage && <th />}</tr></thead>
               <tbody>
                 {members.map(m => (
                   <tr key={m.id}>
@@ -77,6 +91,9 @@ export default function Members({ project, reloadProject }) {
                         </select>
                       ) : m.role_name}
                     </td>
+                    <td>{canManage
+                      ? <OccupancySelect value={m.occupancy} label={`Occupancy of ${m.name}`} onChange={async (v) => { if (await run(() => api.patch(`/projects/${project.id}/members/${m.id}`, { occupancy: v }), `Occupancy of ${m.name}: ${v == null ? 'not set' : `${v}%`}`)) reloadProject(); }} />
+                      : (m.occupancy == null ? <span className="muted">—</span> : `${m.occupancy}%`)}</td>
                     <td className="num"><Link to={`/projects/${project.identifier}/work-packages?assignee_id=${m.user_id}`}>{m.open_wps}</Link></td>
                     <td className="hide-sm small muted">{timeAgo(m.created_at)}</td>
                     {canManage && (

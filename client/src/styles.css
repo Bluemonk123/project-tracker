@@ -801,7 +801,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 
 /* Teams: member order (drag) and current vs proposed roles */
 .tm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); gap: 18px; align-items: start; }
-.tm-list > li.tm-item { display: block; position: relative; }
+
 .tm-top { display: flex; gap: 10px; align-items: center; min-width: 0; }
 .tm-handle { display: inline-grid; place-items: center; width: 22px; height: 28px; margin-left: -6px; border-radius: 6px; color: var(--ink-3); cursor: grab; flex: none; }
 .tm-handle svg { stroke-width: 3.2; }
@@ -823,3 +823,30 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .tm-chips { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
 .tm-chip { background: var(--sunken); border-radius: 999px; padding: 1px 8px; font-size: 11.5px; white-space: nowrap; }
 .tm-list .popover-wrap { display: block; }
+
+/* Teams as tables */
+.tm-table td { vertical-align: middle; }
+.tm-table tr.tm-item { position: relative; }
+.tm-table .tm-hcell { width: 30px; padding-right: 0; }
+.tm-table .tm-name { white-space: nowrap; }
+.tm-table .tm-rolecol { min-width: 190px; width: 24%; }
+.tm-table td.tm-arrow { padding: 0 2px; text-align: center; width: 18px; }
+.tm-table tr.drop-before td { box-shadow: inset 0 3px 0 var(--accent); }
+.tm-table tr.drop-after td { box-shadow: inset 0 -3px 0 var(--accent); }
+.tm-table tr.tm-item.drop-before::before, .tm-table tr.tm-item.drop-after::after { content: none; }
+.tm-occ { font-weight: 650; font-variant-numeric: tabular-nums; }
+.tm-occ.over { color: var(--danger); }
+.tm-occ.low { color: var(--ink-3); }
+.tm-count { font-weight: 700; font-size: var(--fs-sm); }
+.tm-pm { display: grid; gap: 1px; }
+.tm-pm a { padding-left: 29px; color: var(--ink-3); }
+.tm-table .popover-wrap { display: block; }
+.occ-select { width: auto; min-width: 104px; height: 30px; font-size: 13px; }
+.pb-occ { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px; display: grid; gap: 6px; }
+.pb-occ-head { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); }
+.pb-occ-head .xs { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.pb-occ-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 90px auto; align-items: center; gap: 10px; }
+.pb-occ-bar { height: 6px; border-radius: 4px; background: var(--sunken); overflow: hidden; }
+.pb-occ-bar span { display: block; height: 100%; background: var(--pc, var(--accent)); }
+.pb-occ-val { font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
+@media (max-width: 560px) { .pb-occ-row { grid-template-columns: minmax(0, 1fr) auto; } .pb-occ-row .xs, .pb-occ-bar { display: none; } }

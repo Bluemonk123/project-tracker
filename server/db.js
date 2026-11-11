@@ -201,6 +201,9 @@ function migrate() {
   if (!projCols.includes('board_data')) db.exec('ALTER TABLE projects ADD COLUMN board_data TEXT');
   const roleCols = all('PRAGMA table_info(project_customer_roles)').map(c => c.name);
   for (const c of ['pain_points', 'challenges', 'touch_points']) if (!roleCols.includes(c)) db.exec(`ALTER TABLE project_customer_roles ADD COLUMN ${c} TEXT`);
+  // Project members: how much of the person's time goes to the project, in percent
+  const pmCols = all('PRAGMA table_info(project_members)').map(c => c.name);
+  if (!pmCols.includes('occupancy')) db.exec('ALTER TABLE project_members ADD COLUMN occupancy INTEGER');
   // Teams: member order, and each member's current and proposed roles (JSON lists)
   const tmCols = all('PRAGMA table_info(team_members)').map(c => c.name);
   for (const c of ['position INTEGER', 'current_roles TEXT', 'proposed_roles TEXT']) {

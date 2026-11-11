@@ -178,11 +178,19 @@ r.delete('/projects/:pid', (req, res) => {
 
 // ---------- members ----------
 export function listMembers(projectId) {
-  return all(`SELECT pm.id, pm.user_id, pm.role_id, pm.created_at, u.name, u.email, u.job_title, u.status, r.name AS role_name,
+  return all(`SELECT pm.id, pm.user_id, pm.role_id, pm.occupancy, pm.created_at, u.name, u.email, u.job_title, u.status, r.name AS role_name,
                 (SELECT COUNT(*) FROM work_packages wp JOIN statuses s ON s.id = wp.status_id
                   WHERE wp.project_id = pm.project_id AND wp.assignee_id = pm.user_id AND s.is_closed = 0) AS open_wps
               FROM project_members pm JOIN users u ON u.id = pm.user_id JOIN roles r ON r.id = pm.role_id
               WHERE pm.project_id = ? ORDER BY u.name`, projectId);
+}
+
+// Occupancy: share of the person's time on the project, 0–100 % (empty = not set)
+function checkOccupancy(v) {
+  if (v === null || v === '' || v === undefined) return null;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 0 || n > 100) fail(400, 'Occupancy must be a whole percentage from 0 to 100.');
+  return n;
 }
 
 function checkProjectRole(id) {
@@ -199,6 +207,7 @@ r.post('/projects/:pid/members', (req, res) => {
   const p = resolveProject(req.params.pid);
   need(req, 'project.members', p.id);
   const role = checkProjectRole(req.body.role_id);
+  const occupancy = checkOccupancy(req.body.occupancy);
   let userIds = [];
   if (req.body.team_id) userIds = all('SELECT user_id FROM team_members WHERE team_id = ?', req.body.team_id).map(x => x.user_id);
   if (req.body.user_id) userIds.push(Number(req.body.user_id));
@@ -207,7 +216,7 @@ r.post('/projects/:pid/members', (req, res) => {
   let added = 0;
   tx(() => {
     for (const uid of new Set(userIds)) {
-      const r1 = run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', p.id, uid, role.id);
+      const r1 = run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id, occupancy) VALUES(?,?,?,?)', p.id, uid, role.id, occupancy);
       added += r1.changes;
     }
   });
@@ -218,8 +227,9 @@ r.post('/projects/:pid/members', (req, res) => {
 r.patch('/projects/:pid/members/:mid', (req, res) => {
   const p = resolveProject(req.params.pid);
   need(req, 'project.members', p.id);
-  const role = checkProjectRole(req.body.role_id);
-  run('UPDATE project_members SET role_id = ? WHERE id = ? AND project_id = ?', role.id, req.params.mid, p.id);
+  get('SELECT id FROM project_members WHERE id = ? AND project_id = ?', req.params.mid, p.id) || fail(404, 'Member not found.');
+  if (req.body.role_id !== undefined) run('UPDATE project_members SET role_id = ? WHERE id = ? AND project_id = ?', checkProjectRole(req.body.role_id).id, req.params.mid, p.id);
+  if (req.body.occupancy !== undefined) run('UPDATE project_members SET occupancy = ? WHERE id = ? AND project_id = ?', checkOccupancy(req.body.occupancy), req.params.mid, p.id);
   res.json({ ok: true });
 });
 
@@ -360,15 +370,42 @@ const addMember = (teamId, uid) => {
   run('INSERT INTO team_members(team_id, user_id, position) VALUES(?,?,?)', teamId, uid, pos);
 };
 
-r.get('/teams', (_req, res) => {
+r.get('/teams', (req, res) => {
   const teams = all(`SELECT t.*, u.name AS lead_name FROM teams t LEFT JOIN users u ON u.id = t.lead_id ORDER BY t.name`);
+  // projects each person is in (only projects the viewer can see) and their total occupancy across them
+  const vis = visibleProjectIds(req);
+  const load = new Map(vis.length ? all(`SELECT pm.user_id, COUNT(*) AS projects, SUM(COALESCE(pm.occupancy, 0)) AS occupancy, COUNT(pm.occupancy) AS occupancy_set
+                                         FROM project_members pm JOIN projects p ON p.id = pm.project_id
+                                         WHERE pm.project_id IN (${vis.map(() => '?').join(',')}) AND p.archived = 0
+                                         GROUP BY pm.user_id`, ...vis).map(x => [x.user_id, x]) : []);
   const members = all(`SELECT tm.team_id, tm.current_roles, tm.proposed_roles, u.id, u.name, u.email, u.job_title FROM team_members tm
                        JOIN users u ON u.id = tm.user_id ORDER BY tm.position IS NULL, tm.position, u.name`)
-    .map(m => ({ ...m, current_roles: roleList(m.current_roles), proposed_roles: roleList(m.proposed_roles) }));
+    .map(m => {
+      const l = load.get(m.id);
+      return { ...m, current_roles: roleList(m.current_roles), proposed_roles: roleList(m.proposed_roles),
+        project_count: l?.projects || 0, occupancy: l?.occupancy_set ? l.occupancy : null };
+    });
   res.json(teams.map(t => ({ ...t, members: members.filter(m => m.team_id === t.id) })));
 });
 
 r.get('/team-roles', (_req, res) => res.json(TEAM_ROLES));
+
+// The projects a person is in, with their role and occupancy and each project's Project Manager and Account Manager.
+r.get('/users/:id/projects', (req, res) => {
+  const user = get('SELECT id, name, email, job_title FROM users WHERE id = ?', req.params.id) || fail(404, 'User not found.');
+  const vis = visibleProjectIds(req);
+  if (!vis.length) return res.json({ user, projects: [] });
+  const rows = all(`SELECT p.id, p.name, p.identifier, p.color, p.status, r.name AS role_name, pm.occupancy
+                    FROM project_members pm JOIN projects p ON p.id = pm.project_id JOIN roles r ON r.id = pm.role_id
+                    WHERE pm.user_id = ? AND p.archived = 0 AND p.id IN (${vis.map(() => '?').join(',')}) ORDER BY p.name`, user.id, ...vis);
+  const pos = positionsFor(rows.map(x => x.id));
+  const people = (slot) => (slot?.active || []).map(x => {
+    const id = x.user_id ?? x.id;
+    const u = get('SELECT id, name, email FROM users WHERE id = ?', id);
+    return u ? { id: u.id, name: u.name, email: u.email } : null;
+  }).filter(Boolean);
+  res.json({ user, projects: rows.map(x => ({ ...x, pm: people(pos.get(x.id)?.PM), am: people(pos.get(x.id)?.AM) })) });
+});
 
 // New order of a team's members (drag and drop). Only people already in the team; anyone left out keeps their place at the end.
 r.put('/teams/:id/order', (req, res) => {

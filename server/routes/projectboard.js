@@ -138,7 +138,7 @@ r.get('/projects/:pid/board-info', (req, res) => {
     members: listMembers(p.id).filter(m => m.status !== 'locked'),
     documents,
     max_mb: maxUploadMb(),
-    can: { brief: canBrief(req, p.id), documents: canDocs(req, p.id) },
+    can: { brief: canBrief(req, p.id), documents: canDocs(req, p.id), members: can(req, 'project.members', p.id) },
   });
 });
 

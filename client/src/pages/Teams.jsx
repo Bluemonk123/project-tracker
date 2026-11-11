@@ -44,8 +44,8 @@ function RolePicker({ value, options, onChange, disabled, label, placeholder = '
   );
 }
 
-// A team's members: drag the handle to move someone above or below others (within this team only).
-function MemberList({ team, roles, canManage, reload }) {
+// A team's members as a table, one row per person. Drag the handle to move someone above or below others (within this team only).
+function MemberList({ team, roles, canManage, reload, onProjects }) {
   const [order, setOrder] = useState(null); // optimistic order while saving
   const [dragId, setDragId] = useState(null);
   const [overAt, setOverAt] = useState(null); // { id, after }
@@ -54,9 +54,8 @@ function MemberList({ team, roles, canManage, reload }) {
   const DND = `application/x-pt-team-${team.id}`;
   const save = async (ids) => {
     setOrder(ids);
-    const ok = await run(() => api.put(`/teams/${team.id}/order`, { user_ids: ids }));
+    await run(() => api.put(`/teams/${team.id}/order`, { user_ids: ids }));
     await reload(); setOrder(null);
-    return ok;
   };
   const move = (fromId, toId, after) => {
     const ids = members.map(m => m.id).filter(id => id !== fromId);
@@ -77,56 +76,97 @@ function MemberList({ team, roles, canManage, reload }) {
     await run(() => api.patch(`/teams/${team.id}/members/${m.id}`, { [key]: v }));
     reload();
   };
+  if (!members.length) return <div className="panel-body small muted">No members.</div>;
   return (
-    <ul className="list tm-list" onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOverAt(null); }}>
-      {members.map(m => {
-        const changed = m.proposed_roles.length > 0 && m.proposed_roles.join() !== m.current_roles.join();
-        const cls = ['tm-item', dragId === m.id ? 'dragging' : '', overAt?.id === m.id ? (overAt.after ? 'drop-after' : 'drop-before') : ''].join(' ');
-        return (
-          <li key={m.id} className={cls}
-            onDragOver={(e) => {
-              if (!canManage || !e.dataTransfer.types.includes(DND)) return; // only members of this same team
-              e.preventDefault(); e.dataTransfer.dropEffect = 'move';
-              const r = e.currentTarget.getBoundingClientRect();
-              const after = e.clientY > r.top + r.height / 2;
-              if (overAt?.id !== m.id || overAt.after !== after) setOverAt({ id: m.id, after });
-            }}
-            onDrop={(e) => {
-              if (!e.dataTransfer.types.includes(DND)) return;
-              e.preventDefault();
-              const from = Number(e.dataTransfer.getData(DND));
-              const after = overAt?.after;
-              setOverAt(null); setDragId(null);
-              if (from && from !== m.id) move(from, m.id, after);
-            }}>
-            <div className="tm-top">
-              {canManage && (
-                <span className="tm-handle" draggable title="Drag to move up or down (or use the arrow keys)" role="button" tabIndex={0}
-                  aria-label={`Move ${m.name}. Use the up and down arrow keys.`}
-                  onDragStart={(e) => { e.dataTransfer.setData(DND, String(m.id)); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setDragImage(e.currentTarget.closest('li'), 20, 20); setDragId(m.id); }}
-                  onDragEnd={() => { setDragId(null); setOverAt(null); }}
-                  onKeyDown={(e) => { if (e.key === 'ArrowUp') { e.preventDefault(); nudge(m.id, -1); } if (e.key === 'ArrowDown') { e.preventDefault(); nudge(m.id, 1); } }}>
-                  <Icon name="grip" size={16} />
-                </span>
-              )}
-              <Person id={m.id} name={m.name} />
-              {m.id === team.lead_id && <span className="tag accent">Lead</span>}
-              <span className="spacer" /><span className="xs muted ellipsis">{m.job_title}</span>
-            </div>
-            <div className="tm-roles">
-              <div className="tm-role"><span className="tm-role-label">Current role</span>
-                <RolePicker value={m.current_roles} options={roles} disabled={!canManage} label={`${m.name}: current role`} onChange={(v) => setRoles(m, 'current_roles', v)} />
-              </div>
-              <span className={`tm-arrow${changed ? ' changed' : ''}`} aria-hidden="true">→</span>
-              <div className="tm-role"><span className="tm-role-label">Proposed role{changed && <span className="tm-change"> · change</span>}</span>
-                <RolePicker value={m.proposed_roles} options={roles} disabled={!canManage} label={`${m.name}: proposed role`} onChange={(v) => setRoles(m, 'proposed_roles', v)} />
-              </div>
-            </div>
-          </li>
-        );
-      })}
-      {!members.length && <li className="small muted">No members.</li>}
-    </ul>
+    <div className="table-wrap">
+      <table className="table tm-table" onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOverAt(null); }}>
+        <thead><tr>
+          {canManage && <th className="tm-hcell" aria-label="Order" />}
+          <th>Name</th><th>Job title</th><th className="tm-rolecol">Current role</th><th aria-hidden="true" /><th className="tm-rolecol">Future role</th>
+          <th className="num">Occupancy</th><th className="num">Projects</th>
+        </tr></thead>
+        <tbody>
+          {members.map(m => {
+            const changed = m.proposed_roles.length > 0 && m.proposed_roles.join() !== m.current_roles.join();
+            const cls = ['tm-item', dragId === m.id ? 'dragging' : '', overAt?.id === m.id ? (overAt.after ? 'drop-after' : 'drop-before') : ''].join(' ');
+            const occ = m.occupancy;
+            return (
+              <tr key={m.id} className={cls}
+                onDragOver={(e) => {
+                  if (!canManage || !e.dataTransfer.types.includes(DND)) return; // only members of this same team
+                  e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+                  const r = e.currentTarget.getBoundingClientRect();
+                  const after = e.clientY > r.top + r.height / 2;
+                  if (overAt?.id !== m.id || overAt.after !== after) setOverAt({ id: m.id, after });
+                }}
+                onDrop={(e) => {
+                  if (!e.dataTransfer.types.includes(DND)) return;
+                  e.preventDefault();
+                  const from = Number(e.dataTransfer.getData(DND));
+                  const after = overAt?.after;
+                  setOverAt(null); setDragId(null);
+                  if (from && from !== m.id) move(from, m.id, after);
+                }}>
+                {canManage && (
+                  <td className="tm-hcell">
+                    <span className="tm-handle" draggable title="Drag to move up or down (or use the arrow keys)" role="button" tabIndex={0}
+                      aria-label={`Move ${m.name}. Use the up and down arrow keys.`}
+                      onDragStart={(e) => { e.dataTransfer.setData(DND, String(m.id)); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setDragImage(e.currentTarget.closest('tr'), 20, 20); setDragId(m.id); }}
+                      onDragEnd={() => { setDragId(null); setOverAt(null); }}
+                      onKeyDown={(e) => { if (e.key === 'ArrowUp') { e.preventDefault(); nudge(m.id, -1); } if (e.key === 'ArrowDown') { e.preventDefault(); nudge(m.id, 1); } }}>
+                      <Icon name="grip" size={16} />
+                    </span>
+                  </td>
+                )}
+                <td className="tm-name"><Person id={m.id} name={m.name} />{m.id === team.lead_id && <span className="tag accent" style={{ marginLeft: 6 }}>Lead</span>}</td>
+                <td className="small soft">{m.job_title || '—'}</td>
+                <td className="tm-rolecol"><RolePicker value={m.current_roles} options={roles} disabled={!canManage} label={`${m.name}: current role`} onChange={(v) => setRoles(m, 'current_roles', v)} /></td>
+                <td className={`tm-arrow${changed ? ' changed' : ''}`} title={changed ? 'Role change planned' : undefined} aria-hidden="true">→</td>
+                <td className="tm-rolecol"><RolePicker value={m.proposed_roles} options={roles} disabled={!canManage} label={`${m.name}: future role`} onChange={(v) => setRoles(m, 'proposed_roles', v)} /></td>
+                <td className="num">
+                  {occ == null ? <span className="muted">—</span> : <span className={`tm-occ${occ > 100 ? ' over' : occ < 50 ? ' low' : ''}`} title={`Total occupancy across ${m.project_count} project${m.project_count === 1 ? '' : 's'} (from each project's team)`}>{occ}%</span>}
+                </td>
+                <td className="num">
+                  {m.project_count ? <button type="button" className="link-btn tm-count" onClick={() => onProjects(m)} aria-label={`${m.name}: ${m.project_count} projects`}>{m.project_count}</button> : <span className="muted">0</span>}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// The projects a person is in, with their Project Manager and Account Manager.
+function UserProjects({ member, onClose }) {
+  const { data, error, loading } = useLoad(() => api.get(`/users/${member.id}/projects`), [member.id]);
+  const who = (list) => (list?.length ? list.map(x => (
+    <div key={x.id} className="tm-pm"><Person id={x.id} name={x.name} /><a className="xs" href={`mailto:${x.email}`}>{x.email}</a></div>
+  )) : <span className="muted small">Not mapped</span>);
+  return (
+    <Modal title={`${member.name}: projects`} wide onClose={onClose} footer={<button type="button" className="btn primary" onClick={onClose}>Close</button>}>
+      <ErrorBox error={error} />
+      {loading && !data ? <Loading /> : !data?.projects.length ? <Empty title="No projects">{member.name} is not a member of any project you can see.</Empty> : (
+        <div className="table-wrap">
+          <table className="table">
+            <thead><tr><th>Project</th><th>Role</th><th className="num">Occupancy</th><th>Project Manager</th><th>Account Manager</th></tr></thead>
+            <tbody>
+              {data.projects.map(p => (
+                <tr key={p.id}>
+                  <td><Link to={`/project-board?p=${p.identifier}`} onClick={onClose}><span className="pb-dot" style={{ '--pc': p.color, display: 'inline-block', marginRight: 6 }} />{p.name}</Link></td>
+                  <td className="small">{p.role_name}</td>
+                  <td className="num">{p.occupancy == null ? <span className="muted">—</span> : `${p.occupancy}%`}</td>
+                  <td>{who(p.pm)}</td>
+                  <td>{who(p.am)}</td>
+                </tr>
+              ))}
+              <tr className="group-row"><td colSpan={2}>Total</td><td className="num">{data.projects.reduce((t, p) => t + (p.occupancy || 0), 0)}%</td><td colSpan={2} /></tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Modal>
   );
 }
 
@@ -136,6 +176,7 @@ export default function Teams() {
   const { data: roles } = useLoad(() => api.get('/team-roles'), []);
   const [modal, setModal] = useState(null);
   const [view, setView] = useState(null);
+  const [projectsOf, setProjectsOf] = useState(null);
   const [, run] = useAsync();
   const canManage = can('teams.manage');
   return (
@@ -150,7 +191,7 @@ export default function Teams() {
           For example: Web team, Mobile team, QA, Support.
         </Empty></div>
       ) : (
-        <div className="tm-grid">
+        <div className="stack">
           {data.map(t => (
             <section key={t.id} className="panel">
               <div className="panel-head">
@@ -168,11 +209,12 @@ export default function Teams() {
                 </div>
               </div>
               {t.description && <div className="panel-body small soft" style={{ paddingBottom: 0 }}>{t.description}</div>}
-              <MemberList team={t} roles={roles || []} canManage={canManage} reload={reload} />
+              <MemberList team={t} roles={roles || []} canManage={canManage} reload={reload} onProjects={setProjectsOf} />
             </section>
           ))}
         </div>
       )}
+      {projectsOf && <UserProjects member={projectsOf} onClose={() => setProjectsOf(null)} />}
       {modal && <TeamModal team={modal.team} onClose={() => setModal(null)} onSaved={reload} />}
       {view && (
         <Modal title={`${view.name} workload`} wide onClose={() => setView(null)}>
