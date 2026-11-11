@@ -850,3 +850,6 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .pb-occ-bar span { display: block; height: 100%; background: var(--pc, var(--accent)); }
 .pb-occ-val { font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
 @media (max-width: 560px) { .pb-occ-row { grid-template-columns: minmax(0, 1fr) auto; } .pb-occ-row .xs, .pb-occ-bar { display: none; } }
+/* let role dropdowns extend past small team tables on wide screens (tables scroll sideways only on narrow ones) */
+@media (min-width: 1100px) { .table-wrap:has(> .tm-table) { overflow: visible; } }
+.tm-table .popover { max-height: 360px; overflow-y: auto; }
