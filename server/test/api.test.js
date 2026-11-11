@@ -619,7 +619,7 @@ test('teams: member order and current / proposed roles', async () => {
   assert.equal((await admin.put(`/teams/${t}/order`, { user_ids: [99999] })).status, 400, 'only this team');
   assert.equal((await dev.put(`/teams/${t}/order`, { user_ids: [me] })).status, 403);
   // roles
-  assert.deepEqual((await admin.get('/team-roles')).data, ['Backend Developer', 'Frontend Developer', 'Functional Testing', 'UAT', 'Product Master', 'DevOps']);
+  assert.deepEqual((await admin.get('/team-roles')).data, ['Backend Developer', 'Frontend Developer', 'Functional Testing', 'UAT', 'Product Master', 'DevOps', 'Product Manager', 'Account Manager', 'Business Analyst', 'Client Facing', 'System Admin']);
   assert.equal((await admin.patch(`/teams/${t}/members/${ids.dev}`, { current_roles: ['DevOps', 'Backend Developer'], proposed_roles: ['Product Master'] })).status, 200);
   assert.equal((await admin.patch(`/teams/${t}/members/${ids.dev}`, { current_roles: ['Astronaut'] })).status, 400);
   let m = (await list()).find(x => x.id === ids.dev);
