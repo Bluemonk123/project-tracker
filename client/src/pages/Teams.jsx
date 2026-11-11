@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { useApp, useLoad } from '../context.jsx';
 import Icon from '../components/Icon.jsx';
-import { Loading, ErrorBox, Empty, Modal, Field, MultiUserPicker, UserSelect, Person, useAsync, confirmDialog, MoreMenu } from '../components/ui.jsx';
+import { Loading, ErrorBox, Empty, Modal, Field, MultiUserPicker, UserSelect, Person, useAsync, confirmDialog, MoreMenu, Popover } from '../components/ui.jsx';
 import { WorkloadTable } from './Overview.jsx';
 
 function TeamModal({ team, onClose, onSaved }) {
@@ -25,9 +25,115 @@ function TeamModal({ team, onClose, onSaved }) {
   );
 }
 
+// Multi-select dropdown of team roles.
+function RolePicker({ value, options, onChange, disabled, label, placeholder = 'Choose roles' }) {
+  if (disabled) return value.length ? <span className="tm-chips">{value.map(r => <span key={r} className="tm-chip">{r}</span>)}</span> : <span className="xs muted">Not set</span>;
+  return (
+    <Popover align="left" trigger={({ toggle, open }) => (
+      <button type="button" className={`tm-multi${open ? ' open' : ''}`} onClick={toggle} aria-label={label} aria-expanded={open}>
+        {value.length ? <span className="tm-chips">{value.map(r => <span key={r} className="tm-chip">{r}</span>)}</span> : <span className="muted">{placeholder}</span>}
+        <Icon name="chevronDown" size={13} />
+      </button>
+    )}>
+      {options.map(o => (
+        <label key={o} className="menu-item check">
+          <input type="checkbox" checked={value.includes(o)} onChange={(e) => onChange(e.target.checked ? options.filter(x => x === o || value.includes(x)) : value.filter(x => x !== o))} />{o}
+        </label>
+      ))}
+    </Popover>
+  );
+}
+
+// A team's members: drag the handle to move someone above or below others (within this team only).
+function MemberList({ team, roles, canManage, reload }) {
+  const [order, setOrder] = useState(null); // optimistic order while saving
+  const [dragId, setDragId] = useState(null);
+  const [overAt, setOverAt] = useState(null); // { id, after }
+  const [, run] = useAsync();
+  const members = order ? order.map(id => team.members.find(m => m.id === id)).filter(Boolean) : team.members;
+  const DND = `application/x-pt-team-${team.id}`;
+  const save = async (ids) => {
+    setOrder(ids);
+    const ok = await run(() => api.put(`/teams/${team.id}/order`, { user_ids: ids }));
+    await reload(); setOrder(null);
+    return ok;
+  };
+  const move = (fromId, toId, after) => {
+    const ids = members.map(m => m.id).filter(id => id !== fromId);
+    let at = ids.indexOf(toId);
+    if (at < 0) return;
+    if (after) at += 1;
+    ids.splice(at, 0, fromId);
+    if (ids.join() !== members.map(m => m.id).join()) save(ids);
+  };
+  const nudge = (id, dir) => {
+    const ids = members.map(m => m.id);
+    const i = ids.indexOf(id), j = i + dir;
+    if (j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    save(ids);
+  };
+  const setRoles = async (m, key, v) => {
+    await run(() => api.patch(`/teams/${team.id}/members/${m.id}`, { [key]: v }));
+    reload();
+  };
+  return (
+    <ul className="list tm-list" onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOverAt(null); }}>
+      {members.map(m => {
+        const changed = m.proposed_roles.length > 0 && m.proposed_roles.join() !== m.current_roles.join();
+        const cls = ['tm-item', dragId === m.id ? 'dragging' : '', overAt?.id === m.id ? (overAt.after ? 'drop-after' : 'drop-before') : ''].join(' ');
+        return (
+          <li key={m.id} className={cls}
+            onDragOver={(e) => {
+              if (!canManage || !e.dataTransfer.types.includes(DND)) return; // only members of this same team
+              e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+              const r = e.currentTarget.getBoundingClientRect();
+              const after = e.clientY > r.top + r.height / 2;
+              if (overAt?.id !== m.id || overAt.after !== after) setOverAt({ id: m.id, after });
+            }}
+            onDrop={(e) => {
+              if (!e.dataTransfer.types.includes(DND)) return;
+              e.preventDefault();
+              const from = Number(e.dataTransfer.getData(DND));
+              const after = overAt?.after;
+              setOverAt(null); setDragId(null);
+              if (from && from !== m.id) move(from, m.id, after);
+            }}>
+            <div className="tm-top">
+              {canManage && (
+                <span className="tm-handle" draggable title="Drag to move up or down (or use the arrow keys)" role="button" tabIndex={0}
+                  aria-label={`Move ${m.name}. Use the up and down arrow keys.`}
+                  onDragStart={(e) => { e.dataTransfer.setData(DND, String(m.id)); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setDragImage(e.currentTarget.closest('li'), 20, 20); setDragId(m.id); }}
+                  onDragEnd={() => { setDragId(null); setOverAt(null); }}
+                  onKeyDown={(e) => { if (e.key === 'ArrowUp') { e.preventDefault(); nudge(m.id, -1); } if (e.key === 'ArrowDown') { e.preventDefault(); nudge(m.id, 1); } }}>
+                  <Icon name="grip" size={16} />
+                </span>
+              )}
+              <Person id={m.id} name={m.name} />
+              {m.id === team.lead_id && <span className="tag accent">Lead</span>}
+              <span className="spacer" /><span className="xs muted ellipsis">{m.job_title}</span>
+            </div>
+            <div className="tm-roles">
+              <div className="tm-role"><span className="tm-role-label">Current role</span>
+                <RolePicker value={m.current_roles} options={roles} disabled={!canManage} label={`${m.name}: current role`} onChange={(v) => setRoles(m, 'current_roles', v)} />
+              </div>
+              <span className={`tm-arrow${changed ? ' changed' : ''}`} aria-hidden="true">→</span>
+              <div className="tm-role"><span className="tm-role-label">Proposed role{changed && <span className="tm-change"> · change</span>}</span>
+                <RolePicker value={m.proposed_roles} options={roles} disabled={!canManage} label={`${m.name}: proposed role`} onChange={(v) => setRoles(m, 'proposed_roles', v)} />
+              </div>
+            </div>
+          </li>
+        );
+      })}
+      {!members.length && <li className="small muted">No members.</li>}
+    </ul>
+  );
+}
+
 export default function Teams() {
   const { can } = useApp();
   const { data, error, loading, reload } = useLoad(() => api.get('/teams'), []);
+  const { data: roles } = useLoad(() => api.get('/team-roles'), []);
   const [modal, setModal] = useState(null);
   const [view, setView] = useState(null);
   const [, run] = useAsync();
@@ -44,7 +150,7 @@ export default function Teams() {
           For example: Web team, Mobile team, QA, Support.
         </Empty></div>
       ) : (
-        <div className="grid-3">
+        <div className="tm-grid">
           {data.map(t => (
             <section key={t.id} className="panel">
               <div className="panel-head">
@@ -62,16 +168,7 @@ export default function Teams() {
                 </div>
               </div>
               {t.description && <div className="panel-body small soft" style={{ paddingBottom: 0 }}>{t.description}</div>}
-              <ul className="list">
-                {t.members.map(m => (
-                  <li key={m.id}>
-                    <Person id={m.id} name={m.name} />
-                    {m.id === t.lead_id && <span className="tag accent">Lead</span>}
-                    <span className="spacer" /><span className="xs muted ellipsis">{m.job_title}</span>
-                  </li>
-                ))}
-                {!t.members.length && <li className="small muted">No members.</li>}
-              </ul>
+              <MemberList team={t} roles={roles || []} canManage={canManage} reload={reload} />
             </section>
           ))}
         </div>

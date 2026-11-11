@@ -53,7 +53,8 @@ r.post('/admin/users', (req, res) => {
   const { id } = run(`INSERT INTO users(name, email, password_hash, is_admin, global_role_id, job_title, must_change_password)
                       VALUES(?,?,?,?,?,?,1)`,
     name, email, hashPassword(pw), req.body.is_admin ? 1 : 0, checkGlobalRole(req.body.global_role_id), req.body.job_title || null);
-  if (Array.isArray(req.body.team_ids)) for (const t of req.body.team_ids) run('INSERT OR IGNORE INTO team_members(team_id, user_id) VALUES(?,?)', t, id);
+  if (Array.isArray(req.body.team_ids)) for (const t of req.body.team_ids) run(`INSERT OR IGNORE INTO team_members(team_id, user_id, position)
+    VALUES(?, ?, (SELECT COALESCE(MAX(position), -1) + 1 FROM team_members WHERE team_id = ?))`, t, id, t);
   res.status(201).json({ id });
 });
 
@@ -82,8 +83,15 @@ r.patch('/admin/users/:id', (req, res) => {
     if (sql) run(`UPDATE users SET ${sql} WHERE id = ?`, ...values, user.id);
     if (fields.status === 'locked' || b.password) run('DELETE FROM sessions WHERE user_id = ?', user.id);
     if (Array.isArray(b.team_ids)) {
-      run('DELETE FROM team_members WHERE user_id = ?', user.id);
-      for (const t of b.team_ids) run('INSERT OR IGNORE INTO team_members(team_id, user_id) VALUES(?,?)', t, user.id);
+      // keep the person's place and roles in teams they stay in
+      const want = b.team_ids.map(Number);
+      for (const t of all('SELECT team_id FROM team_members WHERE user_id = ?', user.id)) {
+        if (!want.includes(t.team_id)) run('DELETE FROM team_members WHERE team_id = ? AND user_id = ?', t.team_id, user.id);
+      }
+      for (const t of want) {
+        run(`INSERT OR IGNORE INTO team_members(team_id, user_id, position)
+             VALUES(?, ?, (SELECT COALESCE(MAX(position), -1) + 1 FROM team_members WHERE team_id = ?))`, t, user.id, t);
+      }
     }
   });
   res.json({ ok: true });

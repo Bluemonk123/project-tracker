@@ -336,10 +336,61 @@ r.delete('/projects/:pid/news/:nid', (req, res) => {
 });
 
 // ---------- teams ----------
+// Roles a team member can have now (current) and be moving to (proposed).
+export const TEAM_ROLES = ['Backend Developer', 'Frontend Developer', 'Functional Testing', 'UAT', 'Product Master', 'DevOps'];
+const roleList = (v) => { try { return JSON.parse(v || '[]'); } catch { return []; } };
+function checkRoles(v, label) {
+  if (v === undefined) return undefined;
+  if (!Array.isArray(v)) fail(400, `${label} must be a list of roles.`);
+  const bad = v.find(x => !TEAM_ROLES.includes(x));
+  if (bad) fail(400, `${bad} is not one of the roles: ${TEAM_ROLES.join(', ')}.`);
+  return TEAM_ROLES.filter(x => v.includes(x)); // keep the catalogue's order, no duplicates
+}
+// Adds new members at the end and removes people no longer listed, keeping everyone else's order and roles.
+function setTeamMembers(teamId, ids) {
+  const want = [...new Set(ids.map(Number).filter(Boolean))];
+  const have = all('SELECT user_id FROM team_members WHERE team_id = ?', teamId).map(x => x.user_id);
+  for (const uid of have) if (!want.includes(uid)) run('DELETE FROM team_members WHERE team_id = ? AND user_id = ?', teamId, uid);
+  let pos = get('SELECT COALESCE(MAX(position), -1) AS m FROM team_members WHERE team_id = ?', teamId).m;
+  for (const uid of want) if (!have.includes(uid)) run('INSERT OR IGNORE INTO team_members(team_id, user_id, position) VALUES(?,?,?)', teamId, uid, ++pos);
+}
+const addMember = (teamId, uid) => {
+  if (!uid || get('SELECT 1 FROM team_members WHERE team_id = ? AND user_id = ?', teamId, uid)) return;
+  const pos = get('SELECT COALESCE(MAX(position), -1) AS m FROM team_members WHERE team_id = ?', teamId).m + 1;
+  run('INSERT INTO team_members(team_id, user_id, position) VALUES(?,?,?)', teamId, uid, pos);
+};
+
 r.get('/teams', (_req, res) => {
   const teams = all(`SELECT t.*, u.name AS lead_name FROM teams t LEFT JOIN users u ON u.id = t.lead_id ORDER BY t.name`);
-  const members = all(`SELECT tm.team_id, u.id, u.name, u.email, u.job_title FROM team_members tm JOIN users u ON u.id = tm.user_id ORDER BY u.name`);
+  const members = all(`SELECT tm.team_id, tm.current_roles, tm.proposed_roles, u.id, u.name, u.email, u.job_title FROM team_members tm
+                       JOIN users u ON u.id = tm.user_id ORDER BY tm.position IS NULL, tm.position, u.name`)
+    .map(m => ({ ...m, current_roles: roleList(m.current_roles), proposed_roles: roleList(m.proposed_roles) }));
   res.json(teams.map(t => ({ ...t, members: members.filter(m => m.team_id === t.id) })));
+});
+
+r.get('/team-roles', (_req, res) => res.json(TEAM_ROLES));
+
+// New order of a team's members (drag and drop). Only people already in the team; anyone left out keeps their place at the end.
+r.put('/teams/:id/order', (req, res) => {
+  need(req, 'teams.manage');
+  const t = get('SELECT id FROM teams WHERE id = ?', req.params.id) || fail(404, 'Team not found.');
+  const ids = Array.isArray(req.body?.user_ids) ? req.body.user_ids.map(Number) : fail(400, 'Send the members in their new order.');
+  const current = all('SELECT user_id FROM team_members WHERE team_id = ? ORDER BY position IS NULL, position', t.id).map(x => x.user_id);
+  if (ids.some(id => !current.includes(id))) fail(400, 'Only members of this team can be ordered here.');
+  const order = [...ids, ...current.filter(id => !ids.includes(id))];
+  tx(() => order.forEach((uid, i) => run('UPDATE team_members SET position = ? WHERE team_id = ? AND user_id = ?', i, t.id, uid)));
+  res.json({ ok: true });
+});
+
+// A member's current and proposed roles in the team.
+r.patch('/teams/:id/members/:uid', (req, res) => {
+  need(req, 'teams.manage');
+  const m = get('SELECT * FROM team_members WHERE team_id = ? AND user_id = ?', req.params.id, req.params.uid) || fail(404, 'This person is not in the team.');
+  const cur = checkRoles(req.body?.current_roles, 'Current role');
+  const prop = checkRoles(req.body?.proposed_roles, 'Proposed role');
+  if (cur) run('UPDATE team_members SET current_roles = ? WHERE team_id = ? AND user_id = ?', JSON.stringify(cur), m.team_id, m.user_id);
+  if (prop) run('UPDATE team_members SET proposed_roles = ? WHERE team_id = ? AND user_id = ?', JSON.stringify(prop), m.team_id, m.user_id);
+  res.json({ ok: true });
 });
 
 r.post('/teams', (req, res) => {
@@ -348,8 +399,8 @@ r.post('/teams', (req, res) => {
   if (get('SELECT id FROM teams WHERE name = ?', name)) fail(400, 'A team with this name already exists.');
   const id = tx(() => {
     const { id } = run('INSERT INTO teams(name, description, lead_id) VALUES(?,?,?)', name, req.body.description || null, req.body.lead_id || null);
-    for (const uid of req.body.member_ids || []) run('INSERT OR IGNORE INTO team_members(team_id, user_id) VALUES(?,?)', id, uid);
-    if (req.body.lead_id) run('INSERT OR IGNORE INTO team_members(team_id, user_id) VALUES(?,?)', id, req.body.lead_id);
+    setTeamMembers(id, req.body.member_ids || []);
+    addMember(id, req.body.lead_id);
     return id;
   });
   res.status(201).json({ id });
@@ -365,12 +416,8 @@ r.patch('/teams/:id', (req, res) => {
       lead_id: req.body.lead_id === '' ? null : req.body.lead_id,
     });
     if (sql) run(`UPDATE teams SET ${sql} WHERE id = ?`, ...values, t.id);
-    if (Array.isArray(req.body.member_ids)) {
-      run('DELETE FROM team_members WHERE team_id = ?', t.id);
-      for (const uid of req.body.member_ids) run('INSERT OR IGNORE INTO team_members(team_id, user_id) VALUES(?,?)', t.id, uid);
-    }
-    const lead = req.body.lead_id ?? t.lead_id;
-    if (lead) run('INSERT OR IGNORE INTO team_members(team_id, user_id) VALUES(?,?)', t.id, lead);
+    if (Array.isArray(req.body.member_ids)) setTeamMembers(t.id, req.body.member_ids);
+    addMember(t.id, req.body.lead_id ?? t.lead_id);
   });
   res.json({ ok: true });
 });

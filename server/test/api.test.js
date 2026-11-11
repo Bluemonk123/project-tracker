@@ -608,3 +608,26 @@ test('hours: estimate on tasks, logged time on board, project board and task rep
   assert.equal(r.data.rows[0].logged, 9); assert.equal(r.data.rows[0].period, 2);
   assert.deepEqual(r.data.totals, { estimated: 8, logged: 9, period: 2 });
 });
+
+test('teams: member order and current / proposed roles', async () => {
+  const me = (await admin.get('/auth/me')).data.user.id;
+  const t = (await admin.post('/teams', { name: 'Order Team', member_ids: [me, ids.dev, ids.out] })).data.id;
+  const list = async () => (await admin.get('/teams')).data.find(x => x.id === t).members;
+  assert.deepEqual((await list()).map(m => m.id), [me, ids.dev, ids.out], 'added order kept');
+  assert.equal((await admin.put(`/teams/${t}/order`, { user_ids: [ids.out, me, ids.dev] })).status, 200);
+  assert.deepEqual((await list()).map(m => m.id), [ids.out, me, ids.dev]);
+  assert.equal((await admin.put(`/teams/${t}/order`, { user_ids: [99999] })).status, 400, 'only this team');
+  assert.equal((await dev.put(`/teams/${t}/order`, { user_ids: [me] })).status, 403);
+  // roles
+  assert.deepEqual((await admin.get('/team-roles')).data, ['Backend Developer', 'Frontend Developer', 'Functional Testing', 'UAT', 'Product Master', 'DevOps']);
+  assert.equal((await admin.patch(`/teams/${t}/members/${ids.dev}`, { current_roles: ['DevOps', 'Backend Developer'], proposed_roles: ['Product Master'] })).status, 200);
+  assert.equal((await admin.patch(`/teams/${t}/members/${ids.dev}`, { current_roles: ['Astronaut'] })).status, 400);
+  let m = (await list()).find(x => x.id === ids.dev);
+  assert.deepEqual(m.current_roles, ['Backend Developer', 'DevOps']);
+  assert.deepEqual(m.proposed_roles, ['Product Master']);
+  // editing the team (members list) keeps order and roles of people who stay
+  assert.equal((await admin.patch(`/teams/${t}`, { member_ids: [me, ids.dev] })).status, 200);
+  const after = await list();
+  assert.deepEqual(after.map(x => x.id), [me, ids.dev]);
+  assert.deepEqual(after.find(x => x.id === ids.dev).current_roles, ['Backend Developer', 'DevOps']);
+});

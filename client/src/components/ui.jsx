@@ -124,7 +124,7 @@ export function Popover({ trigger, children, align = 'right' }) {
   return (
     <span className="popover-wrap" ref={ref}>
       {trigger({ open, toggle: () => setOpen(o => !o) })}
-      {open && <div ref={pop} className={`popover ${align}${up ? ' up' : ''}`} onClick={(e) => { if (e.target.closest('.menu-item')) setOpen(false); }}>{children}</div>}
+      {open && <div ref={pop} className={`popover ${align}${up ? ' up' : ''}`} onClick={(e) => { if (e.target.closest('.menu-item') && !e.target.closest('.menu-item.check')) setOpen(false); }}>{children}</div>}
     </span>
   );
 }
