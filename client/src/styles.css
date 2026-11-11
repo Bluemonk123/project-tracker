@@ -853,3 +853,6 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 /* let role dropdowns extend past small team tables on wide screens (tables scroll sideways only on narrow ones) */
 @media (min-width: 1100px) { .table-wrap:has(> .tm-table) { overflow: visible; } }
 .tm-table .popover { max-height: 360px; overflow-y: auto; }
+/* tables written in a project brief: keep the first column (e.g. "Layer") on one line */
+.pb-brief table td:first-child, .pb-brief table th:first-child { white-space: nowrap; font-weight: 600; }
+.pb-brief table { font-size: 13px; }
