@@ -117,12 +117,12 @@ export default function Layout() {
           <NavLink to="/project-board" className="nav-link" title="Project Board"><Icon name="briefcase" /><span className="nav-text">Project Board</span></NavLink>
           <NavLink to="/board" className="nav-link" title="Task Board"><Icon name="board" /><span className="nav-text">Task Board</span></NavLink>
           <NavLink to="/technologies" className="nav-link" title="Technologies"><Icon name="layers" /><span className="nav-text">Technologies</span></NavLink>
-          {can('tickets.view') && <NavLink to="/ticket-board" className="nav-link" title="Ticket Board"><Icon name="ticket" /><span className="nav-text">Ticket Board</span></NavLink>}
-          <NavLink to="/tickets-raised" className="nav-link" title="Tickets Raised"><Icon name="inbox" /><span className="nav-text">Tickets Raised</span></NavLink>
           <NavLink to="/work-packages" className="nav-link" title="All work"><Icon name="list" /><span className="nav-text">All work</span></NavLink>
           <NavLink to="/meetings" className="nav-link" title="Meetings"><Icon name="chat" /><span className="nav-text">Meetings</span></NavLink>
           <NavLink to="/time" className="nav-link" title="Time"><Icon name="clock" /><span className="nav-text">Time</span></NavLink>
           <NavLink to="/teams" className="nav-link" title="Teams"><Icon name="users" /><span className="nav-text">Teams</span></NavLink>
+          {can('tickets.view') && <NavLink to="/ticket-board" className="nav-link" title="Ticket Board"><Icon name="ticket" /><span className="nav-text">Ticket Board</span></NavLink>}
+          <NavLink to="/tickets-raised" className="nav-link" title="Tickets Raised"><Icon name="inbox" /><span className="nav-text">Tickets Raised</span></NavLink>
         </nav>
         <nav className="nav-group" aria-label="Projects">
           <div className="nav-heading">
