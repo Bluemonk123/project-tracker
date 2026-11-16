@@ -788,10 +788,6 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .kb-log { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 1px 6px; font: inherit; font-size: 11px; color: var(--ink-2); cursor: pointer; }
 .kb-log:hover { border-color: var(--accent); color: var(--accent-text); }
 .kb-col-hours { font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.kb-hours-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 0 0 12px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-size: var(--fs-sm); color: var(--ink-2); }
-.kb-hours-summary b { color: var(--ink); font-variant-numeric: tabular-nums; }
-.kb-hours-summary .over, .kb-hours-summary .over b { color: var(--danger); }
-.kb-hours-summary a { margin-left: auto; }
 .pb-hours { display: grid; gap: 4px; width: 100%; }
 .pb-hours-nums { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
 .pb-hours-bar { height: 6px; border-radius: 4px; background: var(--sunken); overflow: hidden; max-width: 320px; }

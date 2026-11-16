@@ -108,9 +108,6 @@ export default function KanbanBoard({ project }) {
   const rows = data?.rows || [];
   const byColumn = (c) => rows.filter(r => r.board_column === c.key);
   const sum = (list, k) => list.reduce((t, r) => t + (r[k] || 0), 0);
-  const left = (r) => (!r.is_closed && r.estimated_hours > 0 ? Math.max(0, r.estimated_hours - (r.spent_hours || 0)) : 0);
-  const totals = { est: sum(rows, 'estimated_hours'), spent: sum(rows, 'spent_hours'), range: sum(rows, 'range_hours'), left: rows.reduce((t, r) => t + left(r), 0),
-    over: rows.filter(r => r.estimated_hours > 0 && r.spent_hours > r.estimated_hours).length };
 
   const drop = async (col, droppedId) => {
     const w = rows.find(r => r.id === (droppedId || dragId));
@@ -166,16 +163,6 @@ export default function KanbanBoard({ project }) {
       </div>
 
       <ErrorBox error={error} />
-      {data && rows.length > 0 && (
-        <div className="kb-hours-summary" aria-label="Hours for the tasks shown">
-          <span><b>{h(totals.est)}</b> estimated</span>
-          <span><b>{h(totals.spent)}</b> logged in total</span>
-          <span title="Open tasks only"><b>{h(totals.left)}</b> remaining</span>
-          <span><b>{h(totals.range)}</b> logged {isThisWeek ? 'this week' : 'in this period'}</span>
-          {totals.over > 0 && <span className="over"><b>{totals.over}</b> over estimate</span>}
-          <Link className="small" to={project ? `/projects/${project.identifier}/time` : '/time'}>Time</Link>
-        </div>
-      )}
       {loading && !data ? <Loading /> : (
         <div className="kb-board">
           {columns.map(col => {
