@@ -573,14 +573,15 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .kb-board { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 14px; align-items: flex-start; }
 .kb-col { flex: 1 1 0; min-width: 205px; max-width: 380px; display: flex; flex-direction: column; border-radius: 6px; transition: background 0.12s; }
 .kb-col.drop { background: color-mix(in srgb, var(--accent) 10%, transparent); outline: 2px dashed var(--accent); outline-offset: 4px; }
-.kb-col-bar { height: 5px; border-radius: 3px; }
-.kb-col-head { padding: 8px 2px 10px; }
-.kb-col-label { font-size: var(--fs-xs); color: var(--ink-3); }
-.kb-col-head h2 { font-size: 21px; font-weight: 560; line-height: 1.15; }
-.kb-count { font-size: var(--fs-sm); color: var(--ink-3); font-variant-numeric: tabular-nums; margin-left: 2px; }
-.kb-add { height: 40px; border: 1px solid var(--line); background: var(--surface); border-radius: 4px; cursor: pointer; display: grid; place-items: center; color: var(--ink-2); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); margin-bottom: 12px; }
-.kb-add:hover { border-color: var(--accent); color: var(--accent-text); }
-.kb-add svg { width: 18px; height: 18px; }
+.kb-col-head { display: flex; align-items: center; gap: 8px; padding: 9px 8px 9px 14px; margin-bottom: 12px; border-radius: 8px;
+  background: color-mix(in srgb, var(--cc) 30%, var(--surface)); border: 1px solid color-mix(in srgb, var(--cc) 55%, transparent); }
+.kb-col-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; min-width: 0; flex: 1; }
+.kb-col-head h2 { font-size: 17px; font-weight: 650; line-height: 1.2; color: var(--ink); }
+.kb-count { font-size: 12px; font-weight: 650; color: var(--ink); font-variant-numeric: tabular-nums; background: color-mix(in srgb, var(--surface) 70%, transparent); border-radius: 999px; padding: 0 7px; line-height: 19px; }
+.kb-col-head .kb-col-hours { color: var(--ink-2); }
+.kb-add { flex: none; width: 30px; height: 30px; border: 0; background: color-mix(in srgb, var(--surface) 75%, transparent); border-radius: 6px; cursor: pointer; display: grid; place-items: center; color: var(--ink); }
+.kb-add:hover { background: var(--surface); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.kb-add svg { width: 17px; height: 17px; }
 .kb-cards { display: flex; flex-direction: column; gap: 12px; min-height: 80px; }
 .kb-card { background: var(--surface); border: 1px solid var(--line); border-top: 3px solid color-mix(in srgb, var(--tc) 30%, var(--line)); border-radius: 4px; padding: 10px 14px 12px; cursor: pointer; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
 .kb-card[draggable="true"] { cursor: grab; }

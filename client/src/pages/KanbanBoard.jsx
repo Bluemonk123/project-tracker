@@ -185,17 +185,17 @@ export default function KanbanBoard({ project }) {
                 onDragOver={(e) => { if (!col.statuses.length) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (over !== col.key) setOver(col.key); }}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOver(o => (o === col.key ? null : o)); }}
                 onDrop={(e) => { e.preventDefault(); drop(col, Number(e.dataTransfer.getData('text/plain'))); }}>
-                <div className="kb-col-bar" style={{ background: col.color }} />
-                <div className="kb-col-head">
-                  <span className="kb-col-label">Status</span>
-                  <div className="row"><h2>{col.name}</h2><span className="kb-count">{items.length}</span></div>
-                  {(sum(items, 'estimated_hours') > 0 || sum(items, 'spent_hours') > 0) && (
-                    <span className="kb-col-hours" title="Logged / estimated hours of the tasks in this column">{h(sum(items, 'spent_hours')).replace(' h', '')} / {h(sum(items, 'estimated_hours'))}</span>
+                <div className="kb-col-head" style={{ '--cc': col.color }}>
+                  <div className="kb-col-title">
+                    <h2>{col.name}</h2><span className="kb-count">{items.length}</span>
+                    {(sum(items, 'estimated_hours') > 0 || sum(items, 'spent_hours') > 0) && (
+                      <span className="kb-col-hours" title="Logged / estimated hours of the tasks in this column">{h(sum(items, 'spent_hours')).replace(' h', '')} / {h(sum(items, 'estimated_hours'))}</span>
+                    )}
+                  </div>
+                  {canCreateIn && col.statuses.length > 0 && (
+                    <button type="button" className="kb-add" onClick={() => setAdding(col)} title={`Add to ${col.name}`} aria-label={`Add a work package to ${col.name}`}><Icon name="plus" /></button>
                   )}
                 </div>
-                {canCreateIn && col.statuses.length > 0 && (
-                  <button className="kb-add" onClick={() => setAdding(col)} aria-label={`Add a work package to ${col.name}`}><Icon name="plus" /></button>
-                )}
                 <div className="kb-cards">
                   {items.map(w => <Card key={w.id} w={w} column={col} dragging={dragId === w.id} onLog={setLogging} onDragStart={setDragId} onDragEnd={() => { setDragId(null); setOver(null); }} />)}
                   {!items.length && <div className="kb-empty">Nothing here for this period</div>}
