@@ -148,21 +148,6 @@ function migrate() {
     });
   }
 
-  // Tickets: a "Ticket" type and a "Ticket" status shown in the Task Board's first column
-  if (getSetting('migration_tickets_v1') === null) {
-    tx(() => {
-      if (!get("SELECT id FROM types WHERE name = 'Ticket'")) {
-        run("INSERT INTO types(name, color, is_milestone, position) VALUES('Ticket', '#E5484D', 0, (SELECT COALESCE(MAX(position), 0) + 1 FROM types))");
-      }
-      if (!get("SELECT id FROM statuses WHERE name = 'Ticket'")) {
-        const first = get('SELECT COALESCE(MIN(position), 0) AS p FROM statuses').p;
-        run("INSERT INTO statuses(name, color, is_closed, is_default, position, board_column) VALUES('Ticket', '#E5484D', 0, 0, ?, 'tickets')", first - 1);
-        all('SELECT id FROM statuses ORDER BY position, id').forEach((s, i) => run('UPDATE statuses SET position = ? WHERE id = ?', i, s.id));
-      } else run("UPDATE statuses SET board_column = 'tickets' WHERE name = 'Ticket'");
-      setSetting('migration_tickets_v1', '1');
-    });
-  }
-
   // Design / Develop / Testing: one person per stage on every work package.
   const wpCols = all('PRAGMA table_info(work_packages)').map(c => c.name);
   for (const c of ['designer_id', 'developer_id', 'tester_id']) {
@@ -243,6 +228,71 @@ function migrate() {
         run('UPDATE roles SET permissions = ? WHERE id = ?', JSON.stringify([...new Set([...perms, ...keys])]), role.id);
       }
       setSetting('migration_board_perms_v1', '1');
+    });
+  }
+
+  // ---------- Ticket Board (helpdesk) ----------
+  const nCols = all('PRAGMA table_info(notifications)').map(c => c.name);
+  if (!nCols.includes('ticket_id')) db.exec('ALTER TABLE notifications ADD COLUMN ticket_id INTEGER REFERENCES tickets(id) ON DELETE CASCADE');
+  if (!nCols.includes('link')) db.exec('ALTER TABLE notifications ADD COLUMN link TEXT');
+  for (const [k, v] of [['ticket_sla_hours_urgent', 4], ['ticket_sla_hours_high', 8], ['ticket_sla_hours_normal', 24]]) {
+    if (getSetting(k) === null) setSetting(k, v);
+  }
+  // Groups: add the standard ones that were never added; one an admin deactivated stays as it is.
+  const seeded = (() => { try { return JSON.parse(getSetting('ticket_groups_seeded') || '[]'); } catch { return []; } })();
+  ['Support', 'Development', 'Training', 'Research'].forEach((g, i) => {
+    if (seeded.includes(g)) return;
+    run('INSERT OR IGNORE INTO ticket_groups(name, active, position) VALUES(?, 1, ?)', g, i);
+    seeded.push(g);
+  });
+  setSetting('ticket_groups_seeded', JSON.stringify(seeded));
+  if (getSetting('ticket_macros_seeded') === null) {
+    run(`INSERT INTO ticket_macros(name, body_template, set_status, is_internal, display_order) VALUES(?,?,?,0,1)`, 'Ask for more details',
+      'Hi {customer_first_name},\n\nThanks for raising ticket {ticket_id}. Could you share a few more details (steps, screenshots) so we can look into it?\n\nRegards,\n{agent_first_name}', 'pending');
+    run(`INSERT INTO ticket_macros(name, body_template, set_status, is_internal, display_order) VALUES(?,?,?,0,2)`, 'Solved',
+      'Hi {customer_first_name},\n\nTicket {ticket_id} is now fixed. Reply here if anything still looks wrong.\n\nRegards,\n{agent_first_name}', 'solved');
+    setSetting('ticket_macros_seeded', '1');
+  }
+  // One-time move: tasks raised with the earlier "New Ticket" button (type or status "Ticket") become helpdesk tickets,
+  // and the Ticket column, status and type leave the Task Board. Finds nothing to do on later runs.
+  if (getSetting('migration_helpdesk_v1') === null) {
+    tx(() => {
+      const iso = (t) => (t ? (String(t).includes('T') ? String(t) : String(t).replace(' ', 'T') + 'Z') : new Date().toISOString());
+      const tStatus = all("SELECT id FROM statuses WHERE board_column = 'tickets'").map(r => r.id);
+      const tType = get("SELECT id FROM types WHERE name = 'Ticket'")?.id || null;
+      const wps = all(`SELECT w.*, s.is_closed, u.name AS author_name, u.email AS author_email FROM work_packages w
+                       JOIN statuses s ON s.id = w.status_id LEFT JOIN users u ON u.id = w.author_id
+                       WHERE w.type_id = ? OR w.status_id IN (${tStatus.map(() => '?').join(',') || 'NULL'})`, tType, ...tStatus);
+      const defStatus = get("SELECT id FROM statuses WHERE is_default = 1 AND (board_column IS NULL OR board_column <> 'tickets') ORDER BY position LIMIT 1")?.id
+        || get("SELECT id FROM statuses WHERE board_column IS NULL OR board_column <> 'tickets' ORDER BY position LIMIT 1")?.id;
+      const defType = get("SELECT id FROM types WHERE name <> 'Ticket' ORDER BY position LIMIT 1")?.id;
+      for (const w of wps) {
+        const no = get('SELECT COALESCE(MAX(ticket_no), 10000000) + 1 AS n FROM tickets').n;
+        const solved = w.is_closed ? 1 : 0;
+        const tid = run(`INSERT INTO tickets(ticket_no, status, subject, feedback, priority, ticket_type, group_name, channel, source,
+                           requester_kind, requester_user_id, raised_by, requester_email, assignee_id, raised_on, solved_at, created_by, created_at, updated_at)
+                         VALUES(?,?,?,?,'normal','issue','Support','web','task board','staff',?,?,?,?,?,?,?,?,?)`,
+          no, solved ? 'solved' : 'open', String(w.subject || '').slice(0, 200), String(w.description || w.subject || '(no description)').slice(0, 5000),
+          w.author_id, w.author_name || 'Unknown', w.author_email, w.assignee_id, iso(w.created_at), solved ? iso(w.updated_at) : null,
+          w.author_id, iso(w.created_at), iso(w.updated_at)).id;
+        run(`INSERT INTO ticket_messages(ticket_id, author_type, author_name, body, created_at) VALUES(?, 'system', 'System', ?, ?)`,
+          tid, `Moved from the Task Board (${w.subject})`, new Date().toISOString());
+        for (const a of all("SELECT * FROM attachments WHERE container_type = 'wp' AND container_id = ?", w.id)) {
+          run(`INSERT INTO ticket_attachments(ticket_id, file_name, stored_name, mime_type, size_bytes, uploaded_by, created_at) VALUES(?,?,?,?,?,?,?)`,
+            tid, a.filename, a.stored_name, a.content_type, a.size, a.uploaded_by, iso(a.created_at));
+        }
+        // keep a task that has time logged on it (as an ordinary task); remove the rest
+        if (get('SELECT 1 AS x FROM time_entries WHERE wp_id = ? LIMIT 1', w.id)) {
+          run('UPDATE work_packages SET status_id = CASE WHEN status_id IN (' + (tStatus.join(',') || 'NULL') + ') THEN ? ELSE status_id END, type_id = CASE WHEN type_id = ? THEN ? ELSE type_id END WHERE id = ?',
+            defStatus, tType, defType, w.id);
+        } else {
+          run("DELETE FROM attachments WHERE container_type = 'wp' AND container_id = ?", w.id); // the files now belong to the ticket
+          run('DELETE FROM work_packages WHERE id = ?', w.id);
+        }
+      }
+      for (const sid of tStatus) if (!get('SELECT 1 AS x FROM work_packages WHERE status_id = ? LIMIT 1', sid)) run('DELETE FROM statuses WHERE id = ?', sid);
+      if (tType && !get('SELECT 1 AS x FROM work_packages WHERE type_id = ? LIMIT 1', tType)) run('DELETE FROM types WHERE id = ?', tType);
+      setSetting('migration_helpdesk_v1', String(wps.length));
     });
   }
 }

@@ -18,18 +18,24 @@ before(async () => {
 after(() => { server.close(); fs.rmSync(tmp, { recursive: true, force: true }); });
 
 function client() {
-  let cookie = '';
+  const jar = {};
+  const cookie = () => Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; ');
   const call = async (method, url, body) => {
-    const res = await fetch(base + url, {
-      method, headers: { 'Content-Type': 'application/json', cookie }, body: body ? JSON.stringify(body) : undefined,
-    });
-    const sc = res.headers.get('set-cookie');
-    if (sc) cookie = sc.split(';')[0];
+    if (method !== 'GET' && !jar.pt_csrf) await call('GET', '/health'); // picks up the CSRF cookie
+    const isForm = body instanceof FormData;
+    const headers = { cookie: cookie(), 'x-csrf-token': jar.pt_csrf || '' };
+    if (!isForm) headers['Content-Type'] = 'application/json';
+    const res = await fetch(base + url, { method, headers, body: isForm ? body : body ? JSON.stringify(body) : undefined });
+    for (const sc of res.headers.getSetCookie()) {
+      const [kv] = sc.split(';'); const i = kv.indexOf('=');
+      const k = kv.slice(0, i), v = kv.slice(i + 1);
+      if (v) jar[k] = v; else delete jar[k];
+    }
     const ct = res.headers.get('content-type') || '';
     const data = ct.includes('json') ? await res.json() : await res.text();
-    return { status: res.status, data };
+    return { status: res.status, data, headers: res.headers };
   };
-  return { cookie: () => cookie, get: u => call('GET', u), post: (u, b) => call('POST', u, b), patch: (u, b) => call('PATCH', u, b), put: (u, b) => call('PUT', u, b), del: (u, b) => call('DELETE', u, b) };
+  return { jar, cookie, get: u => call('GET', u), post: (u, b) => call('POST', u, b), patch: (u, b) => call('PATCH', u, b), put: (u, b) => call('PUT', u, b), del: (u, b) => call('DELETE', u, b) };
 }
 
 const admin = client();
@@ -293,8 +299,7 @@ test('kanban board: columns, date range, employee and project filters', async ()
   const q = `/board?from=2026-09-07&to=2026-09-11&project_id=${p.id}`;
   let r = await admin.get(q);
   assert.equal(r.status, 200, JSON.stringify(r.data));
-  assert.deepEqual(r.data.columns.map(c => c.name), ['Tickets', 'New', 'In Design', 'In Develop', 'In Testing', 'Closed']);
-  assert.ok(r.data.columns[0].statuses.some(st => st.name === 'Ticket'), 'Ticket status in the Tickets column');
+  assert.deepEqual(r.data.columns.map(c => c.name), ['New', 'In Design', 'In Develop', 'In Testing', 'Closed']);
   const ids2 = r.data.rows.map(x => x.id);
   assert.ok(ids2.includes(inWeek.id) && ids2.includes(spanning.id) && ids2.includes(undated.id));
   assert.ok(!ids2.includes(nextWeek.id));
@@ -329,7 +334,7 @@ test('task links, attachment limits and assigning a non-member', async () => {
     const fd = new FormData();
     fd.append('container_type', 'wp'); fd.append('container_id', String(wp.id));
     fd.append('file', new Blob(['x']), name);
-    const res = await fetch(base + '/attachments', { method: 'POST', body: fd, headers: { cookie: admin.cookie() } });
+    const res = await fetch(base + '/attachments', { method: 'POST', body: fd, headers: { cookie: admin.cookie(), 'x-csrf-token': admin.jar.pt_csrf } });
     return res.status;
   };
   assert.equal(await up('notes.exe'), 400);
@@ -463,7 +468,7 @@ test('project board: brief, customer roles and documents', async () => {
   const slotIds = Object.fromEntries(r.data.documents.map(d => [d.key, d.id]));
   const up = async (who, slot, name, body = 'x') => {
     const fd = new FormData(); fd.append('file', new Blob([body]), name);
-    return (await fetch(`${base}/projects/${p.id}/documents/${slotIds[slot] ?? 99999}`, { method: 'POST', body: fd, headers: { cookie: who.cookie() } })).status;
+    return (await fetch(`${base}/projects/${p.id}/documents/${slotIds[slot] ?? 99999}`, { method: 'POST', body: fd, headers: { cookie: who.cookie(), 'x-csrf-token': who.jar.pt_csrf } })).status;
   };
   assert.equal(await up(admin, '02', 'brd-v1.docx'), 201);
   assert.equal(await up(admin, '02', 'brd-v2.docx', 'second'), 201);
@@ -570,7 +575,7 @@ test('project board: brief, customer roles and documents', async () => {
   assert.equal((await dev.post(`/projects/${p.id}/release-notes`, { name: 'X', version: '1' })).status, 403);
   const upNote = async (who, body, name) => {
     const fd = new FormData(); fd.append('file', new Blob([body]), name);
-    return fetch(`${base}/release-notes/${rn}/files`, { method: 'POST', body: fd, headers: { cookie: who.cookie() } });
+    return fetch(`${base}/release-notes/${rn}/files`, { method: 'POST', body: fd, headers: { cookie: who.cookie(), 'x-csrf-token': who.jar.pt_csrf } });
   };
   assert.equal((await upNote(admin, 'notes v1', 'rn-1.4.0.pdf')).status, 201);
   assert.equal((await upNote(admin, 'changelog', 'changelog.txt')).status, 201);
@@ -663,14 +668,3 @@ test('occupancy per project member, totals on teams and a person\'s projects wit
   assert.ok(Array.isArray(pa.am));
 });
 
-test('tickets: raised in the Ticket status show in the first column', async () => {
-  const meta = (await admin.get('/meta')).data;
-  const type = meta.types.find(t => t.name === 'Ticket');
-  const status = meta.statuses.find(s => s.board_column === 'tickets');
-  assert.ok(type && status);
-  const p = (await admin.post('/projects', { name: 'Ticket Test', identifier: 'TKT' })).data;
-  const wp = (await admin.post('/work-packages', { project_id: p.id, subject: 'Printer offline', type_id: type.id, status_id: status.id })).data;
-  const today = new Date().toISOString().slice(0, 10);
-  const r = await admin.get(`/board?from=${today}&to=${today}&project_id=${p.id}`);
-  assert.equal(r.data.rows.find(x => x.id === wp.id).board_column, 'tickets');
-});

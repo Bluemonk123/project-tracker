@@ -157,7 +157,6 @@ r.get('/work-packages', (req, res) => {
 
 // ---------- Kanban board (New / In Design / In Develop / In Testing / Closed) ----------
 export const BOARD_COLUMNS = [
-  { key: 'tickets', name: 'Tickets', color: '#E5484D' },
   { key: 'new', name: 'New', color: '#8FD9C4' },
   { key: 'design', name: 'In Design', color: '#B79BDB' },
   { key: 'develop', name: 'In Develop', color: '#5BC8DE' },

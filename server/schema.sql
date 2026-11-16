@@ -437,3 +437,97 @@ CREATE TABLE IF NOT EXISTS project_approval_sections (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_approval_sections ON project_approval_sections(project_id, created_at);
+
+-- ---------- Ticket Board (helpdesk) ----------
+-- Times in the ticket tables are ISO 8601 UTC strings (2026-11-16T11:52:00.000Z).
+CREATE TABLE IF NOT EXISTS tickets (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_no          INTEGER NOT NULL UNIQUE,              -- 8 digits, from 10000001
+  status             TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','pending','hold','solved')),
+  subject            TEXT,
+  feedback           TEXT NOT NULL,                        -- the description (first message)
+  priority           TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('urgent','high','normal')),
+  ticket_type        TEXT NOT NULL DEFAULT 'issue' CHECK (ticket_type IN ('issue','feedback','feature','task')),
+  group_name         TEXT NOT NULL DEFAULT 'Support',
+  channel            TEXT NOT NULL DEFAULT 'web' CHECK (channel IN ('web','email','agent')),
+  source             TEXT,                                 -- header / login page / agent / task board
+  requester_kind     TEXT NOT NULL DEFAULT 'staff' CHECK (requester_kind IN ('staff','partner','guest')),
+  requester_user_id  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  raised_by          TEXT NOT NULL,
+  requester_email    TEXT,
+  partner_code       TEXT,
+  assignee_id        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  tags               TEXT,
+  linked_record      TEXT,
+  notes              TEXT,                                 -- closing notes, appended
+  raised_on          TEXT NOT NULL,
+  hold_started_at    TEXT,
+  sla_paused_seconds INTEGER NOT NULL DEFAULT 0,
+  solved_at          TEXT,
+  sla_due_at         TEXT,
+  created_by         INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status, updated_at);
+CREATE INDEX IF NOT EXISTS idx_tickets_assignee ON tickets(assignee_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_raised_by ON tickets(raised_by);
+CREATE INDEX IF NOT EXISTS idx_tickets_requester ON tickets(requester_user_id);
+
+CREATE TABLE IF NOT EXISTS ticket_messages (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id        INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  author_type      TEXT NOT NULL CHECK (author_type IN ('requester','user','system')),
+  author_user_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  author_name      TEXT,
+  body             TEXT NOT NULL DEFAULT '',
+  is_internal      INTEGER NOT NULL DEFAULT 0,
+  email_message_id TEXT,
+  created_at       TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ticket_messages ON ticket_messages(ticket_id, created_at);
+
+CREATE TABLE IF NOT EXISTS ticket_attachments (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id   INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  message_id  INTEGER REFERENCES ticket_messages(id) ON DELETE CASCADE,  -- NULL: raised with the ticket
+  file_name   TEXT NOT NULL,
+  stored_name TEXT NOT NULL,
+  mime_type   TEXT,
+  size_bytes  INTEGER NOT NULL DEFAULT 0,
+  uploaded_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ticket_attachments ON ticket_attachments(ticket_id, message_id);
+
+CREATE TABLE IF NOT EXISTS ticket_macros (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  name          TEXT NOT NULL,
+  body_template TEXT NOT NULL,          -- {customer_first_name} {agent_first_name} {ticket_id}
+  set_status    TEXT,
+  set_group     TEXT,
+  is_internal   INTEGER NOT NULL DEFAULT 0,
+  active        INTEGER NOT NULL DEFAULT 1,
+  display_order INTEGER NOT NULL DEFAULT 0
+);
+
+-- Master list of ticket groups (admin-editable; deactivated groups stay deactivated)
+CREATE TABLE IF NOT EXISTS ticket_groups (
+  id       INTEGER PRIMARY KEY AUTOINCREMENT,
+  name     TEXT NOT NULL UNIQUE,
+  active   INTEGER NOT NULL DEFAULT 1,
+  position INTEGER NOT NULL DEFAULT 0
+);
+
+-- General audit log (who did what to which record)
+CREATE TABLE IF NOT EXISTS audit_log (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  actor_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  action      TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id   INTEGER,
+  details     TEXT,
+  ip          TEXT,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id);

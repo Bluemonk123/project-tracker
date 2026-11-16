@@ -33,6 +33,9 @@ import Teams from './pages/Teams.jsx';
 import Notifications from './pages/Notifications.jsx';
 import Profile from './pages/Profile.jsx';
 import Admin from './pages/Admin.jsx';
+import TicketBoard from './pages/tickets/TicketBoard.jsx';
+import { TicketPage } from './pages/tickets/TicketScreen.jsx';
+import TicketsRaised from './pages/tickets/TicketsRaised.jsx';
 
 // Project tabs reuse the global pages, scoped to the current project.
 function InProject({ Component }) {
@@ -81,6 +84,9 @@ function Root() {
         <Route path="board" element={<KanbanBoard />} />
         <Route path="project-board" element={<ProjectBoard />} />
         <Route path="technologies" element={<TechOverview />} />
+        <Route path="ticket-board" element={<TicketBoard />} />
+        <Route path="ticket-board/:no" element={<TicketPage />} />
+        <Route path="tickets-raised" element={<TicketsRaised />} />
         <Route path="wp/:id" element={<WpDetail />} />
         <Route path="meetings" element={<Meetings />} />
         <Route path="meetings/:id" element={<MeetingDetail />} />

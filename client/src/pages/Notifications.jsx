@@ -9,6 +9,7 @@ const REASONS = {
   assigned: 'Assigned', accountable: 'Accountable', mentioned: 'Mentioned', commented: 'Comment', status: 'Status',
   meeting_invite: 'Meeting', meeting_minutes: 'Minutes', meeting_moved: 'Meeting', blocker: 'Blocker', news: 'Announcement',
   member_added: 'Project', project_status: 'Project',
+  ticket_new: 'New ticket', ticket_assigned: 'Ticket', ticket_reply: 'Ticket reply', ticket_update: 'Ticket',
 };
 
 export default function Notifications() {
@@ -20,7 +21,8 @@ export default function Notifications() {
   const markAll = async () => { if (await run(() => api.post('/notifications/read', { all: true }), 'All marked as read')) { setUnread(0); reload(); } };
   const open = async (n) => {
     if (!n.read_at) { await api.post('/notifications/read', { ids: [n.id] }); setUnread(Math.max(0, (data || []).filter(x => !x.read_at).length - 1)); }
-    if (n.wp_id) nav(`/wp/${n.wp_id}`);
+    if (n.link && n.link.startsWith('/')) nav(n.link);
+    else if (n.wp_id) nav(`/wp/${n.wp_id}`);
     else if (n.meeting_id) nav(`/meetings/${n.meeting_id}`);
     else if (n.project_identifier) nav(`/projects/${n.project_identifier}`);
     else reload();

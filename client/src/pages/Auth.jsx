@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { api } from '../api.js';
 import { useApp } from '../context.jsx';
-import { Field, ErrorBox } from '../components/ui.jsx';
+import { Field, ErrorBox, Modal } from '../components/ui.jsx';
+import { FilePicker, toForm } from './tickets/common.jsx';
 
 function Art({ appName }) {
   const lanes = [
@@ -38,6 +39,7 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [contact, setContact] = useState(false);
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true); setError(null);
@@ -55,9 +57,53 @@ export function Login() {
           <Field label="Password" htmlFor="password"><input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></Field>
           <button className="btn primary" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
           <p className="small muted">Forgot your password? Ask your administrator to set a new one for you.</p>
+          <button type="button" className="btn ghost tk-contact-link" onClick={() => setContact(true)}>Contact admin for access/issues</button>
         </form>
       </div>
+      {contact && <ContactAdminModal onClose={() => setContact(false)} />}
     </div>
+  );
+}
+
+// For people who can't sign in: raises a ticket for the administrators (no account needed).
+function ContactAdminModal({ onClose }) {
+  const [f, setF] = useState({ name: '', email: '', description: '' });
+  const [files, setFiles] = useState([]);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(null);
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const submit = async () => {
+    if (f.name.trim().startsWith('[')) { setError(new Error('A name cannot start with "[".')); return; }
+    if (f.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())) { setError(new Error('That email address is not valid.')); return; }
+    setBusy(true); setError(null);
+    try { setDone(await api.post('/public/contact', toForm(f, files))); } catch (e) { setError(e); } finally { setBusy(false); }
+  };
+  if (done) {
+    return (
+      <Modal title="Message sent" onClose={onClose} footer={<button type="button" className="btn primary" onClick={onClose}>Done</button>}>
+        <div className="tk-done">
+          <div className="xs muted">Your ticket number</div>
+          <div className="tk-done-no">{done.ticket_no}</div>
+          <p className="small muted">{f.email.trim() ? `The administrators have been told. Replies and changes are emailed to ${f.email.trim()}.` : 'The administrators have been told. Keep this number to ask about it later.'}</p>
+        </div>
+        {done.warnings?.length > 0 && <div className="warn-box">{done.warnings.map(w => <div key={w}>{w}</div>)}</div>}
+      </Modal>
+    );
+  }
+  return (
+    <Modal title="Contact admin for access/issues" onClose={onClose} onSubmit={submit} footer={<>
+      <button type="button" className="btn" onClick={onClose}>Cancel</button>
+      <button className="btn primary" disabled={busy}>{busy ? 'Sending…' : 'Send'}</button>
+    </>}>
+      <ErrorBox error={error} />
+      <Field label="Your name"><input type="text" maxLength={100} required value={f.name} onChange={set('name')} autoComplete="name" /></Field>
+      <Field label="Email" hint="Optional. Replies and changes to your ticket are emailed here.">
+        <input type="email" maxLength={254} value={f.email} onChange={set('email')} autoComplete="email" />
+      </Field>
+      <Field label="Describe the problem"><textarea rows={5} maxLength={5000} required value={f.description} onChange={set('description')} placeholder="e.g. I can't sign in with my email, or I need access to a project." /></Field>
+      <FilePicker files={files} onChange={setFiles} onError={(m) => setError(new Error(m))} />
+    </Modal>
   );
 }
 

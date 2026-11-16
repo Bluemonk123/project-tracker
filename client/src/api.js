@@ -1,6 +1,13 @@
+// The CSRF token the server put in the pt_csrf cookie; sent back in a header on every change.
+export function csrfToken() {
+  const m = document.cookie.match(/(?:^|;\s*)pt_csrf=([a-f0-9]+)/);
+  return m ? m[1] : '';
+}
+export const csrfHeaders = () => ({ 'X-CSRF-Token': csrfToken() });
+
 // Small fetch wrapper. Throws Error(message) with .status on failure.
-async function request(method, url, body, { raw = false } = {}) {
-  const opts = { method, headers: {}, credentials: 'same-origin' };
+async function request(method, url, body, { raw = false, retried = false } = {}) {
+  const opts = { method, headers: method === 'GET' ? {} : csrfHeaders(), credentials: 'same-origin' };
   if (body instanceof FormData) opts.body = body;
   else if (body !== undefined) {
     opts.headers['Content-Type'] = 'application/json';
@@ -11,6 +18,8 @@ async function request(method, url, body, { raw = false } = {}) {
   let data = null;
   const ct = res.headers.get('content-type') || '';
   if (ct.includes('application/json')) data = await res.json();
+  // first visit with no token yet: the failed response set one, so try once more
+  if (res.status === 403 && data?.code === 'csrf' && !retried) return request(method, url, body, { raw, retried: true });
   if (!res.ok) {
     const err = new Error(data?.error || `Request failed (${res.status}).`);
     err.status = res.status;

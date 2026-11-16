@@ -6,7 +6,7 @@ import { useApp } from '../context.jsx';
 import { api, qs } from '../api.js';
 import NewProjectModal from '../pages/NewProjectModal.jsx';
 import ConnectionStatus from './ConnectionStatus.jsx';
-import NewWpModal from '../pages/NewWpModal.jsx';
+import RaiseTicketModal from '../pages/tickets/RaiseTicketModal.jsx';
 
 function BrandMark() {
   return <img className="brand-mark" src="/logo-tile.png" alt="" width="30" height="30" />;
@@ -117,6 +117,8 @@ export default function Layout() {
           <NavLink to="/project-board" className="nav-link" title="Project Board"><Icon name="briefcase" /><span className="nav-text">Project Board</span></NavLink>
           <NavLink to="/board" className="nav-link" title="Task Board"><Icon name="board" /><span className="nav-text">Task Board</span></NavLink>
           <NavLink to="/technologies" className="nav-link" title="Technologies"><Icon name="layers" /><span className="nav-text">Technologies</span></NavLink>
+          {can('tickets.view') && <NavLink to="/ticket-board" className="nav-link" title="Ticket Board"><Icon name="ticket" /><span className="nav-text">Ticket Board</span></NavLink>}
+          <NavLink to="/tickets-raised" className="nav-link" title="Tickets Raised"><Icon name="inbox" /><span className="nav-text">Tickets Raised</span></NavLink>
           <NavLink to="/work-packages" className="nav-link" title="All work"><Icon name="list" /><span className="nav-text">All work</span></NavLink>
           <NavLink to="/meetings" className="nav-link" title="Meetings"><Icon name="chat" /><span className="nav-text">Meetings</span></NavLink>
           <NavLink to="/time" className="nav-link" title="Time"><Icon name="clock" /><span className="nav-text">Time</span></NavLink>
@@ -144,14 +146,14 @@ export default function Layout() {
       </aside>
       {navOpen && <div className="modal-backdrop" style={{ zIndex: 80, background: 'rgba(0,0,0,.3)' }} onClick={() => setNavOpen(false)} />}
       <div className="main">
-        {ticketOpen && <NewTicketModal onClose={() => setTicketOpen(false)} />}
+        {ticketOpen && <RaiseTicketModal onClose={() => setTicketOpen(false)} />}
         <header className="topbar">
           <button type="button" className="icon-btn menu-btn" onClick={toggleMenu} aria-expanded={menuOpen}
             aria-label={menuOpen ? 'Collapse menu' : 'Expand menu'} title={menuOpen ? 'Collapse menu' : 'Expand menu'}><Icon name="menu" /></button>
           <GlobalSearch />
           <div className="topbar-actions">
             <button type="button" className="btn sm new-ticket-btn" onClick={() => setTicketOpen(true)} title="Raise a new ticket">
-              <Icon name="plus" size={15} /><span>New Ticket</span>
+              <Icon name="plus" size={15} /><span>Raise Ticket</span>
             </button>
             <ConnectionStatus />
             <Link to="/notifications" className="icon-btn" aria-label={`Alerts${me?.unread ? `, ${me.unread} unread` : ''}`}>
@@ -176,16 +178,5 @@ export default function Layout() {
       </div>
       {newProject && <NewProjectModal onClose={() => setNewProject(false)} />}
     </div>
-  );
-}
-
-// "New Ticket" in the top bar: a work package of type Ticket in the Ticket status (first column of the Task Board).
-function NewTicketModal({ onClose }) {
-  const { meta } = useApp();
-  const type = meta.types.find(t => t.name === 'Ticket');
-  const status = meta.statuses.find(s => s.board_column === 'tickets');
-  return (
-    <NewWpModal title="New ticket" defaults={{ ...(type ? { type_id: type.id } : {}), ...(status ? { status_id: status.id } : {}) }} onClose={onClose}
-      onCreated={() => window.dispatchEvent(new Event('pt-wp-created'))} />
   );
 }

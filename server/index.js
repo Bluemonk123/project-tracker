@@ -1,4 +1,5 @@
 import express from 'express';
+import crypto from 'node:crypto';
 import cookieParser from 'cookie-parser';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -15,6 +16,27 @@ import miscRoutes from './routes/misc.js';
 import techRoutes from './routes/tech.js';
 import projectBoardRoutes from './routes/projectboard.js';
 import { backupCopyRoutes, scheduleCopies } from './routes/backupcopy.js';
+import { publicTicketRoutes, ticketRoutes } from './routes/tickets.js';
+import emailRoutes from './routes/email.js';
+
+// CSRF protection (double-submit token): every browser gets a random pt_csrf cookie, and every
+// request that changes something must echo it in the X-CSRF-Token header. Another site can make
+// the browser send the cookie, but it cannot read it, so it cannot send the matching header.
+export const CSRF_COOKIE = 'pt_csrf';
+function csrf(req, res, next) {
+  let token = req.cookies?.[CSRF_COOKIE];
+  const had = typeof token === 'string' && /^[a-f0-9]{48}$/.test(token);
+  if (!had) {
+    token = crypto.randomBytes(24).toString('hex');
+    res.cookie(CSRF_COOKIE, token, { sameSite: 'lax', path: '/', maxAge: 365 * 86400e3 });
+  }
+  if (req.path.startsWith('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    const sent = String(req.get('x-csrf-token') || '');
+    const ok = had && sent.length === token.length && crypto.timingSafeEqual(Buffer.from(sent), Buffer.from(token));
+    if (!ok) return res.status(403).json({ error: 'This page was open too long. Reload it and try again.', code: 'csrf' });
+  }
+  next();
+}
 
 const PORT = Number(process.env.PORT || 4000);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -24,6 +46,7 @@ export function createApp() {
   app.disable('x-powered-by');
   app.use(express.json({ limit: '5mb' }));
   app.use(cookieParser());
+  app.use(csrf);
   app.use((_, res, next) => { res.setHeader('X-Frame-Options', 'SAMEORIGIN'); next(); });
   app.use(loadUser);
 
@@ -31,6 +54,7 @@ export function createApp() {
   // Lightweight check used by the Connected / Disconnected indicator in the top bar
   api.get('/health', (_req, res) => { res.setHeader('Cache-Control', 'no-store'); res.json({ ok: true, time: new Date().toISOString() }); });
   api.use(authRoutes); // setup, login, logout, me (individual routes guard themselves)
+  api.use(publicTicketRoutes); // login-page "Contact admin" form (no sign-in)
   api.use(requireAuth);
   api.use(adminRoutes);
   api.use(backupCopyRoutes);
@@ -41,6 +65,8 @@ export function createApp() {
   api.use(miscRoutes);
   api.use(techRoutes);
   api.use(projectBoardRoutes);
+  api.use(ticketRoutes);
+  api.use(emailRoutes);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found.')));
   app.use('/api', api);
 

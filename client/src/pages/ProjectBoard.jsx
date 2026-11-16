@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { api } from '../api.js';
+import { api, csrfHeaders } from '../api.js';
 import { useApp, useLoad } from '../context.jsx';
 import Icon from '../components/Icon.jsx';
 import { STATUS, POSITION_ORDER } from '../components/KeyPeople.jsx';
@@ -698,7 +698,7 @@ function ReleaseNotes({ data, reload }) {
 
 async function uploadFile(url, file) {
   const fd = new FormData(); fd.append('file', file);
-  const res = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' });
+  const res = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin', headers: csrfHeaders() });
   const out = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(out.error || 'Upload failed.');
   return out;
@@ -772,7 +772,7 @@ function DocRow({ d, projectId, canUpload, maxMb, reload, onRename, onDelete }) 
     setBusy(true);
     try {
       const fd = new FormData(); fd.append('file', file);
-      const res = await fetch(`/api/projects/${projectId}/documents/${d.id}`, { method: 'POST', body: fd, credentials: 'same-origin' });
+      const res = await fetch(`/api/projects/${projectId}/documents/${d.id}`, { method: 'POST', body: fd, credentials: 'same-origin', headers: csrfHeaders() });
       const out = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(out.error || 'Upload failed.');
       toast(`${d.key} ${d.name} uploaded`);

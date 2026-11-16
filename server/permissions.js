@@ -9,6 +9,10 @@ export const GLOBAL_PERMISSIONS = [
   { key: 'teams.manage',     group: 'Administration', label: 'Manage teams' },
   { key: 'projects.create',  group: 'Projects',       label: 'Create projects' },
   { key: 'reports.view',     group: 'Reports',        label: 'View portfolio and workload reports' },
+  // Ticket Board (helpdesk): off for every role until ticked; administrators always have it.
+  { key: 'tickets.view',     group: 'Ticket Board',   label: 'Enable: open the Ticket Board' },
+  { key: 'tickets.create',   group: 'Ticket Board',   label: 'Add: create tickets from the board (New ticket)' },
+  { key: 'tickets.edit',     group: 'Ticket Board',   label: 'Edit: reply, add notes, change fields, take tickets' },
 ];
 
 export const PROJECT_PERMISSIONS = [
