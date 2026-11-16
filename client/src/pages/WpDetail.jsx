@@ -25,7 +25,7 @@ export const STAGES = [
   { key: 'design', name: 'In Design', color: '#B79BDB', field: 'designer', role: 'Designer', activity: 'Design' },
   { key: 'develop', name: 'In Develop', color: '#5BC8DE', field: 'developer', role: 'Developer', activity: 'Development' },
   { key: 'testing', name: 'In Testing', color: '#F39219', field: 'tester', role: 'Tester', activity: 'Testing' },
-  { key: 'closed', name: 'Closed', color: '#C9CED6' },
+  { key: 'closed', name: 'Closed', color: '#7D8796' },
 ];
 const utc = (s) => new Date(`${s.replace(' ', 'T')}Z`).getTime();
 function fmtSpan(ms) {

@@ -162,7 +162,7 @@ export const BOARD_COLUMNS = [
   { key: 'design', name: 'In Design', color: '#B79BDB' },
   { key: 'develop', name: 'In Develop', color: '#5BC8DE' },
   { key: 'testing', name: 'In Testing', color: '#F39219' },
-  { key: 'closed', name: 'Closed', color: '#C9CED6' },
+  { key: 'closed', name: 'Closed', color: '#7D8796' },
 ];
 
 r.get('/board', (req, res) => {
