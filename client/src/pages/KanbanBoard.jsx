@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, qs } from '../api.js';
 import { useApp, useLoad } from '../context.jsx';
@@ -87,6 +87,11 @@ export default function KanbanBoard({ project }) {
   };
   const query = { from, to, assignee_id: employee || undefined, project_id: projectId || undefined, undated: undated ? undefined : 0 };
   const { data, error, loading, reload, setData } = useLoad(() => api.get('/board' + qs(query)), [JSON.stringify(query)]);
+  useEffect(() => { // refresh when a ticket or task is raised from the top bar
+    const again = () => reload();
+    window.addEventListener('pt-wp-created', again);
+    return () => window.removeEventListener('pt-wp-created', again);
+  });
 
   const span = Math.max(1, diffDays(to, from) + 1);
   const step = span <= 7 ? 7 : span;

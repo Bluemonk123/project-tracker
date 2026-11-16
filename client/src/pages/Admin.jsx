@@ -6,7 +6,7 @@ import Icon from '../components/Icon.jsx';
 import { Loading, ErrorBox, Empty, Modal, Field, Person, useAsync, confirmDialog, MoreMenu, ColorPicker, Pill } from '../components/ui.jsx';
 import { timeAgo, fmtSize, fmtDateTime } from '../lib/format.js';
 
-const BOARD_COLUMN_NAMES = { new: 'New', design: 'In Design', develop: 'In Develop', testing: 'In Testing', closed: 'Closed' };
+const BOARD_COLUMN_NAMES = { tickets: 'Tickets', new: 'New', design: 'In Design', develop: 'In Develop', testing: 'In Testing', closed: 'Closed' };
 
 // ---------------- users ----------------
 function UserModal({ user, onClose, onSaved }) {

@@ -163,7 +163,7 @@ const ENUMS = {
   statuses: ['name', 'color', 'is_closed', 'is_default', 'done_ratio', 'board_column', 'position'],
   priorities: ['name', 'color', 'is_default', 'position'],
 };
-const BOARD_COLUMNS = ['new', 'design', 'develop', 'testing', 'closed'];
+const BOARD_COLUMNS = ['tickets', 'new', 'design', 'develop', 'testing', 'closed'];
 const USAGE_COL = { types: 'type_id', statuses: 'status_id', priorities: 'priority_id' };
 
 for (const [table, cols] of Object.entries(ENUMS)) {

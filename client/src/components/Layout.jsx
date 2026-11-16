@@ -6,6 +6,7 @@ import { useApp } from '../context.jsx';
 import { api, qs } from '../api.js';
 import NewProjectModal from '../pages/NewProjectModal.jsx';
 import ConnectionStatus from './ConnectionStatus.jsx';
+import NewWpModal from '../pages/NewWpModal.jsx';
 
 function BrandMark() {
   return <img className="brand-mark" src="/logo-tile.png" alt="" width="30" height="30" />;
@@ -90,6 +91,7 @@ function ThemeToggle() {
 }
 
 export default function Layout() {
+  const [ticketOpen, setTicketOpen] = useState(false);
   const { user, me, projects, can, isAdmin, appName, reload } = useApp();
   const [navOpen, setNavOpen] = useState(false);
   // Desktop: collapse the sidebar to an icon rail (remembered per browser). Phone: slide-in menu.
@@ -142,11 +144,15 @@ export default function Layout() {
       </aside>
       {navOpen && <div className="modal-backdrop" style={{ zIndex: 80, background: 'rgba(0,0,0,.3)' }} onClick={() => setNavOpen(false)} />}
       <div className="main">
+        {ticketOpen && <NewTicketModal onClose={() => setTicketOpen(false)} />}
         <header className="topbar">
           <button type="button" className="icon-btn menu-btn" onClick={toggleMenu} aria-expanded={menuOpen}
             aria-label={menuOpen ? 'Collapse menu' : 'Expand menu'} title={menuOpen ? 'Collapse menu' : 'Expand menu'}><Icon name="menu" /></button>
           <GlobalSearch />
           <div className="topbar-actions">
+            <button type="button" className="btn sm new-ticket-btn" onClick={() => setTicketOpen(true)} title="Raise a new ticket">
+              <Icon name="plus" size={15} /><span>New Ticket</span>
+            </button>
             <ConnectionStatus />
             <Link to="/notifications" className="icon-btn" aria-label={`Alerts${me?.unread ? `, ${me.unread} unread` : ''}`}>
               <Icon name="bell" />{me?.unread > 0 && <span className="badge-dot">{me.unread > 99 ? '99+' : me.unread}</span>}
@@ -170,5 +176,16 @@ export default function Layout() {
       </div>
       {newProject && <NewProjectModal onClose={() => setNewProject(false)} />}
     </div>
+  );
+}
+
+// "New Ticket" in the top bar: a work package of type Ticket in the Ticket status (first column of the Task Board).
+function NewTicketModal({ onClose }) {
+  const { meta } = useApp();
+  const type = meta.types.find(t => t.name === 'Ticket');
+  const status = meta.statuses.find(s => s.board_column === 'tickets');
+  return (
+    <NewWpModal title="New ticket" defaults={{ ...(type ? { type_id: type.id } : {}), ...(status ? { status_id: status.id } : {}) }} onClose={onClose}
+      onCreated={() => window.dispatchEvent(new Event('pt-wp-created'))} />
   );
 }

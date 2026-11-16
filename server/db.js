@@ -148,6 +148,21 @@ function migrate() {
     });
   }
 
+  // Tickets: a "Ticket" type and a "Ticket" status shown in the Task Board's first column
+  if (getSetting('migration_tickets_v1') === null) {
+    tx(() => {
+      if (!get("SELECT id FROM types WHERE name = 'Ticket'")) {
+        run("INSERT INTO types(name, color, is_milestone, position) VALUES('Ticket', '#E5484D', 0, (SELECT COALESCE(MAX(position), 0) + 1 FROM types))");
+      }
+      if (!get("SELECT id FROM statuses WHERE name = 'Ticket'")) {
+        const first = get('SELECT COALESCE(MIN(position), 0) AS p FROM statuses').p;
+        run("INSERT INTO statuses(name, color, is_closed, is_default, position, board_column) VALUES('Ticket', '#E5484D', 0, 0, ?, 'tickets')", first - 1);
+        all('SELECT id FROM statuses ORDER BY position, id').forEach((s, i) => run('UPDATE statuses SET position = ? WHERE id = ?', i, s.id));
+      } else run("UPDATE statuses SET board_column = 'tickets' WHERE name = 'Ticket'");
+      setSetting('migration_tickets_v1', '1');
+    });
+  }
+
   // Design / Develop / Testing: one person per stage on every work package.
   const wpCols = all('PRAGMA table_info(work_packages)').map(c => c.name);
   for (const c of ['designer_id', 'developer_id', 'tester_id']) {

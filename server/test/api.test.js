@@ -293,7 +293,8 @@ test('kanban board: columns, date range, employee and project filters', async ()
   const q = `/board?from=2026-09-07&to=2026-09-11&project_id=${p.id}`;
   let r = await admin.get(q);
   assert.equal(r.status, 200, JSON.stringify(r.data));
-  assert.deepEqual(r.data.columns.map(c => c.name), ['New', 'In Design', 'In Develop', 'In Testing', 'Closed']);
+  assert.deepEqual(r.data.columns.map(c => c.name), ['Tickets', 'New', 'In Design', 'In Develop', 'In Testing', 'Closed']);
+  assert.ok(r.data.columns[0].statuses.some(st => st.name === 'Ticket'), 'Ticket status in the Tickets column');
   const ids2 = r.data.rows.map(x => x.id);
   assert.ok(ids2.includes(inWeek.id) && ids2.includes(spanning.id) && ids2.includes(undated.id));
   assert.ok(!ids2.includes(nextWeek.id));
@@ -660,4 +661,16 @@ test('occupancy per project member, totals on teams and a person\'s projects wit
   assert.equal(pa.pm[0].id, me);
   assert.ok(pa.pm[0].email.includes('@'));
   assert.ok(Array.isArray(pa.am));
+});
+
+test('tickets: raised in the Ticket status show in the first column', async () => {
+  const meta = (await admin.get('/meta')).data;
+  const type = meta.types.find(t => t.name === 'Ticket');
+  const status = meta.statuses.find(s => s.board_column === 'tickets');
+  assert.ok(type && status);
+  const p = (await admin.post('/projects', { name: 'Ticket Test', identifier: 'TKT' })).data;
+  const wp = (await admin.post('/work-packages', { project_id: p.id, subject: 'Printer offline', type_id: type.id, status_id: status.id })).data;
+  const today = new Date().toISOString().slice(0, 10);
+  const r = await admin.get(`/board?from=${today}&to=${today}&project_id=${p.id}`);
+  assert.equal(r.data.rows.find(x => x.id === wp.id).board_column, 'tickets');
 });

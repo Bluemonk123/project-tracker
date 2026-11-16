@@ -45,12 +45,14 @@ function StageTracker({ wp }) {
     p.visits += 1;
   }
   const current = wp.board_column || 'develop';
-  const curIdx = STAGES.findIndex(x => x.key === current);
+  // tasks raised as tickets get a Ticket step first
+  const steps = current === 'tickets' || wp.stages.some(x => x.stage === 'tickets') ? [{ key: 'tickets', name: 'Ticket', color: '#E5484D' }, ...STAGES] : STAGES;
+  const curIdx = steps.findIndex(x => x.key === current);
   const moves = wp.stages.slice(1).reverse();
   return (
     <>
-      <div className="stage-track">
-        {STAGES.map((st, i) => {
+      <div className="stage-track" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
+        {steps.map((st, i) => {
           const p = per[st.key];
           const hours = st.activity ? wp.stage_hours?.[st.activity] : null;
           return (
@@ -71,7 +73,7 @@ function StageTracker({ wp }) {
         <ul className="stage-history">
           {moves.slice(0, 6).map((m, i) => (
             <li key={i} title={fmtDateTime(m.entered_at)}>
-              Moved to <b>{STAGES.find(x => x.key === m.stage)?.name || m.stage}</b> by {m.user_name || 'someone'}, {timeAgo(m.entered_at)}
+              Moved to <b>{steps.find(x => x.key === m.stage)?.name || m.stage}</b> by {m.user_name || 'someone'}, {timeAgo(m.entered_at)}
             </li>
           ))}
         </ul>

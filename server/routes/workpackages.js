@@ -157,6 +157,7 @@ r.get('/work-packages', (req, res) => {
 
 // ---------- Kanban board (New / In Design / In Develop / In Testing / Closed) ----------
 export const BOARD_COLUMNS = [
+  { key: 'tickets', name: 'Tickets', color: '#E5484D' },
   { key: 'new', name: 'New', color: '#8FD9C4' },
   { key: 'design', name: 'In Design', color: '#B79BDB' },
   { key: 'develop', name: 'In Develop', color: '#5BC8DE' },
@@ -322,7 +323,7 @@ function nextNumber(projectId) {
 export const STAGE_FIELD = { design: 'designer_id', develop: 'developer_id', testing: 'tester_id' };
 const STAGE_LABEL = { designer_id: 'Designer', developer_id: 'Developer', tester_id: 'Tester' };
 const STAGE_ROLE = { designer_id: 'designer', developer_id: 'developer', tester_id: 'tester' };
-const STAGE_NAME = { new: 'New', design: 'In Design', develop: 'In Develop', testing: 'In Testing', closed: 'Closed' };
+const STAGE_NAME = { tickets: 'Ticket', new: 'New', design: 'In Design', develop: 'In Develop', testing: 'In Testing', closed: 'Closed' };
 const stageOf = (statusId) => get('SELECT board_column FROM statuses WHERE id = ?', statusId)?.board_column || 'develop';
 function enterStage(wpId, stage, userId) {
   run("UPDATE wp_stages SET left_at = datetime('now') WHERE wp_id = ? AND left_at IS NULL", wpId);

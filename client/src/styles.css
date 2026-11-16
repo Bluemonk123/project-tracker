@@ -856,3 +856,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 /* tables written in a project brief: keep the first column (e.g. "Layer") on one line */
 .pb-brief table td:first-child, .pb-brief table th:first-child { white-space: nowrap; font-weight: 600; }
 .pb-brief table { font-size: 13px; }
+/* New Ticket button in the top bar */
+.new-ticket-btn { border-color: color-mix(in srgb, #E5484D 45%, var(--line)); color: #C4262C; background: color-mix(in srgb, #E5484D 7%, var(--surface)); font-weight: 600; }
+.new-ticket-btn:hover { background: color-mix(in srgb, #E5484D 14%, var(--surface)); border-color: #E5484D; }
+@media (max-width: 640px) { .new-ticket-btn span { display: none; } }
