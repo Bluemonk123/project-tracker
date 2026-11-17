@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, qs } from '../api.js';
 import { useApp, useLoad } from '../context.jsx';
@@ -72,6 +72,10 @@ function Card({ w, column, onDragStart, onDragEnd, dragging, onLog, onRemarks })
       )}
       <div className="kb-foot">
         {w.assignee_name ? <Avatar id={w.assignee_id} name={w.assignee_name} size="sm" /> : <span />}
+        {w.remarks_count > 0 && (
+          <button type="button" className="kb-rc" draggable={false} title={`${w.remarks_count} remark${w.remarks_count === 1 ? '' : 's'}`}
+            onClick={(e) => { e.stopPropagation(); onRemarks(w); }} onKeyDown={(e) => e.stopPropagation()}><Icon name="chat" size={12} />{w.remarks_count}</button>
+        )}
         {primary && w.status_id !== primary.id && <span className="kb-status" style={{ '--c': w.status_color }}>{w.status_name}</span>}
         <span className="spacer" />
         {dates && <span className={`kb-dates${overdue ? ' overdue' : ''}`}>{dates}</span>}
@@ -152,7 +156,24 @@ export default function KanbanBoard({ project }) {
   }, [project, activeUsers]);
 
   const columns = data?.columns || [];
-  const rows = data?.rows || [];
+  // quick find across the cards on the board (subject, ID, ticket number, assignee)
+  const [find, setFind] = useState('');
+  const needle = find.trim().toLowerCase();
+  const matches = (...vals) => !needle || vals.some(v => String(v ?? '').toLowerCase().includes(needle));
+  const rows = (data?.rows || []).filter(r => matches(r.subject, r.key, r.assignee_name, r.project_name, r.ticket_no));
+  const tickets = data?.tickets ? data.tickets.filter(t => matches(t.subject_display, t.ticket_no, t.assignee_name, t.requester_display)) : null;
+  // Compact cards fit many more on screen (remembered in this browser)
+  const [dense, setDense] = useState(() => { try { return localStorage.getItem('pt-board-density') === 'compact'; } catch { return false; } });
+  const toggleDense = (v) => { setDense(v); try { localStorage.setItem('pt-board-density', v ? 'compact' : 'comfortable'); } catch { /* ignore */ } };
+  // the board fills the rest of the window; each column scrolls on its own, headers stay in view
+  const boardRef = useRef(null);
+  const [boardTop, setBoardTop] = useState(260);
+  useEffect(() => {
+    const measure = () => { if (boardRef.current) setBoardTop(Math.max(120, boardRef.current.getBoundingClientRect().top + window.scrollY)); };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [loading, data ? 1 : 0]);
   const byColumn = (c) => rows.filter(r => r.board_column === c.key);
   const sum = (list, k) => list.reduce((t, r) => t + (r[k] || 0), 0);
 
@@ -170,7 +191,7 @@ export default function KanbanBoard({ project }) {
   const canCreateIn = project ? project.permissions.includes('wp.create') : projects.length > 0;
 
   return (
-    <div className="content wide kb">
+    <div className={`content wide kb${dense ? ' dense' : ''}`}>
       <div className="kb-head">
         {!project && <h1>Task Board</h1>}
         <div className="kb-filters" role="group" aria-label="Board filters">
@@ -206,22 +227,30 @@ export default function KanbanBoard({ project }) {
           {(employee || (!project && projectId) || !isThisWeek || !undated) && (
             <button className="btn sm ghost" onClick={() => setSp({}, { replace: true })}>Reset</button>
           )}
+          <span className="spacer" />
+          <label className="kb-field kb-find"><span>Find</span>
+            <input type="search" placeholder="Subject, ID or person" value={find} onChange={(e) => setFind(e.target.value)} />
+          </label>
+          <div className="kb-density" role="group" aria-label="Card size">
+            <button type="button" className={!dense ? 'active' : ''} aria-pressed={!dense} onClick={() => toggleDense(false)} title="Full cards">Comfortable</button>
+            <button type="button" className={dense ? 'active' : ''} aria-pressed={dense} onClick={() => toggleDense(true)} title="Small cards: fit many more on screen">Compact</button>
+          </div>
         </div>
       </div>
 
       <ErrorBox error={error} />
       {loading && !data ? <Loading /> : (
-        <div className="kb-board">
-          {data?.tickets && (
+        <div className="kb-board" ref={boardRef} style={{ '--kb-h': `calc(100vh - ${Math.round(boardTop)}px - 34px)` }}>
+          {tickets && (
             <section className="kb-col" aria-label="Tickets">
               <div className="kb-col-head" style={{ '--cc': '#E5484D' }}>
-                <div className="kb-col-title"><h2>Tickets</h2><span className="kb-count">{data.tickets.length}</span></div>
+                <div className="kb-col-title"><h2>Tickets</h2><span className="kb-count">{tickets.length}</span></div>
                 <button type="button" className="kb-add" onClick={() => setRaising(true)} title="Raise a ticket" aria-label="Raise a ticket"><Icon name="plus" /></button>
               </div>
               <div className="kb-cards">
-                {data.tickets.map(t => <TicketCard key={t.id} t={t} draggable={!!data.can_convert} dragging={dragTicket === t.ticket_no}
+                {tickets.map(t => <TicketCard key={t.id} t={t} draggable={!!data.can_convert} dragging={dragTicket === t.ticket_no}
                   onDragStart={() => setDragTicket(t.ticket_no)} onDragEnd={() => { setDragTicket(null); setOver(null); }} />)}
-                {!data.tickets.length && <div className="kb-empty">No open tickets</div>}
+                {!tickets.length && <div className="kb-empty">{needle ? 'No matching tickets' : 'No open tickets'}</div>}
               </div>
             </section>
           )}
@@ -268,7 +297,7 @@ export default function KanbanBoard({ project }) {
                 </div>
                 <div className="kb-cards">
                   {items.map(w => <Card key={w.id} w={w} column={col} dragging={dragId === w.id} onLog={setLogging} onRemarks={setRemarksFor} onDragStart={setDragId} onDragEnd={() => { setDragId(null); setOver(null); }} />)}
-                  {!items.length && <div className="kb-empty">Nothing here for this period</div>}
+                  {!items.length && <div className="kb-empty">{needle ? 'No matching cards' : 'Nothing here for this period'}</div>}
                 </div>
               </section>
             );
