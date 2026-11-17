@@ -237,10 +237,20 @@ function migrate() {
          proposed_roles = replace(proposed_roles, '"Account Manager"', '"Project Manager"')`);
     setSetting('migration_team_role_pm_v1', '1');
   }
+  // Task Board: a last "Rejected" column. The existing Rejected status moves there (or one is added).
+  if (getSetting('migration_rejected_col_v1') === null) {
+    const rj = get("SELECT id FROM statuses WHERE lower(name) = 'rejected'");
+    if (rj) run("UPDATE statuses SET board_column = 'rejected', is_closed = 1 WHERE id = ?", rj.id);
+    else run("INSERT INTO statuses(name, color, is_closed, is_default, position, board_column) VALUES('Rejected', '#C25B6B', 1, 0, (SELECT COALESCE(MAX(position), 0) + 1 FROM statuses), 'rejected')");
+    setSetting('migration_rejected_col_v1', '1');
+  }
   // ---------- Ticket Board (helpdesk) ----------
   const nCols = all('PRAGMA table_info(notifications)').map(c => c.name);
   if (!nCols.includes('ticket_id')) db.exec('ALTER TABLE notifications ADD COLUMN ticket_id INTEGER REFERENCES tickets(id) ON DELETE CASCADE');
   if (!nCols.includes('link')) db.exec('ALTER TABLE notifications ADD COLUMN link TEXT');
+  // a ticket converted into a task stays linked to it
+  if (!all('PRAGMA table_info(tickets)').some(c => c.name === 'wp_id')) db.exec('ALTER TABLE tickets ADD COLUMN wp_id INTEGER REFERENCES work_packages(id) ON DELETE SET NULL');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_tickets_wp ON tickets(wp_id)');
   for (const [k, v] of [['ticket_sla_hours_urgent', 4], ['ticket_sla_hours_high', 8], ['ticket_sla_hours_normal', 24]]) {
     if (getSetting(k) === null) setSetting(k, v);
   }

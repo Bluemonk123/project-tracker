@@ -136,7 +136,7 @@ export function LinkEditor({ links, onChange }) {
   );
 }
 
-export default function NewWpModal({ projectId: fixedProject, defaults = {}, onClose, onCreated, title = 'New task' }) {
+export default function NewWpModal({ projectId: fixedProject, defaults = {}, onClose, onCreated, title = 'New task', createUrl = '/work-packages', single = false, intro = null }) {
   const { meta, projects, user, activeUsers, toast } = useApp();
   const nav = useNavigate();
   const writable = projects.filter(p => !p.archived);
@@ -185,7 +185,7 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
     if (isMilestone) body.start_date = body.due_date;
     setBusy(true);
     let wp;
-    try { wp = await api.post('/work-packages', body); }
+    try { wp = await api.post(createUrl, body); }
     catch (e) { setError(e); setBusy(false); return; }
     const failed = [];
     if (logHours > 0) {
@@ -206,9 +206,10 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
     <Modal title={title} wide onClose={onClose} onSubmit={() => submit(false)} footer={<>
       <span className="xs muted" style={{ marginRight: 'auto' }}>Ctrl + Enter saves</span>
       <button type="button" className="btn" onClick={onClose}>Cancel</button>
-      <button type="button" className="btn" disabled={busy} onClick={() => submit(true)}>Create and add another</button>
+      {!single && <button type="button" className="btn" disabled={busy} onClick={() => submit(true)}>Create and add another</button>}
       <button className="btn primary" disabled={busy}>{busy ? 'Saving…' : 'Create task'}</button>
     </>}>
+      {intro}
       <ErrorBox error={error} />
       <div className="form-grid three">
         <Field label="Project">

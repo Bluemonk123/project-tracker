@@ -147,7 +147,10 @@ r.delete('/attachments/:id', (req, res) => {
   const a = get('SELECT * FROM attachments WHERE id = ?', req.params.id) || fail(404, 'File not found.');
   if (a.uploaded_by !== req.user.id) need(req, 'wp.edit', a.project_id);
   run('DELETE FROM attachments WHERE id = ?', a.id);
-  fs.rmSync(path.join(UPLOAD_DIR, path.basename(a.stored_name)), { force: true });
+  // the same file may also belong to a ticket (a ticket converted into a task) or another attachment row
+  const stillUsed = get('SELECT 1 AS x FROM attachments WHERE stored_name = ? LIMIT 1', a.stored_name)
+    || get('SELECT 1 AS x FROM ticket_attachments WHERE stored_name = ? LIMIT 1', a.stored_name);
+  if (!stillUsed) fs.rmSync(path.join(UPLOAD_DIR, path.basename(a.stored_name)), { force: true });
   res.json({ ok: true });
 });
 

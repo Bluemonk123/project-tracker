@@ -3,7 +3,7 @@ import { get, all, run, tx } from '../db.js';
 import { need, can, fail, visibleProjectIds } from '../access.js';
 import { requireText, dateOrNull, intOrNull, numOrNull, notify, mentionedUserIds, todayISO } from '../util.js';
 import { resolveProject } from './projects.js';
-import { boardTickets } from './tickets.js';
+import { boardTickets, solveLinkedTickets } from './tickets.js';
 
 const r = Router();
 
@@ -163,6 +163,7 @@ export const BOARD_COLUMNS = [
   { key: 'develop', name: 'In Develop', color: '#5BC8DE' },
   { key: 'testing', name: 'In Testing', color: '#F39219' },
   { key: 'closed', name: 'Closed', color: '#7D8796' },
+  { key: 'rejected', name: 'Rejected', color: '#C25B6B' },
 ];
 
 r.get('/board', (req, res) => {
@@ -180,7 +181,8 @@ r.get('/board', (req, res) => {
   const columns = BOARD_COLUMNS.map(c => ({ ...c, statuses: statuses.filter(st => st.board_column === c.key) }));
   // helpdesk tickets in a first "Tickets" column: company-wide board only, for people who can open the Ticket Board
   const tickets = !q.project_id && can(req, 'tickets.view') ? boardTickets(req, q.assignee_id) : null;
-  if (!projectIds.length) return res.json({ columns, rows: [], tickets });
+  const can_convert = !!tickets && can(req, 'tickets.edit');
+  if (!projectIds.length) return res.json({ columns, rows: [], tickets, can_convert });
   const where = [`wp.project_id IN (${projectIds.map(() => '?').join(',')})`];
   const params = [...projectIds];
   // dated work overlapping the range; undated work that is still open, or was closed/changed in the range
@@ -197,14 +199,57 @@ r.get('/board', (req, res) => {
   if (/^\d+$/.test(q.type_id || '')) { where.push('wp.type_id = ?'); params.push(Number(q.type_id)); }
   const rows = all(`${BASE_SELECT} WHERE ${where.join(' AND ')}
                     ORDER BY wp.due_date IS NULL, wp.due_date, pr.position DESC, wp.id LIMIT 2000`, ...params)
-    .map(w => ({ ...w, can_edit: canEditWp(req, w), can_log: can(req, 'time.log', w.project_id) }));
+    .map(w => ({ ...w, can_edit: canEditWp(req, w), can_log: can(req, 'time.log', w.project_id), can_remark: canRemark(req, w) }));
+  // remarks count and the ticket a task came from
+  if (rows.length) {
+    const ids = rows.map(w => w.id).join(',');
+    const rc = new Map(all(`SELECT wp_id, COUNT(*) AS n FROM wp_remarks WHERE wp_id IN (${ids}) GROUP BY wp_id`).map(x => [x.wp_id, x.n]));
+    const tk = new Map(all(`SELECT wp_id, ticket_no FROM tickets WHERE wp_id IN (${ids})`).map(x => [x.wp_id, x.ticket_no]));
+    for (const w of rows) { w.remarks_count = rc.get(w.id) || 0; w.ticket_no = tk.get(w.id) || null; }
+  }
   // hours logged on each task within the board's date range
   if (rows.length) {
     const inRange = new Map(all(`SELECT wp_id, SUM(hours) AS h FROM time_entries WHERE wp_id IN (${rows.map(() => '?').join(',')})
                                  AND spent_on BETWEEN ? AND ? GROUP BY wp_id`, ...rows.map(w => w.id), q.from, q.to).map(x => [x.wp_id, x.h]));
     for (const w of rows) w.range_hours = inRange.get(w.id) || 0;
   }
-  res.json({ columns, rows, tickets });
+  res.json({ columns, rows, tickets, can_convert });
+});
+
+// ---------- remarks: several short notes per task, each addressed to a chosen person ----------
+const canRemark = (req, wp) => can(req, 'wp.comment', wp.project_id) || canEditWp(req, wp);
+function remarksOf(wpId) {
+  return all(`SELECT r.id, r.body, r.user_id, r.created_by, r.created_at, u.name AS user_name, c.name AS created_by_name
+              FROM wp_remarks r LEFT JOIN users u ON u.id = r.user_id LEFT JOIN users c ON c.id = r.created_by
+              WHERE r.wp_id = ? ORDER BY r.created_at DESC, r.id DESC`, wpId);
+}
+r.get('/work-packages/:id/remarks', (req, res) => {
+  const wp = loadWp(req.params.id);
+  need(req, 'wp.view', wp.project_id);
+  res.json({ remarks: remarksOf(wp.id), can_add: canRemark(req, wp), can_edit: canEditWp(req, wp) });
+});
+r.post('/work-packages/:id/remarks', (req, res) => {
+  const wp = loadWp(req.params.id);
+  need(req, 'wp.view', wp.project_id);
+  if (!canRemark(req, wp)) fail(403, 'You do not have permission to add remarks to this task.');
+  const body = String(req.body.body ?? '').trim();
+  if (!body) fail(400, 'Write the remark.');
+  if (body.length > 2000) fail(400, 'A remark can be up to 2000 characters.');
+  const uid = Number(req.body.user_id);
+  const u = uid ? get("SELECT id, name FROM users WHERE id = ? AND status = 'active'", uid) : null;
+  if (!u) fail(400, 'Choose the person this remark is for.');
+  const id = run('INSERT INTO wp_remarks(wp_id, user_id, body, created_by) VALUES(?,?,?,?)', wp.id, u.id, body, req.user.id).id;
+  run('UPDATE work_packages SET updated_at = datetime(\'now\') WHERE id = ?', wp.id);
+  notify([u.id], { actorId: req.user.id, projectId: wp.project_id, wpId: wp.id, reason: 'remark',
+    message: `${req.user.name} added a remark for you on ${wp.key}: ${body.length > 200 ? body.slice(0, 199) + '…' : body}` });
+  res.status(201).json({ id, remarks: remarksOf(wp.id) });
+});
+r.delete('/remarks/:id', (req, res) => {
+  const rm = get('SELECT * FROM wp_remarks WHERE id = ?', Number(req.params.id)) || fail(404, 'Remark not found.');
+  const wp = loadWp(rm.wp_id);
+  if (rm.created_by !== req.user.id && !canEditWp(req, wp)) fail(403, 'Only the person who wrote a remark, or someone who can edit the task, can delete it.');
+  run('DELETE FROM wp_remarks WHERE id = ?', rm.id);
+  res.json({ ok: true, remarks: remarksOf(wp.id) });
 });
 
 r.get('/work-packages/export.csv', (req, res) => {
@@ -325,7 +370,7 @@ function nextNumber(projectId) {
 export const STAGE_FIELD = { design: 'designer_id', develop: 'developer_id', testing: 'tester_id' };
 const STAGE_LABEL = { designer_id: 'Designer', developer_id: 'Developer', tester_id: 'Tester' };
 const STAGE_ROLE = { designer_id: 'designer', developer_id: 'developer', tester_id: 'tester' };
-const STAGE_NAME = { tickets: 'Ticket', new: 'New', design: 'In Design', develop: 'In Develop', testing: 'In Testing', closed: 'Closed' };
+const STAGE_NAME = { tickets: 'Ticket', new: 'New', design: 'In Design', develop: 'In Develop', testing: 'In Testing', closed: 'Closed', rejected: 'Rejected' };
 const stageOf = (statusId) => get('SELECT board_column FROM statuses WHERE id = ?', statusId)?.board_column || 'develop';
 function enterStage(wpId, stage, userId) {
   run("UPDATE wp_stages SET left_at = datetime('now') WHERE wp_id = ? AND left_at IS NULL", wpId);
@@ -431,13 +476,15 @@ r.get('/work-packages/:id', (req, res) => {
     ancestors.unshift(a);
     cur = a.parent_id;
   }
+  const remarks = remarksOf(wp.id);
+  const ticket = get('SELECT ticket_no, status FROM tickets WHERE wp_id = ? ORDER BY id LIMIT 1', wp.id) || null;
   res.json({
-    ...wp, children, relations, journals, watchers, attachments, links, time, meetings, ancestors, stages, stage_hours, max_files: 5,
+    ...wp, children, relations, journals, watchers, attachments, links, time, meetings, ancestors, stages, stage_hours, max_files: 5, remarks, ticket,
     can: {
       edit: canEditWp(req, wp), assign: can(req, 'wp.assign', wp.project_id) || can(req, 'wp.edit', wp.project_id),
       delete: can(req, 'wp.delete', wp.project_id), comment: can(req, 'wp.comment', wp.project_id),
       log_time: can(req, 'time.log', wp.project_id), upload: can(req, 'files.upload', wp.project_id),
-      create: can(req, 'wp.create', wp.project_id),
+      create: can(req, 'wp.create', wp.project_id), remark: canRemark(req, wp), open_ticket: can(req, 'tickets.view'),
     },
     watching: watchers.some(w => w.id === req.user.id),
   });
@@ -527,6 +574,8 @@ export function updateWp(req, wp, body) {
     }
     const mentioned = [...mentionedUserIds(note), ...(changes.description ? mentionedUserIds(f.description) : [])];
     notify(mentioned, { actorId: req.user.id, projectId, wpId: wp.id, reason: 'mentioned', message: `${req.user.name} mentioned you in ${fresh.key}: ${fresh.subject}` });
+    // closing a task solves its tickets (rejecting it does not: the ticket stays for the support team to answer)
+    if (changes.status_id && fresh.is_closed && !wp.is_closed && fresh.board_column !== 'rejected') solveLinkedTickets(req, fresh);
     return fresh;
   });
 }

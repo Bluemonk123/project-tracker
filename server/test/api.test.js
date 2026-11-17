@@ -299,7 +299,8 @@ test('kanban board: columns, date range, employee and project filters', async ()
   const q = `/board?from=2026-09-07&to=2026-09-11&project_id=${p.id}`;
   let r = await admin.get(q);
   assert.equal(r.status, 200, JSON.stringify(r.data));
-  assert.deepEqual(r.data.columns.map(c => c.name), ['New', 'In Design', 'In Develop', 'In Testing', 'Closed']);
+  assert.deepEqual(r.data.columns.map(c => c.name), ['New', 'In Design', 'In Develop', 'In Testing', 'Closed', 'Rejected']);
+  assert.ok(r.data.columns[5].statuses.some(st => st.name === 'Rejected'), 'Rejected status in the Rejected column');
   const ids2 = r.data.rows.map(x => x.id);
   assert.ok(ids2.includes(inWeek.id) && ids2.includes(spanning.id) && ids2.includes(undated.id));
   assert.ok(!ids2.includes(nextWeek.id));

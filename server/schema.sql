@@ -531,3 +531,14 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id);
+
+-- Remarks on a task: short notes addressed to a chosen person (several per task)
+CREATE TABLE IF NOT EXISTS wp_remarks (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  wp_id      INTEGER NOT NULL REFERENCES work_packages(id) ON DELETE CASCADE,
+  user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,   -- the person the remark is for
+  body       TEXT NOT NULL,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_wp_remarks ON wp_remarks(wp_id, created_at);

@@ -353,3 +353,60 @@ test('Task Board: open tickets in a first column for Ticket Board users only', a
   assert.equal((await agent.get(q + '&assignee_id=none')).data.tickets.every(t => !t.assignee_id), true);
   assert.equal((await staff.get(q)).data.tickets, null);
 });
+
+test('convert a ticket into a task: linked, files carried over, solved when the task closes', async () => {
+  const proj = (await admin.post('/projects', { name: 'Helpdesk Work', identifier: 'HDW' })).data;
+  assert.ok(proj.id, JSON.stringify(proj));
+  const meta = (await admin.get('/meta')).data;
+  const newStatus = meta.statuses.find(s => s.board_column === 'new');
+  const closed = meta.statuses.find(s => s.is_closed);
+  const raised = (await staff.post('/tickets/raise', form({ subject: 'Export is slow', description: 'Takes 5 minutes' }, [['s.png', PNG]]))).data.ticket_no;
+  assert.equal((await other.post(`/tickets/${raised}/convert`, { project_id: proj.id })).status, 403);
+  let r = await admin.post(`/tickets/${raised}/convert`, { project_id: proj.id, status_id: newStatus.id });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const wp = r.data;
+  assert.equal(wp.subject, 'Export is slow');
+  assert.match(wp.description, /Takes 5 minutes/);
+  assert.equal(wp.status_id, newStatus.id);
+  const t = get('SELECT * FROM tickets WHERE ticket_no = ?', raised);
+  assert.equal(t.wp_id, wp.id);
+  assert.ok(all('SELECT body FROM ticket_messages WHERE ticket_id = ?', t.id).some(m => m.body === `Converted to task ${wp.key}`));
+  const detail = (await admin.get(`/work-packages/${wp.id}`)).data;
+  assert.equal(detail.ticket.ticket_no, raised);
+  assert.equal(detail.attachments.length, 1);
+  assert.equal((await admin.get(`/tickets/${raised}`)).data.linked_task.key, wp.key);
+  assert.equal((await admin.post(`/tickets/${raised}/convert`, { project_id: proj.id })).status, 400);
+  const board = (await admin.get('/board?from=2020-01-01&to=2030-12-31')).data;
+  assert.ok(!board.tickets.some(x => x.ticket_no === raised), 'converted ticket leaves the Tickets column');
+  assert.equal(board.rows.find(x => x.id === wp.id).ticket_no, raised);
+  // deleting the task's copy of the file keeps the ticket's file
+  const a = detail.attachments[0];
+  await admin.del(`/attachments/${a.id}`);
+  assert.equal(fs.existsSync(path.join(tmp, 'uploads', a.stored_name)), true);
+  // closing the task solves the ticket and tells the requester
+  const before = notes(ids.staff).length;
+  r = await admin.patch(`/work-packages/${wp.id}`, { status_id: closed.id });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(get('SELECT status FROM tickets WHERE id = ?', t.id).status, 'solved');
+  assert.ok(notes(ids.staff).slice(before).some(n => n.message.startsWith(`Ticket ${raised} is Solved`)));
+  ids.proj = proj; ids.wp = wp;
+});
+
+test('remarks: several per task, each for a chosen person who is alerted', async () => {
+  const wp = ids.wp;
+  let r = await admin.post(`/work-packages/${wp.id}/remarks`, { body: 'Check with the client', user_id: '' });
+  assert.equal(r.status, 400);
+  r = await admin.post(`/work-packages/${wp.id}/remarks`, { body: 'Check with the client', user_id: ids.agent });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  r = await admin.post(`/work-packages/${wp.id}/remarks`, { body: 'Needs a second review', user_id: ids.staff });
+  assert.equal(r.data.remarks.length, 2);
+  assert.equal(r.data.remarks[0].user_name, 'Sam Staff');
+  assert.ok(notes(ids.agent).some(n => n.reason === 'remark' && n.message.includes('Check with the client')));
+  assert.equal((await admin.get(`/work-packages/${wp.id}`)).data.remarks.length, 2);
+  assert.equal((await admin.get('/board?from=2020-01-01&to=2030-12-31')).data.rows.find(x => x.id === wp.id).remarks_count, 2);
+  // someone outside the project can't add one; only the author or an editor can delete
+  assert.equal((await other.post(`/work-packages/${wp.id}/remarks`, { body: 'x', user_id: ids.admin })).status, 403);
+  const rid = r.data.remarks[0].id;
+  assert.equal((await other.del(`/remarks/${rid}`)).status, 403);
+  assert.equal((await admin.del(`/remarks/${rid}`)).data.remarks.length, 1);
+});

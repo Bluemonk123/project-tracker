@@ -8,6 +8,7 @@ import NewWpModal from './NewWpModal.jsx';
 import { LogTimeModal } from './Time.jsx';
 import RaiseTicketModal from './tickets/RaiseTicketModal.jsx';
 import { TicketPriority, SlaBadge } from './tickets/common.jsx';
+import { RemarksModal } from './Remarks.jsx';
 import { addDays, diffDays, fmtDate, startOfWeek, today, parseDate } from '../lib/format.js';
 
 const h = (n) => `${Math.round((n || 0) * 100) / 100} h`;
@@ -28,7 +29,7 @@ function cardDates(w) {
   return `${fmtDate(s)} – ${fmtDate(e)}`;
 }
 
-function Card({ w, column, onDragStart, onDragEnd, dragging, onLog }) {
+function Card({ w, column, onDragStart, onDragEnd, dragging, onLog, onRemarks }) {
   const nav = useNavigate();
   const overdue = !w.is_closed && w.due_date && w.due_date < today();
   const dates = cardDates(w);
@@ -41,7 +42,7 @@ function Card({ w, column, onDragStart, onDragEnd, dragging, onLog }) {
       onClick={() => nav(`/wp/${w.id}`)} onKeyDown={(e) => { if (e.key === 'Enter') nav(`/wp/${w.id}`); }}
       onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(w.id)); e.dataTransfer.effectAllowed = 'move'; onDragStart(w.id); }}
       onDragEnd={onDragEnd}>
-      <div className="kb-meta">#{w.key} - {w.project_name}</div>
+      <div className="kb-meta">#{w.key} - {w.project_name}{w.ticket_no ? <span className="kb-ticket" title="Converted from this ticket"> · Ticket #{w.ticket_no}</span> : null}</div>
       <div className="kb-title"><span className="kb-type" style={{ color: w.type_color }}>{w.type_name.toUpperCase()}</span> {w.subject}</div>
       {(est > 0 || spent > 0 || w.can_log) && (
         <div className="kb-hours">
@@ -63,16 +64,27 @@ function Card({ w, column, onDragStart, onDragEnd, dragging, onLog }) {
           {dates && <span className={`kb-dates${overdue ? ' overdue' : ''}`}>{dates}</span>}
         </div>
       )}
+      {(w.remarks_count > 0 || w.can_remark) && (
+        <button type="button" className={`kb-remarks${w.remarks_count ? ' has' : ''}`} draggable={false}
+          title={w.remarks_count ? `${w.remarks_count} remark${w.remarks_count === 1 ? '' : 's'}` : 'Add a remark'}
+          aria-label={`Remarks on ${w.key}: ${w.remarks_count}`}
+          onClick={(e) => { e.stopPropagation(); onRemarks(w); }} onKeyDown={(e) => e.stopPropagation()}>
+          <Icon name="chat" size={13} />{w.remarks_count ? `${w.remarks_count} remark${w.remarks_count === 1 ? '' : 's'}` : 'Add remark'}
+        </button>
+      )}
     </article>
   );
 }
 
 // A helpdesk ticket in the first column: opens it on the Ticket Board.
-function TicketCard({ t }) {
+function TicketCard({ t, draggable, onDragStart, onDragEnd, dragging }) {
   const nav = useNavigate();
   const open = () => nav(`/ticket-board?ticket=${t.ticket_no}`);
   return (
-    <article className="kb-card" style={{ '--tc': '#E5484D' }} tabIndex={0} role="link" aria-label={`Ticket ${t.ticket_no} ${t.subject_display}`}
+    <article className={`kb-card${dragging ? ' dragging' : ''}`} style={{ '--tc': '#E5484D' }} tabIndex={0} role="link" aria-label={`Ticket ${t.ticket_no} ${t.subject_display}`}
+      title={draggable ? 'Drag onto a task column to turn this ticket into a task' : undefined}
+      draggable={draggable} onDragStart={(e) => { e.dataTransfer.setData('text/plain', `ticket:${t.ticket_no}`); e.dataTransfer.effectAllowed = 'move'; onDragStart?.(); }}
+      onDragEnd={onDragEnd}
       onClick={open} onKeyDown={(e) => { if (e.key === 'Enter') open(); }}>
       <div className="kb-meta">#{t.ticket_no} - {t.group_name} · {t.requester_display}</div>
       <div className="kb-title"><span className="kb-type" style={{ color: '#E5484D' }}>TICKET</span> {t.subject_display}</div>
@@ -100,6 +112,9 @@ export default function KanbanBoard({ project }) {
   const [adding, setAdding] = useState(null);
   const [logging, setLogging] = useState(null);
   const [raising, setRaising] = useState(false);
+  const [remarksFor, setRemarksFor] = useState(null);
+  const [converting, setConverting] = useState(null); // { ticket, col }
+  const [dragTicket, setDragTicket] = useState(null);
   const [, run] = useAsync();
 
   const set = (changes) => {
@@ -195,7 +210,8 @@ export default function KanbanBoard({ project }) {
                 <button type="button" className="kb-add" onClick={() => setRaising(true)} title="Raise a ticket" aria-label="Raise a ticket"><Icon name="plus" /></button>
               </div>
               <div className="kb-cards">
-                {data.tickets.map(t => <TicketCard key={t.id} t={t} />)}
+                {data.tickets.map(t => <TicketCard key={t.id} t={t} draggable={!!data.can_convert} dragging={dragTicket === t.ticket_no}
+                  onDragStart={() => setDragTicket(t.ticket_no)} onDragEnd={() => { setDragTicket(null); setOver(null); }} />)}
                 {!data.tickets.length && <div className="kb-empty">No open tickets</div>}
               </div>
             </section>
@@ -206,7 +222,17 @@ export default function KanbanBoard({ project }) {
               <section key={col.key} className={`kb-col${over === col.key ? ' drop' : ''}`} aria-label={col.name}
                 onDragOver={(e) => { if (!col.statuses.length) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (over !== col.key) setOver(col.key); }}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOver(o => (o === col.key ? null : o)); }}
-                onDrop={(e) => { e.preventDefault(); drop(col, Number(e.dataTransfer.getData('text/plain'))); }}>
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const payload = e.dataTransfer.getData('text/plain');
+                  if (payload.startsWith('ticket:')) {
+                    const ticket = data.tickets?.find(x => String(x.ticket_no) === payload.slice(7));
+                    setOver(null); setDragTicket(null);
+                    if (ticket && col.statuses.length) setConverting({ ticket, col });
+                    return;
+                  }
+                  drop(col, Number(payload));
+                }}>
                 <div className="kb-col-head" style={{ '--cc': col.color }}>
                   <div className="kb-col-title">
                     <h2>{col.name}</h2><span className="kb-count">{items.length}</span>
@@ -219,7 +245,7 @@ export default function KanbanBoard({ project }) {
                   )}
                 </div>
                 <div className="kb-cards">
-                  {items.map(w => <Card key={w.id} w={w} column={col} dragging={dragId === w.id} onLog={setLogging} onDragStart={setDragId} onDragEnd={() => { setDragId(null); setOver(null); }} />)}
+                  {items.map(w => <Card key={w.id} w={w} column={col} dragging={dragId === w.id} onLog={setLogging} onRemarks={setRemarksFor} onDragStart={setDragId} onDragEnd={() => { setDragId(null); setOver(null); }} />)}
                   {!items.length && <div className="kb-empty">Nothing here for this period</div>}
                 </div>
               </section>
@@ -228,6 +254,20 @@ export default function KanbanBoard({ project }) {
         </div>
       )}
       {raising && <RaiseTicketModal onClose={() => setRaising(false)} />}
+      {remarksFor && <RemarksModal wp={remarksFor} onClose={() => setRemarksFor(null)}
+        onChanged={(n) => setData(d => ({ ...d, rows: d.rows.map(r => (r.id === remarksFor.id ? { ...r, remarks_count: n } : r)) }))} />}
+      {converting && (
+        <NewWpModal title={`Turn ticket #${converting.ticket.ticket_no} into a task`} single
+          createUrl={`/tickets/${converting.ticket.ticket_no}/convert`}
+          intro={<div className="info-box small" style={{ marginBottom: 10 }}>The task starts in <b>{converting.col.name}</b> with the ticket's description and files, and stays linked to ticket #{converting.ticket.ticket_no}. When the task is closed, the ticket is solved and {converting.ticket.raised_by} is told.</div>}
+          defaults={{
+            subject: converting.ticket.subject_display,
+            description: `${converting.ticket.description}\n\n_From ticket #${converting.ticket.ticket_no}, raised by ${converting.ticket.raised_by}._`,
+            status_id: converting.col.statuses[0].id,
+            ...(projectId ? { project_id: Number(projectId) } : {}),
+          }}
+          onClose={() => setConverting(null)} onCreated={() => { setConverting(null); reload(); }} />
+      )}
       {logging && <LogTimeModal wp={logging} onClose={() => setLogging(null)} onSaved={reload} />}
       {adding && (
         <NewWpModal projectId={project?.id || (projectId ? Number(projectId) : undefined)} title={`New task in ${adding.name}`}

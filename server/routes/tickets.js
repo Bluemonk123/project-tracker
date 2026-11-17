@@ -8,6 +8,8 @@ import crypto from 'node:crypto';
 import multer from 'multer';
 import { get, all, run, tx, UPLOAD_DIR, getSetting, setSetting } from '../db.js';
 import { can, need, fail, HttpError, parseList } from '../access.js';
+import { resolveProject } from './projects.js';
+import { createWp } from './workpackages.js';
 import { notify } from '../util.js';
 import { isEmail, sendMailLater, mailEnabled } from '../mailer.js';
 
@@ -420,7 +422,8 @@ r.get('/ticket-board', (req, res) => {
 // Unsolved tickets for the Task Board's first column (most urgent first). assignee: 'me' | 'none' | user id | undefined
 export function boardTickets(req, assignee) {
   const now = Date.now(), hours = slaHours();
-  let rows = all(`${BASE_SELECT} WHERE t.status <> 'solved'`).map(t => decorate(t, now, hours));
+  // a ticket already converted into a task shows as that task, not here
+  let rows = all(`${BASE_SELECT} WHERE t.status <> 'solved' AND (t.wp_id IS NULL OR NOT EXISTS (SELECT 1 FROM work_packages w WHERE w.id = t.wp_id))`).map(t => decorate(t, now, hours));
   if (assignee === 'me') rows = rows.filter(t => t.assignee_id === req.user.id);
   else if (assignee === 'none') rows = rows.filter(t => !t.assignee_id);
   else if (/^\d+$/.test(assignee || '')) rows = rows.filter(t => t.assignee_id === Number(assignee));
@@ -429,6 +432,7 @@ export function boardTickets(req, assignee) {
   return rows.slice(0, 200).map(t => ({
     id: t.id, ticket_no: t.ticket_no, subject_display: t.subject_display, status: t.status, priority: t.priority, group_name: t.group_name,
     assignee_id: t.assignee_id, assignee_name: t.assignee_name, requester_display: t.requester_display, sla: t.sla, age: t.age,
+    raised_by: t.raised_by, description: stripFrom(t.feedback),
   }));
 }
 
@@ -475,8 +479,55 @@ r.get('/tickets/:no', (req, res) => {
     can: { edit: can(req, 'tickets.edit'), delete: !!req.user.is_admin },
     me: { id: req.user.id, name: req.user.name },
     reply_hint: replyHint(t),
+    linked_task: linkedTask(t.wp_id),
   });
 });
+
+function linkedTask(wpId) {
+  if (!wpId) return null;
+  return get(`SELECT w.id, p.identifier || '-' || w.number AS key, w.subject, s.name AS status_name, s.color AS status_color, s.is_closed
+              FROM work_packages w JOIN projects p ON p.id = w.project_id JOIN statuses s ON s.id = w.status_id WHERE w.id = ?`, wpId) || null;
+}
+
+// Convert a ticket into a task (dragged from the Task Board's Tickets column). Same fields as a new task;
+// the task gets the ticket's description and files, and the two stay linked.
+r.post('/tickets/:no/convert', (req, res) => {
+  need(req, 'tickets.edit');
+  const t = findTicket(req.params.no);
+  const existing = linkedTask(t.wp_id);
+  if (existing) fail(400, `This ticket is already linked to task ${existing.key}.`);
+  const p = resolveProject(req.body.project_id);
+  if (p.archived) fail(400, 'This project is archived.');
+  const body = { ...req.body, subject: req.body.subject || displaySubject(t) };
+  if (!body.description) body.description = `${stripFrom(t.feedback)}\n\n_From ticket #${t.ticket_no}, raised by ${t.raised_by}._`;
+  const wp = createWp(req, p.id, body, { journalNote: `Created from ticket #${t.ticket_no}` });
+  const at = nowIso();
+  tx(() => {
+    run('UPDATE tickets SET wp_id = ?, updated_at = ? WHERE id = ?', wp.id, at, t.id);
+    systemLine(t.id, `Converted to task ${wp.key}`, req.user.name, at);
+    // the ticket's own files and those on public replies go with the task (same stored file, no copy)
+    for (const a of all(`SELECT a.* FROM ticket_attachments a LEFT JOIN ticket_messages m ON m.id = a.message_id
+                         WHERE a.ticket_id = ? AND (a.message_id IS NULL OR m.is_internal = 0)`, t.id)) {
+      run(`INSERT INTO attachments(container_type, container_id, project_id, filename, stored_name, content_type, size, uploaded_by)
+           VALUES('wp', ?, ?, ?, ?, ?, ?, ?)`, wp.id, p.id, a.file_name, a.stored_name, a.mime_type, a.size_bytes, a.uploaded_by);
+    }
+  });
+  audit(req, 'TICKET_UPDATED', t, { converted_to: wp.key, wp_id: wp.id });
+  res.status(201).json(wp);
+});
+
+// Called when a task is closed: tickets linked to it are solved and their requesters told.
+export function solveLinkedTickets(req, wp) {
+  try {
+    for (const t of all("SELECT * FROM tickets WHERE wp_id = ? AND status <> 'solved'", wp.id)) {
+      const at = nowIso();
+      const saved = saveFields(t, statusFields(t, 'solved', at), at);
+      systemLine(t.id, `Solved: linked task ${wp.key} was closed`, req.user.name, at);
+      audit(req, 'TICKET_UPDATED', saved, { changes: { status: [t.status, 'solved'] }, via_task: wp.key });
+      alertRequester(saved, req.user, `Ticket ${saved.ticket_no} is Solved`, `The work for your ticket is done (task ${wp.key} was closed by ${req.user.name}).`);
+    }
+  } catch (e) { console.error('Solving linked tickets failed:', e.message); }
+}
 
 // --- Field changes: each saved on its own; every change writes an activity line and an audit row
 const label = (field, v) => (field === 'status' ? STATUS_LABEL[v] || v : v ?? '—');

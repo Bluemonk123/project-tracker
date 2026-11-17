@@ -9,6 +9,7 @@ const REASONS = {
   assigned: 'Assigned', accountable: 'Accountable', mentioned: 'Mentioned', commented: 'Comment', status: 'Status',
   meeting_invite: 'Meeting', meeting_minutes: 'Minutes', meeting_moved: 'Meeting', blocker: 'Blocker', news: 'Announcement',
   member_added: 'Project', project_status: 'Project',
+  remark: 'Remark',
   ticket_new: 'New ticket', ticket_assigned: 'Ticket', ticket_reply: 'Ticket reply', ticket_update: 'Ticket',
 };
 

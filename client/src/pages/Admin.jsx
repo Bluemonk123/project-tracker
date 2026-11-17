@@ -7,7 +7,7 @@ import { Loading, ErrorBox, Empty, Modal, Field, Person, useAsync, confirmDialog
 import { timeAgo, fmtSize, fmtDateTime } from '../lib/format.js';
 import AdminTickets from './tickets/AdminTickets.jsx';
 
-const BOARD_COLUMN_NAMES = { new: 'New', design: 'In Design', develop: 'In Develop', testing: 'In Testing', closed: 'Closed' };
+const BOARD_COLUMN_NAMES = { new: 'New', design: 'In Design', develop: 'In Develop', testing: 'In Testing', closed: 'Closed', rejected: 'Rejected' };
 
 // ---------------- users ----------------
 function UserModal({ user, onClose, onSaved }) {

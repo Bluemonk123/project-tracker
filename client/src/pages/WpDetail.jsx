@@ -10,6 +10,7 @@ import {
 import NewWpModal, { useProjectInfo, WpSearchSelect, LinkEditor, FILE_ACCEPT } from './NewWpModal.jsx';
 import { LogTimeModal } from './Time.jsx';
 import { fmtDate, fmtDateTime, fmtHours, fmtSize, timeAgo } from '../lib/format.js';
+import { RemarksList } from './Remarks.jsx';
 
 const FIELD_LABELS = {
   type_id: 'Type', subject: 'Subject', description: 'Description', status_id: 'Status', priority_id: 'Priority',
@@ -26,6 +27,7 @@ export const STAGES = [
   { key: 'develop', name: 'In Develop', color: '#5BC8DE', field: 'developer', role: 'Developer', activity: 'Development' },
   { key: 'testing', name: 'In Testing', color: '#F39219', field: 'tester', role: 'Tester', activity: 'Testing' },
   { key: 'closed', name: 'Closed', color: '#7D8796' },
+  { key: 'rejected', name: 'Rejected', color: '#C25B6B' },
 ];
 const utc = (s) => new Date(`${s.replace(' ', 'T')}Z`).getTime();
 function fmtSpan(ms) {
@@ -46,7 +48,9 @@ function StageTracker({ wp }) {
   }
   const current = wp.board_column || 'develop';
   // tasks raised as tickets get a Ticket step first
-  const steps = current === 'tickets' || wp.stages.some(x => x.stage === 'tickets') ? [{ key: 'tickets', name: 'Ticket', color: '#E5484D' }, ...STAGES] : STAGES;
+  // the last step is Closed, or Rejected for a rejected task
+  const base = STAGES.filter(st => st.key !== (current === 'rejected' ? 'closed' : 'rejected'));
+  const steps = current === 'tickets' || wp.stages.some(x => x.stage === 'tickets') ? [{ key: 'tickets', name: 'Ticket', color: '#E5484D' }, ...base] : base;
   const curIdx = steps.findIndex(x => x.key === current);
   const moves = wp.stages.slice(1).reverse();
   return (
@@ -270,6 +274,7 @@ export default function WpDetail() {
           ) : <h1 style={{ fontSize: 22 }}>{wp.subject}</h1>}
           <div className="small muted" style={{ marginTop: 6 }}>
             Created by {wp.author_name || 'someone'} {timeAgo(wp.created_at)}, updated {timeAgo(wp.updated_at)}
+            {wp.ticket && <> · From ticket {can.open_ticket ? <Link to={`/ticket-board?ticket=${wp.ticket.ticket_no}`}>#{wp.ticket.ticket_no}</Link> : `#${wp.ticket.ticket_no}`}</>}
           </div>
 
           <div className="section-title">Description
@@ -284,6 +289,9 @@ export default function WpDetail() {
               </div>
             </div>
           ) : wp.description ? <Markdown text={wp.description} /> : <p className="muted small">{can.edit ? 'No description yet. Add details, acceptance criteria or links.' : 'No description.'}</p>}
+
+          <div className="section-title">Remarks <span className="muted">({wp.remarks.length})</span></div>
+          <RemarksList wpId={wp.id} remarks={wp.remarks} canAdd={can.remark} canEdit={can.edit} onChange={(remarks) => setData(d => ({ ...d, remarks }))} />
 
           {!isMilestone && <>
             <div className="section-title">Stages <span className="xs muted" style={{ fontWeight: 400 }}>Moving the task to a stage assigns it to that stage's person</span></div>
