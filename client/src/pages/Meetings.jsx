@@ -6,6 +6,7 @@ import Icon from '../components/Icon.jsx';
 import { Loading, ErrorBox, Empty, Modal, Field, MultiUserPicker, useAsync } from '../components/ui.jsx';
 import { useProjectInfo } from './NewWpModal.jsx';
 import { today, addDays, fmtDay, fmtTime, MEETING_KINDS, startOfWeek } from '../lib/format.js';
+import WorkTabs from '../components/WorkTabs.jsx';
 
 const TEMPLATES = {
   daily: { title: 'Daily stand-up', duration: 15, recurrence: 'weekdays', agenda: ['Round the table: yesterday, today, blockers', 'Overdue and blocked items'] },
@@ -117,19 +118,29 @@ export default function Meetings({ project }) {
 
   return (
     <div className="content">
+      {project ? (
       <div className="page-head">
-        <div className="grow">
-          {project ? <h2>Meetings</h2> : <h1>Meetings</h1>}
-          <p>Daily stand-ups, weekly reviews and other meetings, with agendas, minutes and action items.</p>
-        </div>
-        {canCreate && (
-          <div className="head-actions">
-            <button className="btn" onClick={() => setModal('daily')}><Icon name="plus" />Daily stand-up</button>
-            <button className="btn" onClick={() => setModal('weekly')}><Icon name="plus" />Weekly meeting</button>
-            <button className="btn primary" onClick={() => setModal('other')}><Icon name="plus" />Other meeting</button>
+          <div className="grow">
+            {project ? <h2>Meetings</h2> : <h1>Meetings</h1>}
+            <p>Daily stand-ups, weekly reviews and other meetings, with agendas, minutes and action items.</p>
           </div>
-        )}
-      </div>
+          {canCreate && (
+            <div className="head-actions">
+              <button className="btn" onClick={() => setModal('daily')}><Icon name="plus" />Daily stand-up</button>
+              <button className="btn" onClick={() => setModal('weekly')}><Icon name="plus" />Weekly meeting</button>
+              <button className="btn primary" onClick={() => setModal('other')}><Icon name="plus" />Other meeting</button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <WorkTabs>
+          {canCreate && <>
+  <button className="btn" onClick={() => setModal('daily')}><Icon name="plus" />Daily stand-up</button>
+              <button className="btn" onClick={() => setModal('weekly')}><Icon name="plus" />Weekly meeting</button>
+              <button className="btn primary" onClick={() => setModal('other')}><Icon name="plus" />Other meeting</button>
+          </>}
+        </WorkTabs>
+      )}
       <div className="filterbar">
         <div className="subtabs">
           <button className={when === 'upcoming' ? 'active' : ''} onClick={() => setWhen('upcoming')}>Upcoming</button>

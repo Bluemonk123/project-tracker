@@ -143,6 +143,8 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
   const writable = projects.filter(p => !p.archived);
   const [projectId, setProjectId] = useState(fixedProject || defaults.project_id || writable[0]?.id || '');
   const info = useProjectInfo(projectId);
+  const [cal, setCal] = useState(null);
+  useEffect(() => { api.get('/work-calendar').then(setCal).catch(() => {}); }, []);
   const defStatus = meta.statuses.find(s => s.is_default)?.id || meta.statuses[0]?.id;
   const defPrio = meta.priorities.find(p => p.is_default)?.id || meta.priorities[0]?.id;
   const taskType = meta.types.find(t => t.name === 'Task')?.id || meta.types[0]?.id;
@@ -255,7 +257,7 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
           {personSelect('assignee_id')}
         </Field>
         {!isMilestone && <Field label="Start date"><input type="date" value={f.start_date || ''} onChange={(e) => set('start_date', e.target.value)} /></Field>}
-        <Field label={isMilestone ? 'Date' : 'Due date'}><input type="date" value={f.due_date || ''} min={f.start_date || undefined} onChange={(e) => set('due_date', e.target.value)} /></Field>
+        <Field label={isMilestone ? 'Date' : 'Due date'} hint={!isMilestone && cal?.priority_days?.[f.priority_id] ? `Leave empty: ${cal.priority_days[f.priority_id]} working day(s) from the start, by priority` : undefined}><input type="date" value={f.due_date || ''} min={f.start_date || undefined} onChange={(e) => set('due_date', e.target.value)} /></Field>
       </div>
       {!isMilestone && (
         <div className="form-grid three">

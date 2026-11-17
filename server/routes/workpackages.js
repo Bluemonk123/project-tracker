@@ -4,6 +4,7 @@ import { need, can, fail, visibleProjectIds } from '../access.js';
 import { requireText, dateOrNull, intOrNull, numOrNull, notify, mentionedUserIds, todayISO } from '../util.js';
 import { resolveProject } from './projects.js';
 import { boardTickets, solveLinkedTickets } from './tickets.js';
+import { dueFor } from '../calendar.js';
 
 const r = Router();
 
@@ -198,8 +199,10 @@ r.get('/board', (req, res) => {
        AND COALESCE(wp.start_date, wp.due_date) <= ? AND COALESCE(wp.due_date, wp.start_date) >= ?)
     OR (wp.start_date IS NULL AND wp.due_date IS NULL
        AND ((s.is_closed = 0 AND ? = 1) OR date(wp.updated_at) BETWEEN ? AND ?))
+    OR (s.is_closed = 0 AND COALESCE(wp.due_date, wp.start_date) < ?)
   )`);
-  params.push(q.to, q.from, q.undated === '0' ? 0 : 1, q.from, q.to);
+  // (the last line: open work that is overdue stays on the board until it is done)
+  params.push(q.to, q.from, q.undated === '0' ? 0 : 1, q.from, q.to, q.from);
   if (q.assignee_id === 'me') { where.push('wp.assignee_id = ?'); params.push(req.user.id); }
   else if (q.assignee_id === 'none') where.push('wp.assignee_id IS NULL');
   else if (/^\d+$/.test(q.assignee_id || '')) { where.push('wp.assignee_id = ?'); params.push(Number(q.assignee_id)); }
@@ -258,10 +261,12 @@ r.post('/admin/import/tasks', (req, res) => {
     const at = `${x.created_on} 04:30:00`; // 10:00 India time
     const upd = `${x.updated_on || x.closed_on || x.created_on} 04:30:00`;
     const pos = get('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM work_packages WHERE project_id = ?', p.id).p;
-    const id = run(`INSERT INTO work_packages(project_id, number, type_id, subject, description, status_id, priority_id, criticality_id, author_id,
+    const startDay = x.start_date || x.created_on;
+    const dueDay = x.due_date || dueFor(x.priority_id, startDay) || null;
+    const id = run(`INSERT INTO work_packages(project_id, number, type_id, subject, description, status_id, priority_id, criticality_id, author_id, start_date, due_date,
                       source, requested_by, closed_on, done_ratio, position, created_at, updated_at, solution, module)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      p.id, number, x.type_id, x.subject, x.description || null, x.status.id, x.priority_id, x.criticality_id, req.user.id,
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      p.id, number, x.type_id, x.subject, x.description || null, x.status.id, x.priority_id, x.criticality_id, req.user.id, startDay, dueDay,
       x.source, x.requested_by, x.status.is_closed ? (x.closed_on || null) : null, x.status.is_closed ? 100 : 0, pos, at, upd, String(x.solution || '').trim() || null, String(x.module || '').trim().slice(0, 80) || null).id;
     run('INSERT INTO wp_stages(wp_id, stage, user_id, entered_at) VALUES(?,?,?,?)', id, x.status.board_column || 'develop', req.user.id, at);
     run('INSERT INTO journals(wp_id, user_id, notes, changes, created_at) VALUES(?,?,?,?,?)', id, req.user.id,
@@ -432,6 +437,11 @@ export function createWp(req, projectId, body, { journalNote } = {}) {
   f.priority_id ??= (get('SELECT id FROM priorities WHERE is_default = 1') || get('SELECT id FROM priorities ORDER BY position LIMIT 1')).id;
   if (f.criticality_id === undefined) f.criticality_id = get('SELECT id FROM criticalities WHERE is_default = 1')?.id ?? null;
   const t = get('SELECT is_milestone FROM types WHERE id = ?', f.type_id);
+  // a task starts the day it is created, and is due after its priority's number of working days (both can be changed)
+  if (!t?.is_milestone) {
+    if (!f.start_date) f.start_date = f.due_date && f.due_date < todayISO() ? f.due_date : todayISO();
+    if (!f.due_date) f.due_date = dueFor(f.priority_id, f.start_date);
+  }
   if (t?.is_milestone && f.due_date && !f.start_date) f.start_date = f.due_date;
   if (t?.is_milestone && f.start_date && !f.due_date) f.due_date = f.start_date;
   validateRefs(projectId, f);
@@ -547,6 +557,13 @@ export function updateWp(req, wp, body) {
   }
   if (assignsOthers(req, f, wp) && !can(req, 'wp.assign', wp.project_id) && !can(req, 'wp.edit', wp.project_id)) fail(403, 'You can only assign work to yourself.');
   validateRefs(projectId, f, wp.id);
+  // choosing a priority sets the due date from its working days (counted from the start date, or the day it was created);
+  // changing the due date by hand never changes the priority
+  if (f.priority_id !== undefined && f.priority_id !== wp.priority_id && f.due_date === undefined && !wp.is_milestone) {
+    const start = f.start_date ?? wp.start_date ?? String(wp.created_at).slice(0, 10);
+    const due = dueFor(f.priority_id, start);
+    if (due) { f.due_date = due; if (!wp.start_date && f.start_date === undefined) f.start_date = start; }
+  }
   // Moving into Design / Develop / Testing hands the task to that stage's person (unless the assignee was chosen in the same change).
   // Changing the person of the current stage moves the task to them if it was with the previous person.
   const oldStage = wp.board_column || 'develop';

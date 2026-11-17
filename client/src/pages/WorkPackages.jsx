@@ -7,6 +7,7 @@ import { Loading, ErrorBox, Empty, StatusPill, TypeLabel, Priority, Due, Person,
 import NewWpModal from './NewWpModal.jsx';
 import { fmtHours } from '../lib/format.js';
 import { SOURCE, SourceTag } from './tickets/common.jsx';
+import WorkTabs from '../components/WorkTabs.jsx';
 
 const PRESETS = [
   { id: 'open', label: 'All open', params: { status: 'open' } },
@@ -88,9 +89,7 @@ export default function WorkPackages({ project }) {
   return (
     <div className={`content${project ? '' : ''}`}>
       {!project && (
-        <div className="page-head">
-          <div className="grow"><h1>All work</h1><p>Work packages across every project you can see.</p></div>
-        </div>
+        <WorkTabs />
       )}
       <div className="row wrap" style={{ marginBottom: 12 }}>
         <div className="subtabs" role="tablist" aria-label="Saved views">

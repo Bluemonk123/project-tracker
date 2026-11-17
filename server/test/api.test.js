@@ -296,6 +296,8 @@ test('kanban board: columns, date range, employee and project filters', async ()
   const nextWeek = await mk({ subject: 'Next week', start_date: '2026-09-15', due_date: '2026-09-16' });
   const spanning = await mk({ subject: 'Spans the week', start_date: '2026-08-01', due_date: '2026-10-30' });
   const undated = await mk({ subject: 'No dates' });
+  assert.ok(undated.start_date, 'new tasks start the day they are created');
+  await admin.patch(`/work-packages/${undated.id}`, { start_date: null, due_date: null });
   const q = `/board?from=2026-09-07&to=2026-09-11&project_id=${p.id}`;
   let r = await admin.get(q);
   assert.equal(r.status, 200, JSON.stringify(r.data));

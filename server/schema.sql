@@ -551,3 +551,10 @@ CREATE TABLE IF NOT EXISTS criticalities (
   is_default INTEGER NOT NULL DEFAULT 0,
   position   INTEGER NOT NULL DEFAULT 0
 );
+
+-- Holidays (no work): used with the weekly off days to work out due dates from a priority's duration
+CREATE TABLE IF NOT EXISTS holidays (
+  id   INTEGER PRIMARY KEY AUTOINCREMENT,
+  day  TEXT NOT NULL UNIQUE,   -- YYYY-MM-DD
+  name TEXT NOT NULL
+);

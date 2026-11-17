@@ -233,6 +233,7 @@ export default function WpDetail() {
   const [comment, setComment] = useState('');
   const [modal, setModal] = useState(null);
   const [tab, setTab] = useState('stages');
+  const { data: cal } = useLoad(() => api.get('/work-calendar'), []);
   const [busy, run] = useAsync();
   useEffect(() => { if (wp) setSubject(wp.subject); }, [wp]);
   useEffect(() => { if (wp) document.title = `${wp.key} ${wp.subject}`; }, [wp]);
@@ -274,12 +275,12 @@ export default function WpDetail() {
     </select>
   );
   const isMilestone = !!wp.is_milestone;
+  const prioDays = cal?.priority_days?.[wp.priority_id] || null;
   const curTab = isMilestone && tab === 'stages' ? 'relations' : tab;
   const comments = wp.journals;
   // comments (notes on their own) above the tabs; the change history in the side panel
   const isTalk = (j) => { let c = {}; try { c = JSON.parse(j.changes || '{}') || {}; } catch { /* ignore */ } return !!j.notes && !Object.keys(c).length; };
   const talk = comments.filter(isTalk);
-  const history = comments.filter(j => !isTalk(j));
 
   return (
     <div className="content" style={{ '--pc': wp.project_color }}>
@@ -372,22 +373,11 @@ export default function WpDetail() {
             </section>
           </div>
 
-          <div className="section-title">Comments <span className="muted">({talk.length})</span></div>
-          <div className="wp-comments">
-            {talk.map(j => <Journal key={j.id} j={j} label={label} canEditOwn onSaved={reload} />)}
-            {!talk.length && <p className="small muted" style={{ margin: '4px 0 8px' }}>No comments yet.</p>}
-            {can.comment && (
-              <div className="stack tight" style={{ marginTop: 8 }}>
-                <MarkdownEditor value={comment} onChange={setComment} rows={3} placeholder="Write a comment. Type @ to notify someone." onSubmitShortcut={postComment} mentionUsers={members.length ? members : undefined} />
-                <div className="row"><button className="btn primary sm" disabled={busy || !comment.trim()} onClick={postComment}>Comment</button><span className="xs muted">Ctrl + Enter to send</span></div>
-              </div>
-            )}
-          </div>
-
           <div className="wp-tabs" role="tablist" aria-label="Stages, relations and child work packages">
             {!isMilestone && <button type="button" role="tab" aria-selected={curTab === 'stages'} className={curTab === 'stages' ? 'active' : ''} onClick={() => setTab('stages')}>Stages</button>}
             <button type="button" role="tab" aria-selected={curTab === 'relations'} className={curTab === 'relations' ? 'active' : ''} onClick={() => setTab('relations')}>Relations <span className="muted">({wp.relations.length})</span></button>
             <button type="button" role="tab" aria-selected={curTab === 'children'} className={curTab === 'children' ? 'active' : ''} onClick={() => setTab('children')}>Child work packages <span className="muted">({wp.children.length})</span></button>
+            <button type="button" role="tab" aria-selected={curTab === 'comments'} className={curTab === 'comments' ? 'active' : ''} onClick={() => setTab('comments')}>Comments <span className="muted">({talk.length})</span></button>
           </div>
           <div className="wp-tab-body">
             {curTab === 'stages' && !isMilestone && <>
@@ -418,6 +408,18 @@ export default function WpDetail() {
                   ))}
                 </div>
               ) : <p className="small muted">Link work that blocks, follows or duplicates this one.</p>}
+            </>}
+            {curTab === 'comments' && <>
+            <div className="wp-comments">
+              {talk.map(j => <Journal key={j.id} j={j} label={label} canEditOwn onSaved={reload} />)}
+              {!talk.length && <p className="small muted" style={{ margin: '4px 0 8px' }}>No comments yet.</p>}
+              {can.comment && (
+                <div className="stack tight" style={{ marginTop: 8 }}>
+                  <MarkdownEditor value={comment} onChange={setComment} rows={3} placeholder="Write a comment. Type @ to notify someone." onSubmitShortcut={postComment} mentionUsers={members.length ? members : undefined} />
+                  <div className="row"><button className="btn primary sm" disabled={busy || !comment.trim()} onClick={postComment}>Comment</button><span className="xs muted">Ctrl + Enter to send</span></div>
+                </div>
+              )}
+            </div>
             </>}
             {curTab === 'children' && <>
               <div className="section-title">Child work packages <span className="muted">({wp.children.length})</span>
@@ -473,6 +475,7 @@ export default function WpDetail() {
                   onChange={(e) => update(isMilestone ? { start_date: e.target.value || null, due_date: e.target.value || null } : { due_date: e.target.value || null })} />
               </span>
               {wp.due_date && <><span className="k" /><span className="v" style={{ paddingLeft: 8 }}><Due date={wp.due_date} closed={wp.is_closed} /></span></>}
+              {!isMilestone && prioDays && <><span className="k" /><span className="v xs muted" style={{ paddingLeft: 8 }}>{wp.priority_name.split(' ')[0]} = {prioDays} working day{prioDays === 1 ? '' : 's'}; changing the priority sets the due date again</span></>}
               {!isMilestone && <>
                 <span className="k">Estimated</span>
                 <span className="v"><input type="number" min="0" step="0.5" defaultValue={wp.estimated_hours ?? ''} key={`e${wp.estimated_hours}`} disabled={!can.edit} placeholder="hours"
@@ -503,7 +506,7 @@ export default function WpDetail() {
           </div>
           <div className="panel-body wp-side-sep wp-activity">
             <div className="section-title" style={{ marginTop: 0 }}>Activity</div>
-            {history.map(j => <Journal key={j.id} j={j} label={label} canEditOwn onSaved={reload} />)}
+            {comments.map(j => <Journal key={j.id} j={j} label={label} canEditOwn onSaved={reload} />)}
           </div>
           <div className="panel-body wp-side-sep">
             <div className="small soft" style={{ marginBottom: 6 }}>Watchers</div>

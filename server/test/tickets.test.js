@@ -520,3 +520,30 @@ test('tasks: module field with suggestions and filter', async () => {
   assert.deepEqual(rows.map(x => x.subject), ['Invoice PDF']);
   assert.equal((await admin.patch(`/work-packages/${a.id}`, { module: '' })).data.module, null);
 });
+
+test('working calendar: priority days, off days, holidays drive due dates', async () => {
+  const cal = (await admin.get('/work-calendar')).data;
+  assert.deepEqual(cal.off_days, [0, 6]);
+  assert.equal(cal.hours_per_day, 8);
+  const pr = Object.fromEntries(cal.priorities.map(p => [p.name.slice(0, 2), p.id]));
+  assert.equal(cal.priority_days[pr.P2], 3);
+  assert.equal((await agent.put('/work-calendar', { off_days: [0], hours_per_day: 8, priority_days: {} })).status, 403);
+  assert.equal((await admin.put('/work-calendar', { off_days: [0, 1, 2, 3, 4, 5, 6], hours_per_day: 8 })).status, 400);
+  const pd = { [pr.P1]: 1, [pr.P2]: 3, [pr.P3]: 5, [pr.P4]: 10 };
+  assert.equal((await admin.put('/work-calendar', { off_days: [0, 6], hours_per_day: 9, priority_days: pd })).status, 200);
+  // Fri 2026-12-04 + 3 working days with Mon 2026-12-07 a holiday -> Fri, Tue, Wed = 2026-12-09
+  assert.equal((await admin.post('/holidays', { day: '2026-12-07', name: 'Company day' })).status, 201);
+  let r = await admin.post('/work-packages', { project_id: ids.proj.id, subject: 'Due by priority', priority_id: pr.P2, start_date: '2026-12-04' });
+  assert.equal(r.data.due_date, '2026-12-09');
+  // changing priority recalculates; P1 = the start day
+  r = await admin.patch(`/work-packages/${r.data.id}`, { priority_id: pr.P1 });
+  assert.equal(r.data.due_date, '2026-12-04');
+  // a hand-picked due date stays, and the priority does not change
+  r = await admin.patch(`/work-packages/${r.data.id}`, { due_date: '2026-12-20' });
+  assert.equal(r.data.due_date, '2026-12-20'); assert.equal(r.data.priority_id, pr.P1);
+  // a task created without dates starts today
+  const t = (await admin.post('/work-packages', { project_id: ids.proj.id, subject: 'Starts today', priority_id: pr.P3 })).data;
+  assert.ok(t.start_date && t.due_date && t.due_date >= t.start_date);
+  const hid = (await admin.get('/work-calendar')).data.holidays[0].id;
+  assert.equal((await admin.del(`/holidays/${hid}`)).status, 200);
+});

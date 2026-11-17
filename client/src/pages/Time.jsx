@@ -6,6 +6,8 @@ import Icon from '../components/Icon.jsx';
 import { Modal, Field, Loading, ErrorBox, Empty, Person, Key, useAsync, confirmDialog } from '../components/ui.jsx';
 import { WpSearchSelect } from './NewWpModal.jsx';
 import { today, addDays, startOfWeek, fmtDay, fmtDate, fmtHours, DAY_NAMES, parseDate } from '../lib/format.js';
+import WorkCalendar from './WorkCalendar.jsx';
+import WorkTabs from '../components/WorkTabs.jsx';
 
 // Time logged on a task defaults to its current stage: Design, Development or Testing.
 const STAGE_ACTIVITY = { design: 'Design', develop: 'Development', testing: 'Testing' };
@@ -261,12 +263,13 @@ export default function Time({ project }) {
   const canSeeOthers = project ? project.permissions.includes('time.view_all') : true;
   return (
     <div className="content">
-      {!project && <div className="page-head"><div className="grow"><h1>Time</h1><p>Log hours against projects and tasks, and see where the team's time goes.</p></div></div>}
+      {!project && <WorkTabs />}
       <div className="row wrap" style={{ marginBottom: 16 }}>
         <div className="subtabs">
           <button className={tab === 'week' ? 'active' : ''} onClick={() => setTab('week')}>Timesheet</button>
           <button className={tab === 'tasks' ? 'active' : ''} onClick={() => setTab('tasks')}>Task hours</button>
           <button className={tab === 'report' ? 'active' : ''} onClick={() => setTab('report')}>Report</button>
+          {!project && <button className={tab === 'calendar' ? 'active' : ''} onClick={() => setTab('calendar')}>Working calendar</button>}
         </div>
         {tab === 'week' && canSeeOthers && (
           <select value={person} onChange={(e) => setPerson(e.target.value)} style={{ width: 'auto', height: 30, fontSize: 13 }} aria-label="Whose timesheet">
@@ -274,7 +277,7 @@ export default function Time({ project }) {
           </select>
         )}
       </div>
-      {tab === 'week' ? <WeekView project={project} userFilter={person || undefined} /> : tab === 'tasks' ? <TaskHours project={project} /> : <Report project={project} />}
+      {tab === 'week' ? <WeekView project={project} userFilter={person || undefined} /> : tab === 'tasks' ? <TaskHours project={project} /> : tab === 'calendar' ? <WorkCalendar /> : <Report project={project} />}
     </div>
   );
 }
