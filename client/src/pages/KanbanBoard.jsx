@@ -118,6 +118,9 @@ export default function KanbanBoard({ project }) {
   const [adding, setAdding] = useState(null);
   const [logging, setLogging] = useState(null);
   const [raising, setRaising] = useState(false);
+  // Closed and Rejected share the last column, with a switcher (remembered in this browser)
+  const [endTab, setEndTab] = useState(() => { try { return localStorage.getItem('pt-board-end') === 'rejected' ? 'rejected' : 'closed'; } catch { return 'closed'; } });
+  const chooseEnd = (k) => { setEndTab(k); try { localStorage.setItem('pt-board-end', k); } catch { /* ignore */ } };
   const [remarksFor, setRemarksFor] = useState(null);
   const [converting, setConverting] = useState(null); // { ticket, col }
   const [dragTicket, setDragTicket] = useState(null);
@@ -222,10 +225,12 @@ export default function KanbanBoard({ project }) {
               </div>
             </section>
           )}
-          {columns.map(col => {
+          {columns.filter(c => !(c.key === 'rejected' && columns.some(x => x.key === 'closed'))).map(base => {
+            const rejectedCol = base.key === 'closed' ? columns.find(c => c.key === 'rejected') : null;
+            const col = rejectedCol && endTab === 'rejected' ? rejectedCol : base;
             const items = byColumn(col);
             return (
-              <section key={col.key} className={`kb-col${over === col.key ? ' drop' : ''}`} aria-label={col.name}
+              <section key={base.key} className={`kb-col${over === col.key ? ' drop' : ''}`} aria-label={col.name}
                 onDragOver={(e) => { if (!col.statuses.length) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (over !== col.key) setOver(col.key); }}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOver(o => (o === col.key ? null : o)); }}
                 onDrop={(e) => {
@@ -240,12 +245,23 @@ export default function KanbanBoard({ project }) {
                   drop(col, Number(payload));
                 }}>
                 <div className="kb-col-head" style={{ '--cc': col.color }}>
+                  {rejectedCol ? (
+                    <div className="kb-switch" role="tablist" aria-label="Closed or rejected work">
+                      {[base, rejectedCol].map(c => (
+                        <button type="button" key={c.key} role="tab" aria-selected={col.key === c.key} className={col.key === c.key ? 'active' : ''}
+                          onClick={() => chooseEnd(c.key)} onDragEnter={() => chooseEnd(c.key)} title={c.key === 'rejected' ? 'Show rejected work (drop here to reject)' : 'Show closed work'}>
+                          {c.name}<span className="kb-count">{byColumn(c).length}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
                   <div className="kb-col-title">
                     <h2>{col.name}</h2><span className="kb-count">{items.length}</span>
                     {(sum(items, 'estimated_hours') > 0 || sum(items, 'spent_hours') > 0) && (
                       <span className="kb-col-hours" title="Logged / estimated hours of the tasks in this column">{h(sum(items, 'spent_hours')).replace(' h', '')} / {h(sum(items, 'estimated_hours'))}</span>
                     )}
                   </div>
+                  )}
                   {canCreateIn && col.statuses.length > 0 && !['closed', 'rejected'].includes(col.key) && (
                     <button type="button" className="kb-add" onClick={() => setAdding(col)} title={`Add to ${col.name}`} aria-label={`Add a work package to ${col.name}`}><Icon name="plus" /></button>
                   )}
