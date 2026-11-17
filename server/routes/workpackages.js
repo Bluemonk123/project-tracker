@@ -206,13 +206,11 @@ r.get('/board', (req, res) => {
   if (/^\d+$/.test(q.type_id || '')) { where.push('wp.type_id = ?'); params.push(Number(q.type_id)); }
   const rows = all(`${BASE_SELECT} WHERE ${where.join(' AND ')}
                     ORDER BY wp.due_date IS NULL, wp.due_date, pr.position DESC, wp.id LIMIT 2000`, ...params)
-    .map(w => ({ ...w, can_edit: canEditWp(req, w), can_log: can(req, 'time.log', w.project_id), can_remark: canRemark(req, w) }));
-  // remarks count and the ticket a task came from
+    .map(w => ({ ...w, can_edit: canEditWp(req, w), can_log: can(req, 'time.log', w.project_id) }));
+  // the ticket a task came from
   if (rows.length) {
-    const ids = rows.map(w => w.id).join(',');
-    const rc = new Map(all(`SELECT wp_id, COUNT(*) AS n FROM wp_remarks WHERE wp_id IN (${ids}) GROUP BY wp_id`).map(x => [x.wp_id, x.n]));
-    const tk = new Map(all(`SELECT wp_id, ticket_no FROM tickets WHERE wp_id IN (${ids})`).map(x => [x.wp_id, x.ticket_no]));
-    for (const w of rows) { w.remarks_count = rc.get(w.id) || 0; w.ticket_no = tk.get(w.id) || null; }
+    const tk = new Map(all(`SELECT wp_id, ticket_no FROM tickets WHERE wp_id IN (${rows.map(w => w.id).join(',')})`).map(x => [x.wp_id, x.ticket_no]));
+    for (const w of rows) w.ticket_no = tk.get(w.id) || null;
   }
   // hours logged on each task within the board's date range
   if (rows.length) {
@@ -268,56 +266,23 @@ r.post('/admin/import/tasks', (req, res) => {
     run('INSERT INTO wp_stages(wp_id, stage, user_id, entered_at) VALUES(?,?,?,?)', id, x.status.board_column || 'develop', req.user.id, at);
     run('INSERT INTO journals(wp_id, user_id, notes, changes, created_at) VALUES(?,?,?,?,?)', id, req.user.id,
       x.ref ? `Imported (${x.ref})` : 'Imported', JSON.stringify({ created: [null, true] }), at);
+    // remarks from the sheet become comments in the task's Activity, in order, by their author
     x.remarks.forEach((m, j) => {
       const u = findUser(m.author);
-      run('INSERT INTO wp_remarks(wp_id, user_id, body, created_by, author_name, created_at) VALUES(?,?,?,?,?,?)',
-        id, null, String(m.body).trim().slice(0, 2000), u?.id ?? null, u ? null : String(m.author || '').trim().slice(0, 100) || null, `${x.updated_on || x.created_on} 04:3${Math.min(j, 9)}:00`);
+      run('INSERT INTO journals(wp_id, user_id, notes, changes, created_at, author_name) VALUES(?,?,?,NULL,?,?)',
+        id, u?.id ?? null, String(m.body).trim().slice(0, 5000), `${x.updated_on || x.created_on} 04:3${Math.min(j + 1, 9)}:00`,
+        u ? null : String(m.author || '').trim().slice(0, 100) || null);
     });
     return { ref: x.ref, id, key: `${p.identifier}-${number}` };
   }));
   res.status(201).json({ created: created.length, items: created });
 });
 
-// ---------- remarks: several short notes per task, each addressed to a chosen person ----------
-const canRemark = (req, wp) => can(req, 'wp.comment', wp.project_id) || canEditWp(req, wp);
-function remarksOf(wpId) {
-  return all(`SELECT r.id, r.body, r.user_id, r.created_by, r.created_at, u.name AS user_name, COALESCE(c.name, r.author_name) AS created_by_name
-              FROM wp_remarks r LEFT JOIN users u ON u.id = r.user_id LEFT JOIN users c ON c.id = r.created_by
-              WHERE r.wp_id = ? ORDER BY r.created_at DESC, r.id DESC`, wpId);
-}
 // modules already used in a project (suggestions for the Module field)
 r.get('/projects/:pid/modules', (req, res) => {
   const p = resolveProject(req.params.pid);
   need(req, 'wp.view', p.id);
   res.json(all("SELECT module, COUNT(*) AS n FROM work_packages WHERE project_id = ? AND module IS NOT NULL AND module <> '' GROUP BY module ORDER BY module COLLATE NOCASE", p.id));
-});
-r.get('/work-packages/:id/remarks', (req, res) => {
-  const wp = loadWp(req.params.id);
-  need(req, 'wp.view', wp.project_id);
-  res.json({ remarks: remarksOf(wp.id), can_add: canRemark(req, wp), can_edit: canEditWp(req, wp) });
-});
-r.post('/work-packages/:id/remarks', (req, res) => {
-  const wp = loadWp(req.params.id);
-  need(req, 'wp.view', wp.project_id);
-  if (!canRemark(req, wp)) fail(403, 'You do not have permission to add remarks to this task.');
-  const body = String(req.body.body ?? '').trim();
-  if (!body) fail(400, 'Write the remark.');
-  if (body.length > 2000) fail(400, 'A remark can be up to 2000 characters.');
-  const uid = Number(req.body.user_id);
-  const u = uid ? get("SELECT id, name FROM users WHERE id = ? AND status = 'active'", uid) : null;
-  if (!u) fail(400, 'Choose the person this remark is for.');
-  const id = run('INSERT INTO wp_remarks(wp_id, user_id, body, created_by) VALUES(?,?,?,?)', wp.id, u.id, body, req.user.id).id;
-  run('UPDATE work_packages SET updated_at = datetime(\'now\') WHERE id = ?', wp.id);
-  notify([u.id], { actorId: req.user.id, projectId: wp.project_id, wpId: wp.id, reason: 'remark',
-    message: `${req.user.name} added a remark for you on ${wp.key}: ${body.length > 200 ? body.slice(0, 199) + '…' : body}` });
-  res.status(201).json({ id, remarks: remarksOf(wp.id) });
-});
-r.delete('/remarks/:id', (req, res) => {
-  const rm = get('SELECT * FROM wp_remarks WHERE id = ?', Number(req.params.id)) || fail(404, 'Remark not found.');
-  const wp = loadWp(rm.wp_id);
-  if (rm.created_by !== req.user.id && !canEditWp(req, wp)) fail(403, 'Only the person who wrote a remark, or someone who can edit the task, can delete it.');
-  run('DELETE FROM wp_remarks WHERE id = ?', rm.id);
-  res.json({ ok: true, remarks: remarksOf(wp.id) });
 });
 
 r.get('/work-packages/export.csv', (req, res) => {
@@ -526,7 +491,7 @@ r.get('/work-packages/:id', (req, res) => {
     JOIN work_packages o ON o.id = CASE WHEN rel.from_id = ? THEN rel.to_id ELSE rel.from_id END
     JOIN projects op ON op.id = o.project_id JOIN statuses os ON os.id = o.status_id
     WHERE rel.from_id = ? OR rel.to_id = ?`, wp.id, wp.id, wp.id, wp.id);
-  const journals = all(`SELECT j.*, u.name AS user_name FROM journals j LEFT JOIN users u ON u.id = j.user_id
+  const journals = all(`SELECT j.*, COALESCE(u.name, j.author_name) AS user_name FROM journals j LEFT JOIN users u ON u.id = j.user_id
                         WHERE j.wp_id = ? ORDER BY j.created_at, j.id`, wp.id);
   const watchers = all('SELECT u.id, u.name FROM wp_watchers w JOIN users u ON u.id = w.user_id WHERE w.wp_id = ? ORDER BY u.name', wp.id);
   const attachments = all(`SELECT a.*, u.name AS uploaded_by_name FROM attachments a LEFT JOIN users u ON u.id = a.uploaded_by
@@ -551,15 +516,14 @@ r.get('/work-packages/:id', (req, res) => {
     ancestors.unshift(a);
     cur = a.parent_id;
   }
-  const remarks = remarksOf(wp.id);
   const ticket = get('SELECT ticket_no, status FROM tickets WHERE wp_id = ? ORDER BY id LIMIT 1', wp.id) || null;
   res.json({
-    ...wp, children, relations, journals, watchers, attachments, links, time, meetings, ancestors, stages, stage_hours, max_files: 5, remarks, ticket,
+    ...wp, children, relations, journals, watchers, attachments, links, time, meetings, ancestors, stages, stage_hours, max_files: 5, ticket,
     can: {
       edit: canEditWp(req, wp), assign: can(req, 'wp.assign', wp.project_id) || can(req, 'wp.edit', wp.project_id),
       delete: can(req, 'wp.delete', wp.project_id), comment: can(req, 'wp.comment', wp.project_id),
       log_time: can(req, 'time.log', wp.project_id), upload: can(req, 'files.upload', wp.project_id),
-      create: can(req, 'wp.create', wp.project_id), remark: canRemark(req, wp), open_ticket: can(req, 'tickets.view'),
+      create: can(req, 'wp.create', wp.project_id), open_ticket: can(req, 'tickets.view'),
     },
     watching: watchers.some(w => w.id === req.user.id),
   });

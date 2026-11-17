@@ -270,6 +270,18 @@ function migrate() {
       run(`UPDATE work_packages SET closed_on = date(updated_at) WHERE status_id IN (SELECT id FROM statuses WHERE is_closed = 1)`);
     }
     if (!all('PRAGMA table_info(wp_remarks)').some(c => c.name === 'author_name')) db.exec('ALTER TABLE wp_remarks ADD COLUMN author_name TEXT');
+    if (!all('PRAGMA table_info(journals)').some(c => c.name === 'author_name')) db.exec('ALTER TABLE journals ADD COLUMN author_name TEXT'); // comment author with no account (imports)
+    // Remarks were folded into comments: each remark becomes a comment in the task's Activity, at its own time
+    if (getSetting('migration_remarks_to_comments_v1') === null) {
+      tx(() => {
+        for (const r of all('SELECT r.*, u.name AS for_name FROM wp_remarks r LEFT JOIN users u ON u.id = r.user_id ORDER BY r.id')) {
+          run('INSERT INTO journals(wp_id, user_id, notes, changes, created_at, author_name) VALUES(?,?,?,NULL,?,?)',
+            r.wp_id, r.created_by, r.for_name ? `**For ${r.for_name}:** ${r.body}` : r.body, r.created_at, r.created_by ? null : r.author_name);
+        }
+        run('DELETE FROM wp_remarks');
+        setSetting('migration_remarks_to_comments_v1', '1');
+      });
+    }
   }
   // ---------- Ticket Board (helpdesk) ----------
   const nCols = all('PRAGMA table_info(notifications)').map(c => c.name);

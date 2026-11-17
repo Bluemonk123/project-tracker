@@ -7,7 +7,6 @@ import { Loading, ErrorBox, Avatar, useAsync } from '../components/ui.jsx';
 import NewWpModal from './NewWpModal.jsx';
 import RaiseTicketModal from './tickets/RaiseTicketModal.jsx';
 import { SlaBadge } from './tickets/common.jsx';
-import { RemarksModal } from './Remarks.jsx';
 import { addDays, diffDays, fmtDate, startOfWeek, today, parseDate } from '../lib/format.js';
 
 const h = (n) => `${Math.round((n || 0) * 100) / 100} h`;
@@ -39,13 +38,13 @@ function Who({ id, name }) {
 }
 
 // One task: project and estimate on top, subject, then one line of person · P/C · type.
-function Card({ w, onDragStart, onDragEnd, dragging, onRemarks }) {
+function Card({ w, onDragStart, onDragEnd, dragging }) {
   const nav = useNavigate();
   const overdue = !w.is_closed && w.due_date && w.due_date < today();
   const dates = cardDates(w);
   const est = w.estimated_hours || 0, spent = w.spent_hours || 0;
   const tip = [w.subject, w.module && `Module: ${w.module}`, `${w.key} · ${w.status_name}`, w.requested_by && `Requested by ${w.requested_by}`, w.assignee_name ? `Assigned to ${w.assignee_name}` : 'Unassigned', w.priority_name && `Priority ${w.priority_name}`,
-    `Criticality ${w.criticality_name || 'not set (C0)'}`, dates && `Dates ${dates}${overdue ? ' (overdue)' : ''}`, `Logged ${hrs(spent)} of ${hrs(est)} estimated`,
+dates && `Dates ${dates}${overdue ? ' (overdue)' : ''}`, `Logged ${hrs(spent)} of ${hrs(est)} estimated`,
     w.ticket_no && `From ticket #${w.ticket_no}`].filter(Boolean).join('\n');
   return (
     <article className={`kb-card${dragging ? ' dragging' : ''}${overdue ? ' overdue' : ''}`} style={{ '--tc': w.type_color }} title={tip}
@@ -60,13 +59,7 @@ function Card({ w, onDragStart, onDragEnd, dragging, onRemarks }) {
       <div className="kb-title">{w.subject}</div>
       <div className="kb-line">
         <Who id={w.assignee_id} name={w.assignee_name} />
-        <span className="kb-pc" style={{ '--pcol': w.priority_color, '--ccol': w.criticality_color || '#8A93A0' }}>
-          <b>{prioShort(w.priority_name)}</b> - <b className="c">{w.criticality_name || 'C0'}</b>
-        </span>
-        {w.remarks_count > 0 && (
-          <button type="button" className="kb-rc" draggable={false} title={`${w.remarks_count} remark${w.remarks_count === 1 ? '' : 's'}`}
-            onClick={(e) => { e.stopPropagation(); onRemarks(w); }} onKeyDown={(e) => e.stopPropagation()}><Icon name="chat" size={12} />{w.remarks_count}</button>
-        )}
+        <span className="kb-pc" style={{ '--pcol': w.priority_color }} title={w.priority_name}><b>{prioShort(w.priority_name)}</b></span>
         <span className="kb-type-pill" style={{ '--c': w.type_color }}>{w.type_name}</span>
       </div>
     </article>
@@ -90,9 +83,7 @@ function TicketCard({ t, draggable, onDragStart, onDragEnd, dragging }) {
       <div className="kb-title">{t.subject_display}</div>
       <div className="kb-line">
         <Who id={t.assignee_id} name={t.assignee_name} />
-        <span className="kb-pc" style={{ '--pcol': { urgent: '#C2453B', high: '#C98A1B', normal: '#3B6EA8' }[t.priority], '--ccol': '#8A93A0' }}>
-          <b>{TICKET_P[t.priority] || 'P3'}</b> - <b className="c">C0</b>
-        </span>
+        <span className="kb-pc" style={{ '--pcol': { urgent: '#C2453B', high: '#C98A1B', normal: '#3B6EA8' }[t.priority] }}><b>{TICKET_P[t.priority] || 'P3'}</b></span>
         <span className="kb-type-pill" style={{ '--c': '#E5484D' }}>Ticket</span>
       </div>
     </article>
@@ -115,7 +106,6 @@ export default function KanbanBoard({ project }) {
   // Closed and Rejected share the last column, with a switcher (remembered in this browser)
   const [endTab, setEndTab] = useState(() => { try { return localStorage.getItem('pt-board-end') === 'rejected' ? 'rejected' : 'closed'; } catch { return 'closed'; } });
   const chooseEnd = (k) => { setEndTab(k); try { localStorage.setItem('pt-board-end', k); } catch { /* ignore */ } };
-  const [remarksFor, setRemarksFor] = useState(null);
   const [converting, setConverting] = useState(null); // { ticket, col }
   const [dragTicket, setDragTicket] = useState(null);
   const [, run] = useAsync();
@@ -286,7 +276,7 @@ export default function KanbanBoard({ project }) {
                   )}
                 </div>
                 <div className="kb-cards">
-                  {items.map(w => <Card key={w.id} w={w} dragging={dragId === w.id} onRemarks={setRemarksFor} onDragStart={setDragId} onDragEnd={() => { setDragId(null); setOver(null); }} />)}
+                  {items.map(w => <Card key={w.id} w={w} dragging={dragId === w.id} onDragStart={setDragId} onDragEnd={() => { setDragId(null); setOver(null); }} />)}
                   {!items.length && <div className="kb-empty">{needle ? 'No matching cards' : 'Nothing here for this period'}</div>}
                 </div>
               </section>
@@ -295,8 +285,6 @@ export default function KanbanBoard({ project }) {
         </div>
       )}
       {raising && <RaiseTicketModal onClose={() => setRaising(false)} />}
-      {remarksFor && <RemarksModal wp={remarksFor} onClose={() => setRemarksFor(null)}
-        onChanged={(n) => setData(d => ({ ...d, rows: d.rows.map(r => (r.id === remarksFor.id ? { ...r, remarks_count: n } : r)) }))} />}
       {converting && (
         <NewWpModal title={`Turn ticket #${converting.ticket.ticket_no} into a task`} single
           createUrl={`/tickets/${converting.ticket.ticket_no}/convert`}

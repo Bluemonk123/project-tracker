@@ -6,7 +6,7 @@ import Icon from '../components/Icon.jsx';
 import { Loading, ErrorBox, Empty, StatusPill, TypeLabel, Priority, Due, Person, Key, Progress, useAsync, Popover } from '../components/ui.jsx';
 import NewWpModal from './NewWpModal.jsx';
 import { fmtHours } from '../lib/format.js';
-import { SOURCE, SourceTag, CritTag } from './tickets/common.jsx';
+import { SOURCE, SourceTag } from './tickets/common.jsx';
 
 const PRESETS = [
   { id: 'open', label: 'All open', params: { status: 'open' } },
@@ -18,7 +18,7 @@ const PRESETS = [
   { id: 'closed', label: 'Closed', params: { status: 'closed', sort: 'updated_at:desc' } },
 ];
 
-const FILTER_KEYS = ['status', 'type_id', 'assignee_id', 'priority_id', 'criticality_id', 'source', 'version_id', 'project_id', 'q', 'overdue', 'watched', 'sort', 'group'];
+const FILTER_KEYS = ['status', 'type_id', 'assignee_id', 'priority_id', 'source', 'version_id', 'project_id', 'q', 'overdue', 'watched', 'sort', 'group'];
 
 export default function WorkPackages({ project }) {
   const { meta, projects, activeUsers, can } = useApp();
@@ -83,7 +83,7 @@ export default function WorkPackages({ project }) {
   };
 
   const exportUrl = '/api/work-packages/export.csv' + qs({ ...query, limit: undefined });
-  const cols = project ? 10 : 11;
+  const cols = project ? 9 : 10;
 
   return (
     <div className={`content${project ? '' : ''}`}>
@@ -120,10 +120,6 @@ export default function WorkPackages({ project }) {
         <select value={params.priority_id || ''} onChange={(e) => setParam('priority_id', e.target.value)} aria-label="Priority">
           <option value="">Any priority</option>{[...meta.priorities].reverse().map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <select value={params.criticality_id || ''} onChange={(e) => setParam('criticality_id', e.target.value)} aria-label="Criticality">
-          <option value="">Any criticality</option><option value="none">Not set</option>
-          {[...(meta.criticalities || [])].reverse().map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
         <select value={params.source || ''} onChange={(e) => setParam('source', e.target.value)} aria-label="Source">
           <option value="">Any source</option>{Object.entries(SOURCE).map(([k, s]) => <option key={k} value={k}>{s.label}</option>)}
         </select>
@@ -157,9 +153,6 @@ export default function WorkPackages({ project }) {
           <select aria-label="Set priority" value="" onChange={(e) => e.target.value && bulk({ priority_id: Number(e.target.value) })} disabled={busy}>
             <option value="">Set priority…</option>{[...meta.priorities].reverse().map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          <select aria-label="Set criticality" value="" onChange={(e) => e.target.value && bulk({ criticality_id: e.target.value === 'none' ? null : Number(e.target.value) })} disabled={busy}>
-            <option value="">Set criticality…</option>{[...(meta.criticalities || [])].reverse().map(c => <option key={c.id} value={c.id}>{c.name}</option>)}<option value="none">Not set</option>
-          </select>
           {project && (
             <select aria-label="Set version" value="" onChange={(e) => e.target.value && bulk({ version_id: e.target.value === 'none' ? null : Number(e.target.value) })} disabled={busy}>
               <option value="">Set version…</option><option value="none">No version</option>{project.versions.filter(v => v.status === 'open').map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
@@ -184,7 +177,6 @@ export default function WorkPackages({ project }) {
                 <th className="sortable" onClick={() => sortBy('status')}>Status{sortMark('status')}</th>
                 <th className="sortable" onClick={() => sortBy('assignee')}>Assignee{sortMark('assignee')}</th>
                 <th className="sortable hide-sm" onClick={() => sortBy('priority')}>Priority{sortMark('priority')}</th>
-                <th className="hide-sm">Criticality</th>
                 <th className="hide-sm">Source</th>
                 <th className="sortable" onClick={() => sortBy('due_date')}>Finish{sortMark('due_date')}</th>
                 {!project && <th className="sortable hide-sm" onClick={() => sortBy('project')}>Project{sortMark('project')}</th>}
@@ -234,7 +226,6 @@ function GroupRows({ label, rows, colSpan, project, selected, onToggle, onOpen }
           <td><StatusPill name={r.status_name} color={r.status_color} /></td>
           <td><Person id={r.assignee_id} name={r.assignee_name} /></td>
           <td className="hide-sm"><Priority name={r.priority_name} color={r.priority_color} position={r.priority_position} /></td>
-          <td className="hide-sm">{r.criticality_name ? <CritTag name={r.criticality_name} color={r.criticality_color} /> : <span className="muted">—</span>}</td>
           <td className="hide-sm"><SourceTag source={r.source} /></td>
           <td><Due date={r.due_date} closed={r.is_closed} /></td>
           {!project && <td className="hide-sm small soft ellipsis" style={{ maxWidth: 160 }}>{r.project_name}</td>}

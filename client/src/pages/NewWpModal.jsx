@@ -145,10 +145,9 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
   const info = useProjectInfo(projectId);
   const defStatus = meta.statuses.find(s => s.is_default)?.id || meta.statuses[0]?.id;
   const defPrio = meta.priorities.find(p => p.is_default)?.id || meta.priorities[0]?.id;
-  const defCrit = (meta.criticalities || []).find(c => c.is_default)?.id ?? null;
   const taskType = meta.types.find(t => t.name === 'Task')?.id || meta.types[0]?.id;
   const [f, setF] = useState({
-    type_id: taskType, subject: '', description: '', status_id: defStatus, priority_id: defPrio, criticality_id: defCrit,
+    type_id: taskType, subject: '', description: '', status_id: defStatus, priority_id: defPrio,
     assignee_id: null, responsible_id: null, designer_id: null, developer_id: null, tester_id: null, parent_id: null, version_id: '', start_date: '', due_date: '', estimated_hours: '', log_hours: '',
     ...defaults,
   });
@@ -227,14 +226,6 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
         <Field label="Priority">
           <select value={f.priority_id} onChange={(e) => set('priority_id', Number(e.target.value))}>
             {[...meta.priorities].reverse().map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        </Field>
-      </div>
-      <div className="form-grid three">
-        <Field label="Criticality" hint="How serious the impact is. C1 is the most critical.">
-          <select value={f.criticality_id ?? ''} onChange={(e) => set('criticality_id', e.target.value ? Number(e.target.value) : null)}>
-            <option value="">Not set</option>
-            {[...(meta.criticalities || [])].reverse().map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </Field>
       </div>

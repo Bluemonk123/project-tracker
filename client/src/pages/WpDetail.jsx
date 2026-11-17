@@ -10,7 +10,6 @@ import {
 import NewWpModal, { useProjectInfo, WpSearchSelect, LinkEditor, FILE_ACCEPT } from './NewWpModal.jsx';
 import { LogTimeModal } from './Time.jsx';
 import { fmtDate, fmtDateTime, fmtHours, fmtSize, timeAgo } from '../lib/format.js';
-import { RemarksList } from './Remarks.jsx';
 import { SourceTag } from './tickets/common.jsx';
 import ModuleInput from './ModuleInput.jsx';
 
@@ -324,8 +323,6 @@ export default function WpDetail() {
               empty={can.edit ? 'No solution yet. Write how it was solved when it is.' : 'No solution yet.'} />
           </div>
 
-          <div className="section-title">Remarks <span className="muted">({wp.remarks.length})</span></div>
-          <RemarksList wpId={wp.id} remarks={wp.remarks} canAdd={can.remark} canEdit={can.edit} onChange={(remarks) => setData(d => ({ ...d, remarks }))} />
 
           {!isMilestone && <>
             <div className="section-title">Stages <span className="xs muted" style={{ fontWeight: 400 }}>Moving the task to a stage assigns it to that stage's person</span></div>
@@ -444,8 +441,6 @@ export default function WpDetail() {
               <span className="v">{sel('priority_id', [...meta.priorities].reverse())}</span>
               <span className="k">Requested by</span>
               <span className="v"><RequestedBy value={wp.requested_by || ''} disabled={!can.edit || busy} onSave={(v) => update({ requested_by: v })} /></span>
-              <span className="k">Criticality</span>
-              <span className="v">{sel('criticality_id', [...(meta.criticalities || [])].reverse(), { empty: 'Not set' })}</span>
               <span className="k">Version</span>
               <span className="v">{sel('version_id', (info?.versions || []).filter(v => v.status !== 'closed' || v.id === wp.version_id), { empty: 'None' })}</span>
               {(info?.categories?.length > 0 || wp.category_id) && <>

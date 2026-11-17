@@ -372,7 +372,7 @@ export default function Admin() {
   const tabs = [
     ['users', 'Users', can('admin.users')],
     ['roles', 'Roles and permissions', can('admin.roles')],
-    ['work', 'Types, statuses, priorities, criticality', can('admin.settings')],
+    ['work', 'Types, statuses, priorities', can('admin.settings')],
     ['general', 'General', can('admin.settings')],
     ['tickets', 'Ticket Board', can('admin.settings')],
     ['backups', 'Backups', isAdmin],
@@ -392,7 +392,6 @@ export default function Admin() {
           <EnumEditor table="types" title="Work package types" help="What kinds of work you track." extra={(r) => (r.is_milestone ? 'Milestone' : '')} />
           <EnumEditor table="statuses" title="Statuses" help="The steps work moves through, and the Kanban column each one appears in." extra={(r) => [BOARD_COLUMN_NAMES[r.board_column] ? `Board: ${BOARD_COLUMN_NAMES[r.board_column]}` : null, r.is_closed ? 'Closed' : 'Open', r.is_default ? 'Default' : null, r.done_ratio != null ? `sets ${r.done_ratio}% done` : null].filter(Boolean).join(', ')} />
           <EnumEditor table="priorities" title="Priorities" help="How soon the work is needed. Lowest first (P1 is the highest)." extra={(r) => (r.is_default ? 'Default' : '')} />
-          <EnumEditor table="criticalities" title="Criticality levels" help="How serious the impact is. Lowest first (C1 is the most critical). Optional on each task." extra={(r) => (r.is_default ? 'Default' : '')} />
         </>} />
         <Route path="general" element={<General />} />
         <Route path="tickets" element={<AdminTickets />} />

@@ -392,25 +392,6 @@ test('convert a ticket into a task: linked, files carried over, solved when the 
   ids.proj = proj; ids.wp = wp;
 });
 
-test('remarks: several per task, each for a chosen person who is alerted', async () => {
-  const wp = ids.wp;
-  let r = await admin.post(`/work-packages/${wp.id}/remarks`, { body: 'Check with the client', user_id: '' });
-  assert.equal(r.status, 400);
-  r = await admin.post(`/work-packages/${wp.id}/remarks`, { body: 'Check with the client', user_id: ids.agent });
-  assert.equal(r.status, 201, JSON.stringify(r.data));
-  r = await admin.post(`/work-packages/${wp.id}/remarks`, { body: 'Needs a second review', user_id: ids.staff });
-  assert.equal(r.data.remarks.length, 2);
-  assert.equal(r.data.remarks[0].user_name, 'Sam Staff');
-  assert.ok(notes(ids.agent).some(n => n.reason === 'remark' && n.message.includes('Check with the client')));
-  assert.equal((await admin.get(`/work-packages/${wp.id}`)).data.remarks.length, 2);
-  assert.equal((await admin.get('/board?from=2020-01-01&to=2030-12-31')).data.rows.find(x => x.id === wp.id).remarks_count, 2);
-  // someone outside the project can't add one; only the author or an editor can delete
-  assert.equal((await other.post(`/work-packages/${wp.id}/remarks`, { body: 'x', user_id: ids.admin })).status, 403);
-  const rid = r.data.remarks[0].id;
-  assert.equal((await other.del(`/remarks/${rid}`)).status, 403);
-  assert.equal((await admin.del(`/remarks/${rid}`)).data.remarks.length, 1);
-});
-
 test('email intake: new email -> ticket, reply -> same ticket, auto-replies and duplicates skipped', async () => {
   const { simpleParser } = await import('mailparser');
   const { handleParsed, stripQuoted, checkMailbox } = await import('../inbound.js');
@@ -506,7 +487,8 @@ test('import tasks (admin): dates, status, source, requester, closed date and re
   const w = (await admin.get(`/work-packages/${r.data.items[0].id}`)).data;
   assert.equal(w.source, 'email'); assert.equal(w.requested_by, 'Ankita'); assert.equal(w.closed_on, '2026-02-23');
   assert.equal(w.created_at.slice(0, 10), '2025-10-31'); assert.equal(w.criticality_name, 'C1');
-  assert.deepEqual(w.remarks.map(x => [x.created_by_name, x.body]).sort(), [['Asha Admin', 'old remark'], ['Suresh', 'Corrected manually']].sort());
+  const comments = w.journals.filter(j => j.notes && !j.changes).map(j => [j.user_name, j.notes]);
+  assert.deepEqual(comments, [['Asha Admin', 'old remark'], ['Suresh', 'Corrected manually']]);
   const w2 = (await admin.get(`/work-packages/${r.data.items[1].id}`)).data;
   assert.equal(w2.closed_on, null); assert.equal(w2.board_column, 'develop');
   // closing in the app sets the closed date; reopening clears it
