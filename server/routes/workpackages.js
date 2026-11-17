@@ -297,13 +297,21 @@ r.get('/projects/:pid/modules', (req, res) => {
 r.get('/work-packages/export.csv', (req, res) => {
   const { where, params } = buildFilter(req, req.query);
   const rows = all(`${BASE_SELECT} WHERE ${where} ORDER BY ${orderBy(req.query.sort)} LIMIT 10000`, ...params);
-  const cols = [['key', 'ID'], ['project_name', 'Project'], ['type_name', 'Type'], ['subject', 'Subject'], ['location', 'Location'], ['module', 'Module'], ['status_name', 'Status'],
-    ['priority_name', 'Priority'], ['criticality_name', 'Criticality'], ['source', 'Source'], ['assignee_name', 'Assignee'], ['responsible_name', 'Accountable'],
-    ['designer_name', 'Designer'], ['developer_name', 'Developer'], ['tester_name', 'Tester'], ['version_name', 'Version'],
-    ['start_date', 'Start date'], ['due_date', 'Due date'], ['estimated_hours', 'Estimated hours'], ['spent_hours', 'Spent hours'],
-    ['done_ratio', '% done'], ['parent_key', 'Parent'], ['author_name', 'Author'], ['created_at', 'Created'], ['updated_at', 'Updated']];
-  const esc = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-  const csv = [cols.map(c => c[1]).join(','), ...rows.map(r1 => cols.map(c => esc(r1[c[0]])).join(','))].join('\r\n');
+  // the tasks matching the list's filters (all tasks when there are none), with their details
+  const cols = [['key', 'ID'], ['project_name', 'Project'], ['type_name', 'Type'], ['subject', 'Subject'], ['module', 'Module'],
+    ['description', 'Problem'], ['solution', 'Solution'], ['board_column', 'Stage'], ['status_name', 'Status'], ['priority_name', 'Priority'],
+    ['location', 'Location'], ['assignee_name', 'Assignee'], ['requested_by', 'Requester'], ['source', 'Source'],
+    ['designer_name', 'Designer'], ['developer_name', 'Developer'], ['tester_name', 'Tester'], ['version_name', 'Version'], ['parent_key', 'Parent'],
+    ['start_date', 'Start date'], ['due_date', 'Due date'], ['closed_on', 'Closed on'], ['estimated_hours', 'Estimated hours'], ['spent_hours', 'Spent hours'],
+    ['author_name', 'Created by'], ['created_at', 'Created'], ['updated_at', 'Updated']];
+  const LABEL = {
+    board_column: { new: 'New', design: 'In Design', develop: 'In Develop', testing: 'In Testing', closed: 'Closed', rejected: 'Rejected' },
+    location: { local: 'On Local', staging: 'On Staging', production: 'On Production', external: 'On External' },
+    source: { project: 'Project', ticket: 'Ticket', email: 'Email' },
+  };
+  const val = (r1, k) => (LABEL[k] ? LABEL[k][r1[k]] ?? r1[k] : r1[k]);
+  const esc = (v) => { const s = v == null ? '' : String(v); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const csv = [cols.map(c => c[1]).join(','), ...rows.map(r1 => cols.map(c => esc(val(r1, c[0]))).join(','))].join('\r\n');
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="work-packages-${todayISO()}.csv"`);
   res.send('﻿' + csv);

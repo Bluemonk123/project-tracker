@@ -580,3 +580,16 @@ test('task board: type and location filters', async () => {
   rows = (await admin.get(q + '&location=none')).data.rows;
   assert.ok(rows.every(r => r.location === null));
 });
+
+test('work list CSV export follows the filters, with task details', async () => {
+  const meta = (await admin.get('/meta')).data;
+  const bug = meta.types.find(t => t.name === 'Bug').id;
+  let r = await admin.get(`/work-packages/export.csv?project_id=${ids.proj.id}&status=all&type_id=${bug}`);
+  assert.equal(r.status, 200);
+  const lines = r.data.replace(/^﻿/, '').split('\r\n');
+  assert.ok(lines[0].startsWith('ID,Project,Type,Subject,Module,Problem,Solution,Stage,Status,Priority,Location,Assignee,Requester,Source'));
+  assert.ok(lines.length > 1 && lines.slice(1).every(l => l.split(',')[2] === 'Bug'));
+  assert.ok(r.data.includes('On Staging'));
+  r = await admin.get(`/work-packages/export.csv?project_id=${ids.proj.id}&status=all`);
+  assert.ok(r.data.split('\r\n').length > lines.length);
+});
