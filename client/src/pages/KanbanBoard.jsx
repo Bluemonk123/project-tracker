@@ -7,6 +7,7 @@ import { Loading, ErrorBox, Avatar, useAsync } from '../components/ui.jsx';
 import NewWpModal from './NewWpModal.jsx';
 import RaiseTicketModal from './tickets/RaiseTicketModal.jsx';
 import { SlaBadge } from './tickets/common.jsx';
+import { LOCATIONS } from './WpDetail.jsx';
 import { addDays, diffDays, fmtDate, startOfWeek, today, parseDate } from '../lib/format.js';
 
 const h = (n) => `${Math.round((n || 0) * 100) / 100} h`;
@@ -91,7 +92,7 @@ function TicketCard({ t, draggable, onDragStart, onDragEnd, dragging }) {
 }
 
 export default function KanbanBoard({ project }) {
-  const { activeUsers, projects, user } = useApp();
+  const { activeUsers, projects, user, meta } = useApp();
   const [sp, setSp] = useSearchParams();
   const def = thisWeek();
   const from = sp.get('from') || def.from;
@@ -99,6 +100,8 @@ export default function KanbanBoard({ project }) {
   const employee = sp.get('employee') || '';
   const projectId = project ? String(project.id) : (sp.get('project') || '');
   const undated = sp.get('undated') !== '0';
+  const typeId = sp.get('type') || '';
+  const location = sp.get('location') || '';
   const [dragId, setDragId] = useState(null);
   const [over, setOver] = useState(null);
   const [adding, setAdding] = useState(null);
@@ -115,7 +118,7 @@ export default function KanbanBoard({ project }) {
     for (const [k, v] of Object.entries(changes)) { if (v === '' || v == null) next.delete(k); else next.set(k, v); }
     setSp(next, { replace: true });
   };
-  const query = { from, to, assignee_id: employee || undefined, project_id: projectId || undefined, undated: undated ? undefined : 0 };
+  const query = { from, to, assignee_id: employee || undefined, project_id: projectId || undefined, undated: undated ? undefined : 0, type_id: typeId || undefined, location: location || undefined };
   const { data, error, loading, reload, setData } = useLoad(() => api.get('/board' + qs(query)), [JSON.stringify(query)]);
   useEffect(() => { // refresh when a ticket or task is raised from the top bar
     const again = () => reload();
@@ -203,8 +206,21 @@ export default function KanbanBoard({ project }) {
               </select>
             </label>
           )}
+          <label className="kb-field kb-narrow"><span>Type</span>
+            <select value={typeId} onChange={(e) => set({ type: e.target.value })}>
+              <option value="">All types</option>
+              {meta.types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </label>
+          <label className="kb-field kb-narrow"><span>Location</span>
+            <select value={location} onChange={(e) => set({ location: e.target.value })}>
+              <option value="">All locations</option>
+              {Object.entries(LOCATIONS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+              <option value="none">Not set</option>
+            </select>
+          </label>
           <label className="check small kb-undated"><input type="checkbox" checked={undated} onChange={(e) => set({ undated: e.target.checked ? '' : '0' })} /><span>Show open items<br />without dates</span></label>
-          {(employee || (!project && projectId) || !isThisWeek || !undated) && (
+          {(employee || (!project && projectId) || !isThisWeek || !undated || typeId || location) && (
             <button className="btn sm ghost" onClick={() => setSp({}, { replace: true })}>Reset</button>
           )}
           <span className="spacer" />

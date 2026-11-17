@@ -88,6 +88,8 @@ export function buildFilter(req, q) {
     if (parts.length) where.push(`(${parts.join(' OR ')})`);
   };
   inFilter('wp.type_id', q.type_id);
+  if (q.location === 'none') where.push('wp.location IS NULL');
+  else if (['local', 'staging', 'production', 'external'].includes(q.location)) { where.push('wp.location = ?'); params.push(q.location); }
   inFilter('wp.priority_id', q.priority_id);
   inFilter('wp.criticality_id', q.criticality_id);
   if (q.module) { where.push('wp.module = ?'); params.push(String(q.module)); }
@@ -207,6 +209,8 @@ r.get('/board', (req, res) => {
   else if (q.assignee_id === 'none') where.push('wp.assignee_id IS NULL');
   else if (/^\d+$/.test(q.assignee_id || '')) { where.push('wp.assignee_id = ?'); params.push(Number(q.assignee_id)); }
   if (/^\d+$/.test(q.type_id || '')) { where.push('wp.type_id = ?'); params.push(Number(q.type_id)); }
+  if (q.location === 'none') where.push('wp.location IS NULL');
+  else if (['local', 'staging', 'production', 'external'].includes(q.location)) { where.push('wp.location = ?'); params.push(q.location); }
   const rows = all(`${BASE_SELECT} WHERE ${where.join(' AND ')}
                     ORDER BY wp.due_date IS NULL, wp.due_date, pr.position DESC, wp.id LIMIT 2000`, ...params)
     .map(w => ({ ...w, can_edit: canEditWp(req, w), can_log: can(req, 'time.log', w.project_id) }));

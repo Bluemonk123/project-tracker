@@ -567,3 +567,16 @@ test('tasks: location (local / staging / production / external)', async () => {
   assert.equal((await admin.patch(`/work-packages/${w.id}`, { location: 'production' })).data.location, 'production');
   assert.equal((await admin.patch(`/work-packages/${w.id}`, { location: null })).data.location, null);
 });
+
+test('task board: type and location filters', async () => {
+  const meta = (await admin.get('/meta')).data;
+  const bug = meta.types.find(t => t.name === 'Bug').id;
+  const a = (await admin.post('/work-packages', { project_id: ids.proj.id, subject: 'Staging bug', type_id: bug, location: 'staging' })).data;
+  const q = `/board?from=2020-01-01&to=2030-12-31&project_id=${ids.proj.id}`;
+  let rows = (await admin.get(q + `&type_id=${bug}`)).data.rows;
+  assert.ok(rows.length && rows.every(r => r.type_id === bug));
+  rows = (await admin.get(q + '&location=staging')).data.rows;
+  assert.ok(rows.some(r => r.id === a.id) && rows.every(r => r.location === 'staging'));
+  rows = (await admin.get(q + '&location=none')).data.rows;
+  assert.ok(rows.every(r => r.location === null));
+});

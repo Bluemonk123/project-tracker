@@ -1084,3 +1084,5 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .wp-comment-box { margin-top: 18px; }
 .wp-head-select { width: auto; height: 26px; font-size: 12px; font-weight: 650; padding: 0 26px 0 8px; border-radius: 6px; border-color: var(--line); color: var(--ink-2); }
 .wp-head-select[aria-label="Stage"] { border-color: color-mix(in srgb, var(--sc, var(--line)) 70%, transparent); background-color: color-mix(in srgb, var(--sc, transparent) 18%, var(--surface)); color: var(--ink); }
+.kb-field.kb-narrow { max-width: 150px; min-width: 104px; }
+.kb-filters { flex-wrap: wrap; row-gap: 10px; }
