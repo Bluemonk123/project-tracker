@@ -246,7 +246,7 @@ export default function KanbanBoard({ project }) {
                       <span className="kb-col-hours" title="Logged / estimated hours of the tasks in this column">{h(sum(items, 'spent_hours')).replace(' h', '')} / {h(sum(items, 'estimated_hours'))}</span>
                     )}
                   </div>
-                  {canCreateIn && col.statuses.length > 0 && (
+                  {canCreateIn && col.statuses.length > 0 && !['closed', 'rejected'].includes(col.key) && (
                     <button type="button" className="kb-add" onClick={() => setAdding(col)} title={`Add to ${col.name}`} aria-label={`Add a work package to ${col.name}`}><Icon name="plus" /></button>
                   )}
                 </div>
