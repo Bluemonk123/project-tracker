@@ -76,8 +76,8 @@ function seedDefaults() {
     }
     if (!get('SELECT 1 AS x FROM types LIMIT 1')) {
       [
-        ['Task', '#3B6EA8', 0], ['Requirement', '#7A4FA3', 0], ['Feature', '#2F7A6B', 0],
-        ['User story', '#2E8A9A', 0], ['Bug', '#C2453B', 0], ['Epic', '#B5662A', 0], ['Milestone', '#1F2933', 1],
+        ['Task', '#3B6EA8', 0], ['Feature', '#2F7A6B', 0], ['Requirement', '#7A4FA3', 0], ['Enhancement', '#2E8A9A', 0],
+        ['Bug', '#C2453B', 0], ['Epic', '#B5662A', 0], ['Milestone', '#1F2933', 1],
       ].forEach(([n, c, m], i) => run('INSERT INTO types(name, color, is_milestone, position) VALUES(?,?,?,?)', n, c, m, i));
     }
     if (!get('SELECT 1 AS x FROM statuses LIMIT 1')) {
@@ -243,6 +243,27 @@ function migrate() {
     if (rj) run("UPDATE statuses SET board_column = 'rejected', is_closed = 1 WHERE id = ?", rj.id);
     else run("INSERT INTO statuses(name, color, is_closed, is_default, position, board_column) VALUES('Rejected', '#C25B6B', 1, 0, (SELECT COALESCE(MAX(position), 0) + 1 FROM statuses), 'rejected')");
     setSetting('migration_rejected_col_v1', '1');
+  }
+  // Task types in this order: Task, Feature, Requirement, Enhancement, Bug, Epic, Milestone.
+  // Missing ones are added; any other type that no task uses is removed; one still in use is kept at the end.
+  if (getSetting('migration_types_v2') === null) {
+    tx(() => {
+      const want = [['Task', '#3B6EA8', 0], ['Feature', '#2F7A6B', 0], ['Requirement', '#7A4FA3', 0], ['Enhancement', '#2E8A9A', 0],
+        ['Bug', '#C2453B', 0], ['Epic', '#B5662A', 0], ['Milestone', '#1F2933', 1]];
+      want.forEach(([n, c, m], i) => {
+        const t = get('SELECT id FROM types WHERE lower(name) = lower(?)', n);
+        if (t) run('UPDATE types SET name = ?, position = ? WHERE id = ?', n, i, t.id);
+        else run('INSERT INTO types(name, color, is_milestone, position) VALUES(?,?,?,?)', n, c, m, i);
+      });
+      const names = want.map(w => w[0].toLowerCase());
+      let pos = want.length;
+      for (const t of all('SELECT id, name FROM types ORDER BY position, id')) {
+        if (names.includes(t.name.toLowerCase())) continue;
+        if (get('SELECT 1 AS x FROM work_packages WHERE type_id = ? LIMIT 1', t.id)) run('UPDATE types SET position = ? WHERE id = ?', pos++, t.id);
+        else run('DELETE FROM types WHERE id = ?', t.id);
+      }
+      setSetting('migration_types_v2', '1');
+    });
   }
   // Priorities get a P number (P1 highest), and tasks get a criticality (C1 highest)
   if (getSetting('migration_levels_v1') === null) {

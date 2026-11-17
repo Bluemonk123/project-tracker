@@ -8,7 +8,7 @@ import NewWpModal from '../NewWpModal.jsx';
 
 export default function Requirements({ project }) {
   const { meta } = useApp();
-  const parentTypes = meta.types.filter(t => ['Requirement', 'Epic', 'Feature', 'User story'].includes(t.name));
+  const parentTypes = meta.types.filter(t => ['Requirement', 'Epic', 'Feature', 'Enhancement', 'User story'].includes(t.name));
   const [typeId, setTypeId] = useState(meta.types.find(t => t.name === 'Requirement')?.id || meta.types[0].id);
   const [showClosed, setShowClosed] = useState(true);
   const [open, setOpen] = useState({});

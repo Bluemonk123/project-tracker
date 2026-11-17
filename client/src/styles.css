@@ -1069,14 +1069,16 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .work-tabs-head .head-actions { margin-left: auto; padding-bottom: 8px; }
 .wc-day { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: var(--fs-sm); cursor: pointer; background: var(--surface); }
 .wc-day.off { background: var(--sunken); color: var(--ink-3); text-decoration: line-through; }
-/* task page: Module -> Problem -> Solution -> Files -> Links as a vertical stepper */
+/* task page: Module -> Problem -> Solution -> Files -> Links as a vertical stepper.
+   Each step draws its line from its own circle down past the next circle, above backgrounds and borders,
+   so the connection never breaks; the circles sit on top. */
 .wp-psol .step { position: relative; padding-left: 52px !important; }
-.wp-psol .step::before { content: ''; position: absolute; left: 16px; top: 15px; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #B8BEC6; background: var(--surface); box-sizing: border-box; z-index: 1; }
+.wp-psol .step::before { content: ''; position: absolute; left: 16px; top: 15px; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #B8BEC6; background: var(--surface); box-sizing: border-box; z-index: 3; }
 .wp-psol .step.done::before { border-color: #3E9A80; background: #3E9A80 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 13px no-repeat; }
-.wp-psol .step:not(:last-child)::after { content: ''; position: absolute; left: 25px; top: 37px; bottom: -15px; width: 2px; background: #C9CED4; }
+.wp-psol .step:not(:last-child)::after { content: ''; position: absolute; left: 25px; top: 25px; bottom: -30px; width: 2px; background: #C9CED4; z-index: 2; }
 .wp-psol .step.done:not(:last-child)::after { background: #3E9A80; }
 .wp-psol .wp-module.step::before { top: 50%; transform: translateY(-50%); }
-.wp-psol .wp-module.step:not(:last-child)::after { top: calc(50% + 12px); }
+.wp-psol .wp-module.step:not(:last-child)::after { top: 50%; }
 .wp-psol-part, .wp-psol-part.plain, .wp-psol-part + .wp-psol-part, .wp-psol > .wp-psol-part:nth-of-type(2) { background: none !important; }
 .wp-psol .wp-psol-part.solution { background: color-mix(in srgb, var(--ok-soft) 35%, var(--surface)) !important; }
 .wp-comment-box { margin-top: 18px; }
