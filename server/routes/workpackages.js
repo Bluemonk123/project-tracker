@@ -264,10 +264,10 @@ r.post('/admin/import/tasks', (req, res) => {
     const startDay = x.start_date || x.created_on;
     const dueDay = x.due_date || dueFor(x.priority_id, startDay) || null;
     const id = run(`INSERT INTO work_packages(project_id, number, type_id, subject, description, status_id, priority_id, criticality_id, author_id, start_date, due_date,
-                      source, requested_by, closed_on, done_ratio, position, created_at, updated_at, solution, module)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                      source, requested_by, closed_on, done_ratio, position, created_at, updated_at, solution, module, location)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       p.id, number, x.type_id, x.subject, x.description || null, x.status.id, x.priority_id, x.criticality_id, req.user.id, startDay, dueDay,
-      x.source, x.requested_by, x.status.is_closed ? (x.closed_on || null) : null, x.status.is_closed ? 100 : 0, pos, at, upd, String(x.solution || '').trim() || null, String(x.module || '').trim().slice(0, 80) || null).id;
+      x.source, x.requested_by, x.status.is_closed ? (x.closed_on || null) : null, x.status.is_closed ? 100 : 0, pos, at, upd, String(x.solution || '').trim() || null, String(x.module || '').trim().slice(0, 80) || null, ['local', 'staging', 'production', 'external'].includes(x.location) ? x.location : null).id;
     run('INSERT INTO wp_stages(wp_id, stage, user_id, entered_at) VALUES(?,?,?,?)', id, x.status.board_column || 'develop', req.user.id, at);
     run('INSERT INTO journals(wp_id, user_id, notes, changes, created_at) VALUES(?,?,?,?,?)', id, req.user.id,
       x.ref ? `Imported (${x.ref})` : 'Imported', JSON.stringify({ created: [null, true] }), at);
