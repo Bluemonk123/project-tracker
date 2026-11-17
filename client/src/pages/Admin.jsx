@@ -224,7 +224,7 @@ function EnumModal({ table, row, onClose, onSaved }) {
   const save = async () => {
     const body = { name: f.name, color: f.color };
     if (table === 'statuses') Object.assign(body, { is_closed: f.is_closed, is_default: f.is_default, done_ratio: f.done_ratio === '' ? null : Number(f.done_ratio), board_column: f.board_column || undefined });
-    if (table === 'priorities') body.is_default = f.is_default;
+    if (table === 'priorities' || table === 'criticalities') body.is_default = f.is_default;
     if (table === 'types') body.is_milestone = f.is_milestone;
     const r = await run(() => (row ? api.patch(`/admin/${table}/${row.id}`, body) : api.post(`/admin/${table}`, body)), 'Saved');
     if (r) { onSaved(); onClose(); }
@@ -243,7 +243,7 @@ function EnumModal({ table, row, onClose, onSaved }) {
         </Field>
         <Field label="Set % done to" hint="Optional. When a work package moves into this status its % done is set to this value."><input type="number" min="0" max="100" value={f.done_ratio} onChange={(e) => setF({ ...f, done_ratio: e.target.value })} /></Field>
       </>}
-      {table === 'priorities' && <label className="check"><input type="checkbox" checked={f.is_default} onChange={(e) => setF({ ...f, is_default: e.target.checked })} />Default priority</label>}
+      {(table === 'priorities' || table === 'criticalities') && <label className="check"><input type="checkbox" checked={f.is_default} onChange={(e) => setF({ ...f, is_default: e.target.checked })} />Default for new tasks</label>}
       {table === 'types' && <label className="check"><input type="checkbox" checked={f.is_milestone} onChange={(e) => setF({ ...f, is_milestone: e.target.checked })} />Milestone (a single date, shown as a diamond in Gantt)</label>}
     </Modal>
   );
@@ -372,7 +372,7 @@ export default function Admin() {
   const tabs = [
     ['users', 'Users', can('admin.users')],
     ['roles', 'Roles and permissions', can('admin.roles')],
-    ['work', 'Types, statuses, priorities', can('admin.settings')],
+    ['work', 'Types, statuses, priorities, criticality', can('admin.settings')],
     ['general', 'General', can('admin.settings')],
     ['tickets', 'Ticket Board', can('admin.settings')],
     ['backups', 'Backups', isAdmin],
@@ -391,7 +391,8 @@ export default function Admin() {
         <Route path="work" element={<>
           <EnumEditor table="types" title="Work package types" help="What kinds of work you track." extra={(r) => (r.is_milestone ? 'Milestone' : '')} />
           <EnumEditor table="statuses" title="Statuses" help="The steps work moves through, and the Kanban column each one appears in." extra={(r) => [BOARD_COLUMN_NAMES[r.board_column] ? `Board: ${BOARD_COLUMN_NAMES[r.board_column]}` : null, r.is_closed ? 'Closed' : 'Open', r.is_default ? 'Default' : null, r.done_ratio != null ? `sets ${r.done_ratio}% done` : null].filter(Boolean).join(', ')} />
-          <EnumEditor table="priorities" title="Priorities" help="Lowest first." extra={(r) => (r.is_default ? 'Default' : '')} />
+          <EnumEditor table="priorities" title="Priorities" help="How soon the work is needed. Lowest first (P1 is the highest)." extra={(r) => (r.is_default ? 'Default' : '')} />
+          <EnumEditor table="criticalities" title="Criticality levels" help="How serious the impact is. Lowest first (C1 is the most critical). Optional on each task." extra={(r) => (r.is_default ? 'Default' : '')} />
         </>} />
         <Route path="general" element={<General />} />
         <Route path="tickets" element={<AdminTickets />} />

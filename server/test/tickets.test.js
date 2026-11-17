@@ -465,3 +465,24 @@ test('email settings: incoming mailbox saved without echoing the password; task 
   assert.equal(wp.source, 'email');
   assert.equal((await admin.get(`/work-packages?source=email&status=all`)).data.rows.map(x => x.id).includes(wp.id), true);
 });
+
+test('priority levels P1-P4 and criticality C1-C3 on tasks', async () => {
+  const meta = (await admin.get('/meta')).data;
+  assert.deepEqual(meta.priorities.map(p => p.name), ['P4 - Low', 'P3 - Normal', 'P2 - High', 'P1 - Immediate']);
+  assert.deepEqual(meta.criticalities.map(c => c.name), ['C3', 'C2', 'C1']);
+  const c1 = meta.criticalities.find(c => c.name === 'C1').id;
+  const p1 = meta.priorities.find(p => p.name === 'P1 - Immediate').id;
+  let r = await admin.post('/work-packages', { project_id: ids.proj.id, subject: 'Data loss on save', priority_id: p1, criticality_id: c1 });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.criticality_name, 'C1');
+  assert.equal(r.data.priority_name, 'P1 - Immediate');
+  const id = r.data.id;
+  assert.equal((await admin.post('/work-packages', { project_id: ids.proj.id, subject: 'x', criticality_id: 9999 })).status, 400);
+  assert.ok((await admin.get(`/work-packages?criticality_id=${c1}&status=all`)).data.rows.some(x => x.id === id));
+  r = await admin.patch(`/work-packages/${id}`, { criticality_id: null });
+  assert.equal(r.data.criticality_id, null);
+  assert.ok((await admin.get(`/work-packages?criticality_id=none&status=all`)).data.rows.some(x => x.id === id));
+  // admins can add a level
+  assert.equal((await admin.post('/admin/criticalities', { name: 'C4', color: '#888888' })).status, 201);
+  assert.equal((await agent.post('/admin/criticalities', { name: 'C5' })).status, 403);
+});

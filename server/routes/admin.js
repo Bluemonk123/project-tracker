@@ -14,6 +14,7 @@ r.get('/meta', (_req, res) => {
     types: all('SELECT * FROM types ORDER BY position, id'),
     statuses: all('SELECT * FROM statuses ORDER BY position, id'),
     priorities: all('SELECT * FROM priorities ORDER BY position, id'),
+    criticalities: all('SELECT * FROM criticalities ORDER BY position, id'),
     roles: all('SELECT id, name, scope, description, builtin FROM roles ORDER BY scope, position, id'),
     activities: parseList(getSetting('time_activities')),
     appName: getSetting('app_name', 'Project Tracker'),
@@ -162,9 +163,10 @@ const ENUMS = {
   types: ['name', 'color', 'is_milestone', 'position'],
   statuses: ['name', 'color', 'is_closed', 'is_default', 'done_ratio', 'board_column', 'position'],
   priorities: ['name', 'color', 'is_default', 'position'],
+  criticalities: ['name', 'color', 'is_default', 'position'],
 };
 const BOARD_COLUMNS = ['new', 'design', 'develop', 'testing', 'closed', 'rejected'];
-const USAGE_COL = { types: 'type_id', statuses: 'status_id', priorities: 'priority_id' };
+const USAGE_COL = { types: 'type_id', statuses: 'status_id', priorities: 'priority_id', criticalities: 'criticality_id' };
 
 for (const [table, cols] of Object.entries(ENUMS)) {
   r.post(`/admin/${table}`, (req, res) => {

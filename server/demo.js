@@ -17,7 +17,7 @@ const day = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return is
 const role = (name, scope) => get('SELECT id FROM roles WHERE name = ? AND scope = ?', name, scope).id;
 const status = (name) => get('SELECT id FROM statuses WHERE name = ?', name).id;
 const type = (name) => get('SELECT id FROM types WHERE name = ?', name).id;
-const prio = (name) => get('SELECT id FROM priorities WHERE name = ?', name).id;
+const prio = (name) => get("SELECT id FROM priorities WHERE name = ? OR name LIKE '% - ' || ?", name, name).id;
 const PASSWORD = 'demo12345';
 
 tx(() => {

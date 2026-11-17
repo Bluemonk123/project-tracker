@@ -542,3 +542,12 @@ CREATE TABLE IF NOT EXISTS wp_remarks (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_wp_remarks ON wp_remarks(wp_id, created_at);
+
+-- Criticality of a task (how serious the impact is): C1 highest. Lowest first, like priorities.
+CREATE TABLE IF NOT EXISTS criticalities (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL UNIQUE,
+  color      TEXT NOT NULL DEFAULT '#5B6472',
+  is_default INTEGER NOT NULL DEFAULT 0,
+  position   INTEGER NOT NULL DEFAULT 0
+);

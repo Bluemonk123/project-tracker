@@ -89,7 +89,7 @@ function seedDefaults() {
         run('INSERT INTO statuses(name, color, is_closed, is_default, done_ratio, position) VALUES(?,?,?,?,?,?)', n, c, closed, def, ratio, i));
     }
     if (!get('SELECT 1 AS x FROM priorities LIMIT 1')) {
-      [['Low', '#8A93A0', 0], ['Normal', '#3B6EA8', 1], ['High', '#C98A1B', 0], ['Immediate', '#C2453B', 0]]
+      [['P4 - Low', '#8A93A0', 0], ['P3 - Normal', '#3B6EA8', 1], ['P2 - High', '#C98A1B', 0], ['P1 - Immediate', '#C2453B', 0]]
         .forEach(([n, c, d], i) => run('INSERT INTO priorities(name, color, is_default, position) VALUES(?,?,?,?)', n, c, d, i));
     }
     if (getSetting('app_name') === null) setSetting('app_name', 'Project Tracker');
@@ -243,6 +243,21 @@ function migrate() {
     if (rj) run("UPDATE statuses SET board_column = 'rejected', is_closed = 1 WHERE id = ?", rj.id);
     else run("INSERT INTO statuses(name, color, is_closed, is_default, position, board_column) VALUES('Rejected', '#C25B6B', 1, 0, (SELECT COALESCE(MAX(position), 0) + 1 FROM statuses), 'rejected')");
     setSetting('migration_rejected_col_v1', '1');
+  }
+  // Priorities get a P number (P1 highest), and tasks get a criticality (C1 highest)
+  if (getSetting('migration_levels_v1') === null) {
+    tx(() => {
+      for (const [old, nw] of [['Immediate', 'P1 - Immediate'], ['High', 'P2 - High'], ['Normal', 'P3 - Normal'], ['Low', 'P4 - Low']]) {
+        if (!get('SELECT 1 AS x FROM priorities WHERE name = ?', nw)) run('UPDATE priorities SET name = ? WHERE name = ?', nw, old);
+      }
+      if (!get('SELECT 1 AS x FROM criticalities LIMIT 1')) {
+        [['C3', '#3B6EA8'], ['C2', '#C98A1B'], ['C1', '#C2453B']].forEach(([n, c], i) => run('INSERT INTO criticalities(name, color, position) VALUES(?,?,?)', n, c, i));
+      }
+      if (!all('PRAGMA table_info(work_packages)').some(c => c.name === 'criticality_id')) {
+        db.exec('ALTER TABLE work_packages ADD COLUMN criticality_id INTEGER REFERENCES criticalities(id) ON DELETE SET NULL');
+      }
+      setSetting('migration_levels_v1', '1');
+    });
   }
   // ---------- Ticket Board (helpdesk) ----------
   const nCols = all('PRAGMA table_info(notifications)').map(c => c.name);

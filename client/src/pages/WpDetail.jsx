@@ -14,7 +14,7 @@ import { RemarksList } from './Remarks.jsx';
 import { SourceTag } from './tickets/common.jsx';
 
 const FIELD_LABELS = {
-  type_id: 'Type', subject: 'Subject', description: 'Description', status_id: 'Status', priority_id: 'Priority',
+  type_id: 'Type', subject: 'Subject', description: 'Description', status_id: 'Status', priority_id: 'Priority', criticality_id: 'Criticality',
   assignee_id: 'Assignee', responsible_id: 'Accountable', parent_id: 'Parent', version_id: 'Version', category_id: 'Category',
   start_date: 'Start date', due_date: 'Due date', estimated_hours: 'Estimated hours', done_ratio: '% done', project_id: 'Project',
   relation_added: 'Relation', attachment: 'File', link_added: 'Link',
@@ -99,6 +99,7 @@ function useLabeler(info) {
       case 'type_id': return meta.types.find(t => t.id === v)?.name ?? v;
       case 'status_id': return meta.statuses.find(t => t.id === v)?.name ?? v;
       case 'priority_id': return meta.priorities.find(t => t.id === v)?.name ?? v;
+      case 'criticality_id': return v == null ? 'Not set' : (meta.criticalities || []).find(t => t.id === v)?.name ?? v;
       case 'assignee_id': case 'responsible_id': case 'designer_id': case 'developer_id': case 'tester_id': return userById(v)?.name ?? `user ${v}`;
       case 'version_id': return info?.versions.find(x => x.id === v)?.name ?? `version ${v}`;
       case 'category_id': return info?.categories.find(x => x.id === v)?.name ?? `category ${v}`;
@@ -409,7 +410,9 @@ export default function WpDetail() {
                 </Fragment>
               ))}
               <span className="k">Priority</span>
-              <span className="v">{sel('priority_id', meta.priorities)}</span>
+              <span className="v">{sel('priority_id', [...meta.priorities].reverse())}</span>
+              <span className="k">Criticality</span>
+              <span className="v">{sel('criticality_id', [...(meta.criticalities || [])].reverse(), { empty: 'Not set' })}</span>
               <span className="k">Version</span>
               <span className="v">{sel('version_id', (info?.versions || []).filter(v => v.status !== 'closed' || v.id === wp.version_id), { empty: 'None' })}</span>
               {(info?.categories?.length > 0 || wp.category_id) && <>

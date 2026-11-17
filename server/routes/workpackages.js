@@ -13,6 +13,7 @@ const BASE_SELECT = `
     t.name AS type_name, t.color AS type_color, t.is_milestone,
     s.name AS status_name, s.color AS status_color, s.is_closed, s.board_column,
     pr.name AS priority_name, pr.color AS priority_color, pr.position AS priority_position,
+    cr.name AS criticality_name, cr.color AS criticality_color, cr.position AS criticality_position,
     a.name AS assignee_name, rs.name AS responsible_name, au.name AS author_name,
     dz.name AS designer_name, dv.name AS developer_name, ts.name AS tester_name,
     v.name AS version_name, c.name AS category_name,
@@ -24,6 +25,7 @@ const BASE_SELECT = `
   JOIN types t ON t.id = wp.type_id
   JOIN statuses s ON s.id = wp.status_id
   JOIN priorities pr ON pr.id = wp.priority_id
+  LEFT JOIN criticalities cr ON cr.id = wp.criticality_id
   LEFT JOIN users a ON a.id = wp.assignee_id
   LEFT JOIN users rs ON rs.id = wp.responsible_id
   LEFT JOIN users au ON au.id = wp.author_id
@@ -86,6 +88,7 @@ export function buildFilter(req, q) {
   };
   inFilter('wp.type_id', q.type_id);
   inFilter('wp.priority_id', q.priority_id);
+  inFilter('wp.criticality_id', q.criticality_id);
   // source: project / ticket / email (comma-separated for several)
   const sources = String(q.source || '').split(',').filter(x => ['project', 'ticket', 'email'].includes(x));
   if (sources.length) { where.push(`wp.source IN (${sources.map(() => '?').join(',')})`); params.push(...sources); }
@@ -259,7 +262,7 @@ r.get('/work-packages/export.csv', (req, res) => {
   const { where, params } = buildFilter(req, req.query);
   const rows = all(`${BASE_SELECT} WHERE ${where} ORDER BY ${orderBy(req.query.sort)} LIMIT 10000`, ...params);
   const cols = [['key', 'ID'], ['project_name', 'Project'], ['type_name', 'Type'], ['subject', 'Subject'], ['status_name', 'Status'],
-    ['priority_name', 'Priority'], ['source', 'Source'], ['assignee_name', 'Assignee'], ['responsible_name', 'Accountable'],
+    ['priority_name', 'Priority'], ['criticality_name', 'Criticality'], ['source', 'Source'], ['assignee_name', 'Assignee'], ['responsible_name', 'Accountable'],
     ['designer_name', 'Designer'], ['developer_name', 'Developer'], ['tester_name', 'Tester'], ['version_name', 'Version'],
     ['start_date', 'Start date'], ['due_date', 'Due date'], ['estimated_hours', 'Estimated hours'], ['spent_hours', 'Spent hours'],
     ['done_ratio', '% done'], ['parent_key', 'Parent'], ['author_name', 'Author'], ['created_at', 'Created'], ['updated_at', 'Updated']];
@@ -317,6 +320,7 @@ function validateRefs(projectId, f, wpId = null) {
   if (f.type_id !== undefined && !get('SELECT id FROM types WHERE id = ?', f.type_id)) fail(400, 'Unknown type.');
   if (f.status_id !== undefined && !get('SELECT id FROM statuses WHERE id = ?', f.status_id)) fail(400, 'Unknown status.');
   if (f.priority_id !== undefined && !get('SELECT id FROM priorities WHERE id = ?', f.priority_id)) fail(400, 'Unknown priority.');
+  if (f.criticality_id && !get('SELECT id FROM criticalities WHERE id = ?', f.criticality_id)) fail(400, 'Unknown criticality.');
   if (f.version_id && !get('SELECT id FROM versions WHERE id = ? AND project_id = ?', f.version_id, projectId)) fail(400, 'That version belongs to another project.');
   if (f.category_id && !get('SELECT id FROM categories WHERE id = ? AND project_id = ?', f.category_id, projectId)) fail(400, 'That category belongs to another project.');
   if (f.assignee_id !== undefined) f.assignee_id = checkMemberOrNull(projectId, f.assignee_id, 'Assignee');
@@ -345,6 +349,7 @@ function readFields(b) {
     description: b.description,
     status_id: intOrNull(b.status_id) ?? undefined,
     priority_id: intOrNull(b.priority_id) ?? undefined,
+    criticality_id: intOrNull(b.criticality_id),
     assignee_id: intOrNull(b.assignee_id),
     responsible_id: intOrNull(b.responsible_id),
     designer_id: intOrNull(b.designer_id),
@@ -395,6 +400,7 @@ export function createWp(req, projectId, body, { journalNote } = {}) {
   f.type_id ??= get('SELECT id FROM types ORDER BY position LIMIT 1').id;
   f.status_id ??= (get('SELECT id FROM statuses WHERE is_default = 1') || get('SELECT id FROM statuses ORDER BY position LIMIT 1')).id;
   f.priority_id ??= (get('SELECT id FROM priorities WHERE is_default = 1') || get('SELECT id FROM priorities ORDER BY position LIMIT 1')).id;
+  if (f.criticality_id === undefined) f.criticality_id = get('SELECT id FROM criticalities WHERE is_default = 1')?.id ?? null;
   const t = get('SELECT is_milestone FROM types WHERE id = ?', f.type_id);
   if (t?.is_milestone && f.due_date && !f.start_date) f.start_date = f.due_date;
   if (t?.is_milestone && f.start_date && !f.due_date) f.due_date = f.start_date;
@@ -413,12 +419,12 @@ export function createWp(req, projectId, body, { journalNote } = {}) {
     const pos = get('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM work_packages WHERE project_id = ?', projectId).p;
     const { id } = run(`INSERT INTO work_packages(project_id, number, type_id, subject, description, status_id, priority_id, assignee_id,
         responsible_id, author_id, parent_id, version_id, category_id, start_date, due_date, estimated_hours, done_ratio, position,
-        designer_id, developer_id, tester_id)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        designer_id, developer_id, tester_id, criticality_id)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       projectId, number, f.type_id, f.subject, f.description || null, f.status_id, f.priority_id, f.assignee_id || null,
       f.responsible_id || null, req.user.id, f.parent_id || null, f.version_id || null, f.category_id || null,
       f.start_date || null, f.due_date || null, f.estimated_hours ?? null, f.done_ratio ?? 0, f.position ?? pos,
-      f.designer_id || null, f.developer_id || null, f.tester_id || null);
+      f.designer_id || null, f.developer_id || null, f.tester_id || null, f.criticality_id || null);
     enterStage(id, stage, req.user.id);
     run('INSERT INTO journals(wp_id, user_id, notes, changes) VALUES(?,?,?,?)', id, req.user.id, journalNote || null, JSON.stringify({ created: [null, true] }));
     addLinks(id, body.links, req.user.id);
@@ -493,7 +499,7 @@ r.get('/work-packages/:id', (req, res) => {
   });
 });
 
-const TRACKED = ['type_id', 'subject', 'description', 'status_id', 'priority_id', 'assignee_id', 'responsible_id', 'parent_id',
+const TRACKED = ['type_id', 'subject', 'description', 'status_id', 'priority_id', 'criticality_id', 'assignee_id', 'responsible_id', 'parent_id',
   'version_id', 'category_id', 'start_date', 'due_date', 'estimated_hours', 'done_ratio', 'designer_id', 'developer_id', 'tester_id'];
 
 export function updateWp(req, wp, body) {
@@ -591,7 +597,7 @@ r.patch('/work-packages/:id', (req, res) => {
 r.patch('/work-packages-bulk', (req, res) => {
   const ids = (req.body.ids || []).map(Number).filter(Boolean);
   if (!ids.length) fail(400, 'Select at least one work package.');
-  const allowed = ['status_id', 'priority_id', 'assignee_id', 'responsible_id', 'version_id', 'type_id', 'due_date', 'start_date', 'done_ratio',
+  const allowed = ['status_id', 'priority_id', 'criticality_id', 'assignee_id', 'responsible_id', 'version_id', 'type_id', 'due_date', 'start_date', 'done_ratio',
     'designer_id', 'developer_id', 'tester_id'];
   const changes = Object.fromEntries(Object.entries(req.body.changes || {}).filter(([k]) => allowed.includes(k)));
   if (!Object.keys(changes).length) fail(400, 'Choose what to change.');

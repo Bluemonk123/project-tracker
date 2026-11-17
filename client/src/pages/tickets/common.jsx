@@ -17,6 +17,9 @@ export const PRIORITY = {
 export const TYPE_LABEL = { issue: 'Issue', feedback: 'Feedback', feature: 'Feature', task: 'Task' };
 export const CHANNEL = { web: { label: 'Web', icon: 'link' }, email: { label: 'Email', icon: 'chat' }, agent: { label: 'Agent', icon: 'user' } };
 
+// Criticality of a task (C1 highest)
+export const CritTag = ({ name, color }) => <span className="crit-tag" style={{ '--c': color }} title={`Criticality ${name}`}>{name}</span>;
+
 // Where a task came from
 export const SOURCE = { project: { label: 'Project', icon: 'folder' }, ticket: { label: 'Ticket', icon: 'ticket' }, email: { label: 'Email', icon: 'chat' } };
 export const SourceTag = ({ source }) => {
