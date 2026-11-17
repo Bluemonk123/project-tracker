@@ -1044,3 +1044,13 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .wp-module { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-bottom: 1px solid var(--line-2); }
 .wp-module input { max-width: 360px; }
 .wl-module { font-weight: 600; color: var(--ink-2); }
+/* task page: files and links inside the Module / Problem / Solution box; tabs; activity in the side panel */
+.wp-psol-part.plain { background: none !important; border-top: 1px solid var(--line-2); border-radius: 0; }
+.wp-psol-part.plain .panel { box-shadow: none; }
+.wp-psol > .wp-psol-part:nth-of-type(2) { background: color-mix(in srgb, var(--ok-soft) 35%, var(--surface)); border-radius: 0; }
+.wp-tabs { display: flex; gap: 4px; margin-top: 22px; border-bottom: 1px solid var(--line); }
+.wp-tabs button { border: 0; background: none; font: inherit; font-weight: 600; font-size: var(--fs-sm); color: var(--ink-2); padding: 9px 14px; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
+.wp-tabs button.active { color: var(--ink); border-bottom-color: var(--accent); }
+.wp-tab-body { padding-top: 6px; }
+.wp-side { align-self: start; }
+.wp-activity .stack textarea { min-height: 80px; }

@@ -232,6 +232,7 @@ export default function WpDetail() {
   const [subject, setSubject] = useState('');
   const [comment, setComment] = useState('');
   const [modal, setModal] = useState(null);
+  const [tab, setTab] = useState('stages');
   const [busy, run] = useAsync();
   useEffect(() => { if (wp) setSubject(wp.subject); }, [wp]);
   useEffect(() => { if (wp) document.title = `${wp.key} ${wp.subject}`; }, [wp]);
@@ -273,6 +274,7 @@ export default function WpDetail() {
     </select>
   );
   const isMilestone = !!wp.is_milestone;
+  const curTab = isMilestone && tab === 'stages' ? 'relations' : tab;
   const comments = wp.journals;
 
   return (
@@ -321,102 +323,103 @@ export default function WpDetail() {
               empty={can.edit ? 'No problem described yet. Add details, steps to reproduce or acceptance criteria.' : 'Not described.'} />
             <TextSection title="Solution" value={wp.solution} canEdit={can.edit} busy={busy} onSave={(v) => update({ solution: v })}
               empty={can.edit ? 'No solution yet. Write how it was solved when it is.' : 'No solution yet.'} />
-          </div>
-
-
-          {!isMilestone && <>
-            <div className="section-title">Stages <span className="xs muted" style={{ fontWeight: 400 }}>Moving the task to a stage assigns it to that stage's person</span></div>
-            <StageTracker wp={wp} />
-          </>}
-
-          <div className="section-title">Child work packages <span className="muted">({wp.children.length})</span>
-            {can.create && <span className="actions"><button className="btn sm ghost" onClick={() => setModal('child')}><Icon name="plus" />Add child</button></span>}
-          </div>
-          {wp.children.length > 0 ? (
-            <div className="panel">
-              {wp.children.map(c => (
-                <div key={c.id} className="child-row">
-                  <Key k={c.key} color={c.project_color} /><TypeLabel name={c.type_name} color={c.type_color} />
-                  <Link to={`/wp/${c.id}`} className="ellipsis grow" style={{ color: 'var(--ink)' }}>{c.subject}</Link>
-                  <Person id={c.assignee_id} name={c.assignee_name} muted="" />
-                  <StatusPill name={c.status_name} color={c.status_color} />
+            <section className="wp-psol-part plain">
+              <div className="section-title">Photos, PDF and ZIP files <span className="muted">({wp.attachments.length} of {wp.max_files})</span>
+                {can.upload && wp.attachments.length < wp.max_files && (
+                  <span className="actions">
+                    <label className="btn sm ghost" style={{ cursor: 'pointer' }}><Icon name="paperclip" />Attach files
+                      <input type="file" multiple hidden accept={FILE_ACCEPT} onChange={(e) => { upload([...e.target.files].slice(0, wp.max_files - wp.attachments.length)); e.target.value = ''; }} />
+                    </label>
+                  </span>
+                )}
+              </div>
+              {!wp.attachments.length && <p className="small muted">{can.upload ? `Attach up to ${wp.max_files} photos, PDF or ZIP files.` : 'No files.'}</p>}
+              {wp.attachments.length > 0 && (
+                <div className="panel">
+                  {wp.attachments.map(a => (
+                    <div key={a.id} className="child-row">
+                      <Icon name="paperclip" size={15} />
+                      <a href={`/api/attachments/${a.id}/download?inline=1`} target="_blank" rel="noreferrer" className="ellipsis grow">{a.filename}</a>
+                      <span className="xs muted">{fmtSize(a.size)}, {a.uploaded_by_name}, {timeAgo(a.created_at)}</span>
+                      <a className="icon-btn" href={`/api/attachments/${a.id}/download`} aria-label="Download"><Icon name="download" /></a>
+                      {(a.uploaded_by === user.id || can.edit) && <button className="icon-btn" aria-label="Delete file" onClick={async () => {
+                        if (await confirmDialog({ message: `Delete ${a.filename}?`, confirmLabel: 'Delete', danger: true })) { await run(() => api.del(`/attachments/${a.id}`)); reload(); }
+                      }}><Icon name="trash" /></button>}
+                    </div>
+                  ))}
                 </div>
-              ))}
-              <div className="child-row"><span className="small muted">Children done</span><span className="grow"><Progress value={wp.children.length ? (wp.children.filter(c => c.is_closed).length / wp.children.length) * 100 : 0} /></span></div>
-            </div>
-          ) : <p className="small muted">Break this down into smaller tasks to track progress.</p>}
-
-          <div className="section-title">Relations
-            {can.edit && <span className="actions"><button className="btn sm ghost" onClick={() => setModal('relation')}><Icon name="link" />Add relation</button></span>}
-          </div>
-          {wp.relations.length ? (
-            <div className="panel">
-              {wp.relations.map(r => (
-                <div key={r.id} className="child-row">
-                  <span className="small soft" style={{ width: 96 }}>{REL_LABEL[r.direction][r.type]}</span>
-                  <Link to={`/wp/${r.other_id}`} className="key plain">{r.other_key}</Link>
-                  <span className="ellipsis grow">{r.other_subject}</span>
-                  <StatusPill name={r.other_status} color={r.other_status_color} />
-                  {can.edit && <button className="icon-btn" aria-label="Remove relation" onClick={async () => { await run(() => api.del(`/relations/${r.id}`)); reload(); }}><Icon name="x" /></button>}
+              )}
+            </section>
+            <section className="wp-psol-part plain">
+              <div className="section-title">Links <span className="muted">({wp.links.length})</span></div>
+              {wp.links.length > 0 && (
+                <div className="panel" style={{ marginBottom: 8 }}>
+                  {wp.links.map(l => (
+                    <div key={l.id} className="child-row">
+                      <Icon name="link" size={15} />
+                      <a href={l.url} target="_blank" rel="noopener noreferrer" className="ellipsis grow">{l.title || l.url}</a>
+                      {l.title && <span className="xs muted ellipsis hide-sm" style={{ maxWidth: 260 }}>{l.url}</span>}
+                      {(l.created_by === user.id || can.edit) && <button className="icon-btn" aria-label="Remove link" onClick={async () => { await run(() => api.del(`/links/${l.id}`)); reload(); }}><Icon name="x" /></button>}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : <p className="small muted">Link work that blocks, follows or duplicates this one.</p>}
-
-          <div className="section-title">Photos, PDF and ZIP files <span className="muted">({wp.attachments.length} of {wp.max_files})</span>
-            {can.upload && wp.attachments.length < wp.max_files && (
-              <span className="actions">
-                <label className="btn sm ghost" style={{ cursor: 'pointer' }}><Icon name="paperclip" />Attach files
-                  <input type="file" multiple hidden accept={FILE_ACCEPT} onChange={(e) => { upload([...e.target.files].slice(0, wp.max_files - wp.attachments.length)); e.target.value = ''; }} />
-                </label>
-              </span>
-            )}
+              )}
+              {(can.edit || can.comment) && <LinkEditor links={[]} onChange={async (ls) => { const l = ls[ls.length - 1]; if (l && await run(() => api.post(`/work-packages/${wp.id}/links`, l), 'Link added')) reload(); }} />}
+            </section>
           </div>
-          {!wp.attachments.length && <p className="small muted">{can.upload ? `Attach up to ${wp.max_files} photos, PDF or ZIP files.` : 'No files.'}</p>}
-          {wp.attachments.length > 0 && (
-            <div className="panel">
-              {wp.attachments.map(a => (
-                <div key={a.id} className="child-row">
-                  <Icon name="paperclip" size={15} />
-                  <a href={`/api/attachments/${a.id}/download?inline=1`} target="_blank" rel="noreferrer" className="ellipsis grow">{a.filename}</a>
-                  <span className="xs muted">{fmtSize(a.size)}, {a.uploaded_by_name}, {timeAgo(a.created_at)}</span>
-                  <a className="icon-btn" href={`/api/attachments/${a.id}/download`} aria-label="Download"><Icon name="download" /></a>
-                  {(a.uploaded_by === user.id || can.edit) && <button className="icon-btn" aria-label="Delete file" onClick={async () => {
-                    if (await confirmDialog({ message: `Delete ${a.filename}?`, confirmLabel: 'Delete', danger: true })) { await run(() => api.del(`/attachments/${a.id}`)); reload(); }
-                  }}><Icon name="trash" /></button>}
-                </div>
-              ))}
-            </div>
-          )}
 
-          <div className="section-title">Links <span className="muted">({wp.links.length})</span></div>
-          {wp.links.length > 0 && (
-            <div className="panel" style={{ marginBottom: 8 }}>
-              {wp.links.map(l => (
-                <div key={l.id} className="child-row">
-                  <Icon name="link" size={15} />
-                  <a href={l.url} target="_blank" rel="noopener noreferrer" className="ellipsis grow">{l.title || l.url}</a>
-                  {l.title && <span className="xs muted ellipsis hide-sm" style={{ maxWidth: 260 }}>{l.url}</span>}
-                  {(l.created_by === user.id || can.edit) && <button className="icon-btn" aria-label="Remove link" onClick={async () => { await run(() => api.del(`/links/${l.id}`)); reload(); }}><Icon name="x" /></button>}
-                </div>
-              ))}
-            </div>
-          )}
-          {(can.edit || can.comment) && <LinkEditor links={[]} onChange={async (ls) => { const l = ls[ls.length - 1]; if (l && await run(() => api.post(`/work-packages/${wp.id}/links`, l), 'Link added')) reload(); }} />}
-
-          <div className="section-title">Activity</div>
-          <div>
-            {comments.map(j => <Journal key={j.id} j={j} label={label} canEditOwn onSaved={reload} />)}
+          <div className="wp-tabs" role="tablist" aria-label="Stages, relations and child work packages">
+            {!isMilestone && <button type="button" role="tab" aria-selected={curTab === 'stages'} className={curTab === 'stages' ? 'active' : ''} onClick={() => setTab('stages')}>Stages</button>}
+            <button type="button" role="tab" aria-selected={curTab === 'relations'} className={curTab === 'relations' ? 'active' : ''} onClick={() => setTab('relations')}>Relations <span className="muted">({wp.relations.length})</span></button>
+            <button type="button" role="tab" aria-selected={curTab === 'children'} className={curTab === 'children' ? 'active' : ''} onClick={() => setTab('children')}>Child work packages <span className="muted">({wp.children.length})</span></button>
           </div>
-          {can.comment && (
-            <div className="stack tight" style={{ marginTop: 12 }}>
-              <MarkdownEditor value={comment} onChange={setComment} rows={3} placeholder="Write a comment. Type @ to notify someone." onSubmitShortcut={postComment} mentionUsers={members.length ? members : undefined} />
-              <div className="row"><button className="btn primary sm" disabled={busy || !comment.trim()} onClick={postComment}>Comment</button><span className="xs muted">Ctrl + Enter to send</span></div>
-            </div>
-          )}
+          <div className="wp-tab-body">
+            {curTab === 'stages' && !isMilestone && <>
+                <div className="section-title">Stages <span className="xs muted" style={{ fontWeight: 400 }}>Moving the task to a stage assigns it to that stage's person</span></div>
+                <StageTracker wp={wp} />
+            </>}
+            {curTab === 'relations' && <>
+              <div className="section-title">Relations
+                {can.edit && <span className="actions"><button className="btn sm ghost" onClick={() => setModal('relation')}><Icon name="link" />Add relation</button></span>}
+              </div>
+              {wp.relations.length ? (
+                <div className="panel">
+                  {wp.relations.map(r => (
+                    <div key={r.id} className="child-row">
+                      <span className="small soft" style={{ width: 96 }}>{REL_LABEL[r.direction][r.type]}</span>
+                      <Link to={`/wp/${r.other_id}`} className="key plain">{r.other_key}</Link>
+                      <span className="ellipsis grow">{r.other_subject}</span>
+                      <StatusPill name={r.other_status} color={r.other_status_color} />
+                      {can.edit && <button className="icon-btn" aria-label="Remove relation" onClick={async () => { await run(() => api.del(`/relations/${r.id}`)); reload(); }}><Icon name="x" /></button>}
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="small muted">Link work that blocks, follows or duplicates this one.</p>}
+            </>}
+            {curTab === 'children' && <>
+              <div className="section-title">Child work packages <span className="muted">({wp.children.length})</span>
+                {can.create && <span className="actions"><button className="btn sm ghost" onClick={() => setModal('child')}><Icon name="plus" />Add child</button></span>}
+              </div>
+              {wp.children.length > 0 ? (
+                <div className="panel">
+                  {wp.children.map(c => (
+                    <div key={c.id} className="child-row">
+                      <Key k={c.key} color={c.project_color} /><TypeLabel name={c.type_name} color={c.type_color} />
+                      <Link to={`/wp/${c.id}`} className="ellipsis grow" style={{ color: 'var(--ink)' }}>{c.subject}</Link>
+                      <Person id={c.assignee_id} name={c.assignee_name} muted="" />
+                      <StatusPill name={c.status_name} color={c.status_color} />
+                    </div>
+                  ))}
+                  <div className="child-row"><span className="small muted">Children done</span><span className="grow"><Progress value={wp.children.length ? (wp.children.filter(c => c.is_closed).length / wp.children.length) * 100 : 0} /></span></div>
+                </div>
+              ) : <p className="small muted">Break this down into smaller tasks to track progress.</p>}
+            </>}
+          </div>
+
+
         </div>
 
-        <aside className="panel" style={{ position: 'sticky', top: 72 }}>
+        <aside className="panel wp-side">
           <div className="panel-body">
             <div className="attr-list">
               <span className="k">Status</span>
@@ -492,6 +495,18 @@ export default function WpDetail() {
               <div className="small soft" style={{ margin: '14px 0 6px' }}>Discussed in meetings</div>
               {wp.meetings.map(m => <div key={m.id} className="small"><Link to={`/meetings/${m.id}`}>{m.title}</Link> <span className="muted">{fmtDate(m.starts_at.slice(0, 10))}</span></div>)}
             </>}
+          </div>
+          <div className="panel-body wp-activity" style={{ borderTop: '1px solid var(--line-2)' }}>
+          <div className="section-title" style={{ marginTop: 0 }}>Activity</div>
+          <div>
+            {comments.map(j => <Journal key={j.id} j={j} label={label} canEditOwn onSaved={reload} />)}
+          </div>
+          {can.comment && (
+            <div className="stack tight" style={{ marginTop: 12 }}>
+              <MarkdownEditor value={comment} onChange={setComment} rows={3} placeholder="Write a comment. Type @ to notify someone." onSubmitShortcut={postComment} mentionUsers={members.length ? members : undefined} />
+              <div className="row"><button className="btn primary sm" disabled={busy || !comment.trim()} onClick={postComment}>Comment</button><span className="xs muted">Ctrl + Enter to send</span></div>
+            </div>
+          )}
           </div>
         </aside>
       </div>
