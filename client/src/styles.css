@@ -1054,3 +1054,9 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .wp-tab-body { padding-top: 6px; }
 .wp-side { align-self: start; }
 .wp-activity .stack textarea { min-height: 80px; }
+.wp-side-sep { border-top: 1px solid var(--line-2); }
+.wp-more summary { cursor: pointer; margin-top: 10px; }
+.wp-comments { margin-bottom: 4px; }
+.wp-stage-people { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 6px 0 4px; }
+.wp-stage-person { display: flex; flex-direction: column; gap: 3px; }
+@media (max-width: 700px) { .wp-stage-people { grid-template-columns: 1fr; } }

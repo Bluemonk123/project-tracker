@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useApp, useLoad } from '../context.jsx';
@@ -276,6 +276,10 @@ export default function WpDetail() {
   const isMilestone = !!wp.is_milestone;
   const curTab = isMilestone && tab === 'stages' ? 'relations' : tab;
   const comments = wp.journals;
+  // comments (notes on their own) above the tabs; the change history in the side panel
+  const isTalk = (j) => { let c = {}; try { c = JSON.parse(j.changes || '{}') || {}; } catch { /* ignore */ } return !!j.notes && !Object.keys(c).length; };
+  const talk = comments.filter(isTalk);
+  const history = comments.filter(j => !isTalk(j));
 
   return (
     <div className="content" style={{ '--pc': wp.project_color }}>
@@ -368,6 +372,18 @@ export default function WpDetail() {
             </section>
           </div>
 
+          <div className="section-title">Comments <span className="muted">({talk.length})</span></div>
+          <div className="wp-comments">
+            {talk.map(j => <Journal key={j.id} j={j} label={label} canEditOwn onSaved={reload} />)}
+            {!talk.length && <p className="small muted" style={{ margin: '4px 0 8px' }}>No comments yet.</p>}
+            {can.comment && (
+              <div className="stack tight" style={{ marginTop: 8 }}>
+                <MarkdownEditor value={comment} onChange={setComment} rows={3} placeholder="Write a comment. Type @ to notify someone." onSubmitShortcut={postComment} mentionUsers={members.length ? members : undefined} />
+                <div className="row"><button className="btn primary sm" disabled={busy || !comment.trim()} onClick={postComment}>Comment</button><span className="xs muted">Ctrl + Enter to send</span></div>
+              </div>
+            )}
+          </div>
+
           <div className="wp-tabs" role="tablist" aria-label="Stages, relations and child work packages">
             {!isMilestone && <button type="button" role="tab" aria-selected={curTab === 'stages'} className={curTab === 'stages' ? 'active' : ''} onClick={() => setTab('stages')}>Stages</button>}
             <button type="button" role="tab" aria-selected={curTab === 'relations'} className={curTab === 'relations' ? 'active' : ''} onClick={() => setTab('relations')}>Relations <span className="muted">({wp.relations.length})</span></button>
@@ -375,6 +391,13 @@ export default function WpDetail() {
           </div>
           <div className="wp-tab-body">
             {curTab === 'stages' && !isMilestone && <>
+              <div className="wp-stage-people">
+                {STAGES.filter(st => st.field).map(st => (
+                  <label key={st.key} className="wp-stage-person"><span className="xs muted">{st.role}</span>
+                    <UserSelect value={wp[`${st.field}_id`]} disabled={!can.edit || !can.assign} placeholder="Nobody" onChange={(v) => update({ [`${st.field}_id`]: v })} />
+                  </label>
+                ))}
+              </div>
                 <div className="section-title">Stages <span className="xs muted" style={{ fontWeight: 400 }}>Moving the task to a stage assigns it to that stage's person</span></div>
                 <StageTracker wp={wp} />
             </>}
@@ -424,6 +447,10 @@ export default function WpDetail() {
             <div className="attr-list">
               <span className="k">Status</span>
               <span className="v">{sel('status_id', meta.statuses)}</span>
+              <span className="k">Requester</span>
+              <span className="v"><RequestedBy value={wp.requested_by || ''} disabled={!can.edit || busy} onSave={(v) => update({ requested_by: v })} /></span>
+              <span className="k">Priority</span>
+              <span className="v">{sel('priority_id', [...meta.priorities].reverse())}</span>
               <span className="k">Assignee</span>
               <span className="v">{can.assign || !can.edit
                 ? <UserSelect value={wp.assignee_id} disabled={!can.edit || !can.assign} onChange={(v) => update({ assignee_id: v })} />
@@ -432,24 +459,10 @@ export default function WpDetail() {
                     {wp.assignee_id && wp.assignee_id !== user.id && <option value={wp.assignee_id}>{wp.assignee_name}</option>}
                   </select>}
               </span>
-              <span className="k">Accountable</span>
-              <span className="v"><UserSelect value={wp.responsible_id} disabled={!can.edit || !can.assign} placeholder="Nobody" users={members.length ? members : undefined} onChange={(v) => update({ responsible_id: v })} /></span>
-              {!isMilestone && STAGES.filter(st => st.field).map(st => (
-                <Fragment key={st.key}>
-                  <span className="k">{st.role}</span>
-                  <span className="v"><UserSelect value={wp[`${st.field}_id`]} disabled={!can.edit || !can.assign} placeholder="Nobody" onChange={(v) => update({ [`${st.field}_id`]: v })} /></span>
-                </Fragment>
-              ))}
-              <span className="k">Priority</span>
-              <span className="v">{sel('priority_id', [...meta.priorities].reverse())}</span>
-              <span className="k">Requested by</span>
-              <span className="v"><RequestedBy value={wp.requested_by || ''} disabled={!can.edit || busy} onSave={(v) => update({ requested_by: v })} /></span>
-              <span className="k">Version</span>
-              <span className="v">{sel('version_id', (info?.versions || []).filter(v => v.status !== 'closed' || v.id === wp.version_id), { empty: 'None' })}</span>
-              {(info?.categories?.length > 0 || wp.category_id) && <>
-                <span className="k">Category</span>
-                <span className="v">{sel('category_id', info?.categories || [], { empty: 'None' })}</span>
-              </>}
+            </div>
+          </div>
+          <div className="panel-body wp-side-sep">
+            <div className="attr-list">
               {!isMilestone && <>
                 <span className="k">Start date</span>
                 <span className="v"><input type="date" value={wp.start_date || ''} disabled={!can.edit} max={wp.due_date || undefined} onChange={(e) => update({ start_date: e.target.value || null })} /></span>
@@ -469,21 +482,30 @@ export default function WpDetail() {
                   <span className="num">{fmtHours(wp.spent_hours)}</span>
                   {can.log_time && <button className="btn sm ghost" onClick={() => setModal('time')}><Icon name="clock" />Log time</button>}
                 </span>
-                <span className="k">% done</span>
-                <span className="v">
-                  <select value={wp.done_ratio} disabled={!can.edit} onChange={(e) => update({ done_ratio: Number(e.target.value) })}>
-                    {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map(n => <option key={n} value={n}>{n}%</option>)}
-                  </select>
-                </span>
+              </>}
+            </div>
+            <details className="wp-more">
+              <summary className="small soft">Version, category and parent</summary>
+              <div className="attr-list" style={{ marginTop: 8 }}>
+              <span className="k">Version</span>
+              <span className="v">{sel('version_id', (info?.versions || []).filter(v => v.status !== 'closed' || v.id === wp.version_id), { empty: 'None' })}</span>
+              {(info?.categories?.length > 0 || wp.category_id) && <>
+                <span className="k">Category</span>
+                <span className="v">{sel('category_id', info?.categories || [], { empty: 'None' })}</span>
               </>}
               <span className="k">Parent</span>
               <span className="v" style={{ paddingLeft: 8 }}>
                 {can.edit ? <WpSearchSelect projectId={wp.project_id} value={wp.parent_id} excludeId={wp.id} onChange={(v) => update({ parent_id: v })} placeholder="None" />
                   : wp.parent_id ? <Link to={`/wp/${wp.parent_id}`}>{wp.parent_key}</Link> : <span className="muted">None</span>}
               </span>
-            </div>
+              </div>
+            </details>
           </div>
-          <div className="panel-body" style={{ borderTop: '1px solid var(--line-2)' }}>
+          <div className="panel-body wp-side-sep wp-activity">
+            <div className="section-title" style={{ marginTop: 0 }}>Activity</div>
+            {history.map(j => <Journal key={j.id} j={j} label={label} canEditOwn onSaved={reload} />)}
+          </div>
+          <div className="panel-body wp-side-sep">
             <div className="small soft" style={{ marginBottom: 6 }}>Watchers</div>
             <div className="row wrap">{wp.watchers.map(w => <Avatar key={w.id} id={w.id} name={w.name} size="sm" />)}{!wp.watchers.length && <span className="small muted">Nobody</span>}</div>
             {wp.time.length > 0 && <>
@@ -495,18 +517,6 @@ export default function WpDetail() {
               <div className="small soft" style={{ margin: '14px 0 6px' }}>Discussed in meetings</div>
               {wp.meetings.map(m => <div key={m.id} className="small"><Link to={`/meetings/${m.id}`}>{m.title}</Link> <span className="muted">{fmtDate(m.starts_at.slice(0, 10))}</span></div>)}
             </>}
-          </div>
-          <div className="panel-body wp-activity" style={{ borderTop: '1px solid var(--line-2)' }}>
-          <div className="section-title" style={{ marginTop: 0 }}>Activity</div>
-          <div>
-            {comments.map(j => <Journal key={j.id} j={j} label={label} canEditOwn onSaved={reload} />)}
-          </div>
-          {can.comment && (
-            <div className="stack tight" style={{ marginTop: 12 }}>
-              <MarkdownEditor value={comment} onChange={setComment} rows={3} placeholder="Write a comment. Type @ to notify someone." onSubmitShortcut={postComment} mentionUsers={members.length ? members : undefined} />
-              <div className="row"><button className="btn primary sm" disabled={busy || !comment.trim()} onClick={postComment}>Comment</button><span className="xs muted">Ctrl + Enter to send</span></div>
-            </div>
-          )}
           </div>
         </aside>
       </div>
