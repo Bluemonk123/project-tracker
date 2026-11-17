@@ -17,6 +17,13 @@ export const PRIORITY = {
 export const TYPE_LABEL = { issue: 'Issue', feedback: 'Feedback', feature: 'Feature', task: 'Task' };
 export const CHANNEL = { web: { label: 'Web', icon: 'link' }, email: { label: 'Email', icon: 'chat' }, agent: { label: 'Agent', icon: 'user' } };
 
+// Where a task came from
+export const SOURCE = { project: { label: 'Project', icon: 'folder' }, ticket: { label: 'Ticket', icon: 'ticket' }, email: { label: 'Email', icon: 'chat' } };
+export const SourceTag = ({ source }) => {
+  const s = SOURCE[source] || SOURCE.project;
+  return <span className={`src-tag ${source || 'project'}`} title={`Source: ${s.label}`}><Icon name={s.icon} size={12} />{s.label}</span>;
+};
+
 export const TicketStatus = ({ status }) => {
   const s = STATUS[status] || STATUS.open;
   return <span className="tk-status" style={{ '--c': s.color }}>{s.label}</span>;

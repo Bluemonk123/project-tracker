@@ -11,6 +11,7 @@ import NewWpModal, { useProjectInfo, WpSearchSelect, LinkEditor, FILE_ACCEPT } f
 import { LogTimeModal } from './Time.jsx';
 import { fmtDate, fmtDateTime, fmtHours, fmtSize, timeAgo } from '../lib/format.js';
 import { RemarksList } from './Remarks.jsx';
+import { SourceTag } from './tickets/common.jsx';
 
 const FIELD_LABELS = {
   type_id: 'Type', subject: 'Subject', description: 'Description', status_id: 'Status', priority_id: 'Priority',
@@ -274,6 +275,7 @@ export default function WpDetail() {
           ) : <h1 style={{ fontSize: 22 }}>{wp.subject}</h1>}
           <div className="small muted" style={{ marginTop: 6 }}>
             Created by {wp.author_name || 'someone'} {timeAgo(wp.created_at)}, updated {timeAgo(wp.updated_at)}
+            {' · '}<SourceTag source={wp.source} />
             {wp.ticket && <> · From ticket {can.open_ticket ? <Link to={`/ticket-board?ticket=${wp.ticket.ticket_no}`}>#{wp.ticket.ticket_no}</Link> : `#${wp.ticket.ticket_no}`}</>}
           </div>
 

@@ -86,6 +86,9 @@ export function buildFilter(req, q) {
   };
   inFilter('wp.type_id', q.type_id);
   inFilter('wp.priority_id', q.priority_id);
+  // source: project / ticket / email (comma-separated for several)
+  const sources = String(q.source || '').split(',').filter(x => ['project', 'ticket', 'email'].includes(x));
+  if (sources.length) { where.push(`wp.source IN (${sources.map(() => '?').join(',')})`); params.push(...sources); }
   inFilter('wp.assignee_id', q.assignee_id);
   inFilter('wp.responsible_id', q.responsible_id);
   inFilter('wp.author_id', q.author_id);
@@ -256,7 +259,7 @@ r.get('/work-packages/export.csv', (req, res) => {
   const { where, params } = buildFilter(req, req.query);
   const rows = all(`${BASE_SELECT} WHERE ${where} ORDER BY ${orderBy(req.query.sort)} LIMIT 10000`, ...params);
   const cols = [['key', 'ID'], ['project_name', 'Project'], ['type_name', 'Type'], ['subject', 'Subject'], ['status_name', 'Status'],
-    ['priority_name', 'Priority'], ['assignee_name', 'Assignee'], ['responsible_name', 'Accountable'],
+    ['priority_name', 'Priority'], ['source', 'Source'], ['assignee_name', 'Assignee'], ['responsible_name', 'Accountable'],
     ['designer_name', 'Designer'], ['developer_name', 'Developer'], ['tester_name', 'Tester'], ['version_name', 'Version'],
     ['start_date', 'Start date'], ['due_date', 'Due date'], ['estimated_hours', 'Estimated hours'], ['spent_hours', 'Spent hours'],
     ['done_ratio', '% done'], ['parent_key', 'Parent'], ['author_name', 'Author'], ['created_at', 'Created'], ['updated_at', 'Updated']];

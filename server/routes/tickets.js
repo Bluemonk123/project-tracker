@@ -11,7 +11,7 @@ import { can, need, fail, HttpError, parseList } from '../access.js';
 import { resolveProject } from './projects.js';
 import { createWp } from './workpackages.js';
 import { notify } from '../util.js';
-import { isEmail, sendMailLater, mailEnabled } from '../mailer.js';
+import { isEmail, sendMailLater, mailEnabled, inboundConfig } from '../mailer.js';
 
 // ---------- allowed values ----------
 export const STATUSES = ['open', 'pending', 'hold', 'solved'];
@@ -145,9 +145,9 @@ function alertRequester(t, actor, title, body) {
       if (actor && t.requester_user_id === actor.id) return; // never about their own change
       notify([t.requester_user_id], { actorId: actor?.id ?? null, ticketId: t.id, link: `/tickets-raised?ticket=${t.ticket_no}`, reason: 'ticket_update', message: `${appTitle}: ${body}` });
       const u = userById(t.requester_user_id);
-      if (u?.email && u.status === 'active') sendMailLater({ to: u.email, subject: appTitle, text: `${body}\n\nOpen "Tickets Raised" in the app to see the whole conversation.` });
+      if (u?.email && u.status === 'active') sendMailLater({ to: u.email, subject: appTitle, ticketNo: t.ticket_no, text: `${body}\n\nOpen "Tickets Raised" in the app to see the whole conversation, or reply to this email.` });
     } else if (t.requester_email) {
-      sendMailLater({ to: t.requester_email, subject: appTitle, text: `Hello ${t.raised_by},\n\n${body}\n\nTicket ${t.ticket_no}: ${displaySubject(t)}` });
+      sendMailLater({ to: t.requester_email, subject: appTitle, ticketNo: t.ticket_no, text: `Hello ${t.raised_by},\n\n${body}\n\nTicket ${t.ticket_no}: ${displaySubject(t)}${inboundConfig()?.enabled ? '\n\nReply to this email to add to the ticket.' : ''}` });
     }
   });
 }
@@ -299,6 +299,84 @@ function createTicket(req, f, files) {
   audit(req, 'TICKET_CREATED', t, { source: f.source, channel: t.channel, files: result.saved.length });
   alertNewTicket(t, req.user);
   return { ticket_no: t.ticket_no, id: t.id, warnings: result.warnings };
+}
+
+// ---------- Email intake ----------
+// Called for each email read from the support mailbox (server/inbound.js). A reply to one of our alert emails
+// (matched by the ticket number in its headers or subject, from the requester's own address) is added to that
+// ticket; anything else becomes a new ticket on the Email channel. Returns what was done.
+const EMAIL_SYS = { user: null, ip: null };
+const TICKET_IN_HEADERS = /ticket-(\d{8})-/g;
+const TICKET_IN_SUBJECT = /\bticket\s*#?\s*(\d{8})\b|#(\d{8})\b/i;
+const cleanEmailSubject = (s) => String(s || '').replace(/^\s*(\[[^\]]*\]\s*)*((re|fw|fwd|aw|wg)\s*:\s*)+/i, '').replace(/^\s*(\[[^\]]*\]\s*)+/, '').trim();
+const asUpload = (a) => ({ originalname: Buffer.from(String(a.filename || 'file'), 'utf8').toString('latin1'), buffer: a.content });
+
+export function ingestEmail(m) {
+  const from = String(m.fromEmail || '').trim().toLowerCase();
+  if (!isEmail(from)) return { action: 'skipped', reason: 'no sender address' };
+  const msgId = m.messageId ? String(m.messageId).slice(0, 300) : null;
+  if (msgId && (get('SELECT 1 AS x FROM tickets WHERE email_message_id = ?', msgId) || get('SELECT 1 AS x FROM ticket_messages WHERE email_message_id = ?', msgId))) {
+    return { action: 'skipped', reason: 'already added' };
+  }
+  const body = String(m.text || '').trim().slice(0, MAX_DESC);
+  const files = (m.attachments || []).map(asUpload);
+
+  // 1. a reply to an existing ticket
+  const nos = new Set();
+  for (const h of [m.inReplyTo, ...(m.references || [])]) for (const x of String(h || '').matchAll(TICKET_IN_HEADERS)) nos.add(Number(x[1]));
+  const sm = String(m.subject || '').match(TICKET_IN_SUBJECT);
+  if (sm) nos.add(Number(sm[1] || sm[2]));
+  for (const no of nos) {
+    const t = get('SELECT * FROM tickets WHERE ticket_no = ?', no);
+    if (!t) continue;
+    const ru = t.requester_user_id ? userById(t.requester_user_id) : null;
+    const requesterEmail = String(ru?.email || t.requester_email || '').toLowerCase();
+    if (requesterEmail !== from) continue; // only the requester's own address can add to a ticket by email
+    const at = nowIso();
+    let msgRow;
+    const saved = tx(() => {
+      msgRow = run(`INSERT INTO ticket_messages(ticket_id, author_type, author_user_id, author_name, body, is_internal, email_message_id, created_at)
+                    VALUES(?, 'requester', ?, ?, ?, 0, ?, ?)`, t.id, t.requester_user_id, ru?.name || t.raised_by, body || '(no text)', msgId, at).id;
+      const fields = {};
+      if (['pending', 'solved'].includes(t.status)) {
+        Object.assign(fields, statusFields(t, 'open', at));
+        systemLine(t.id, `Status changed from ${STATUS_LABEL[t.status]} to Open (requester replied by email)`, ru?.name || t.raised_by, at);
+      }
+      return saveFields(t, fields, at);
+    });
+    let warnings = [];
+    if (files.length) { try { warnings = saveFiles(saved, files, msgRow, t.requester_user_id).warnings; } catch { warnings = ['The files could not be saved.']; } }
+    warnings.forEach(w => systemLine(t.id, w, 'Email', at));
+    audit(EMAIL_SYS, 'TICKET_UPDATED', saved, { requester_reply: true, via: 'email', reopened: saved.status !== t.status });
+    safely(() => notify(t.assignee_id ? [t.assignee_id] : agentsToAlert(), {
+      ticketId: t.id, link: `/ticket-board/${t.ticket_no}`, reason: 'ticket_reply',
+      message: `Reply on ticket ${t.ticket_no} — ${ru?.name || t.raised_by} replied by email: ${cut(body, 200)}`,
+    }));
+    return { action: 'reply', ticket_no: t.ticket_no };
+  }
+
+  // 2. a new ticket (at most 20 an hour from one address, so a mail loop can't flood the board)
+  const since = new Date(Date.now() - 3600e3).toISOString();
+  if (get("SELECT COUNT(*) AS n FROM tickets WHERE channel = 'email' AND lower(requester_email) = ? AND created_at > ?", from, since).n >= 20) {
+    return { action: 'skipped', reason: 'too many emails from this address in the last hour' };
+  }
+  const staff = get("SELECT id, name, email FROM users WHERE lower(email) = ? AND status = 'active'", from);
+  const subject = cleanEmailSubject(m.subject).slice(0, MAX_SUBJECT) || null;
+  const out = createTicket(EMAIL_SYS, {
+    subject, feedback: body || subject || '(no text)',
+    requester_kind: staff ? 'staff' : 'guest', requester_user_id: staff?.id || null,
+    raised_by: staff?.name || String(m.fromName || '').trim().replace(/^\[+/, '').slice(0, 100) || from,
+    requester_email: from, channel: 'email', source: 'email', firstLine: `Received by email from ${from}`,
+  }, files);
+  run('UPDATE tickets SET email_message_id = ? WHERE id = ?', msgId, out.id);
+  out.warnings.forEach(w => systemLine(out.id, w, 'Email', nowIso()));
+  // acknowledgement, so the sender has the ticket number and can reply to it
+  sendMailLater({
+    to: from, ticketNo: out.ticket_no, autoReply: true,
+    subject: `Ticket ${out.ticket_no} received: ${subject || 'your request'}`,
+    text: `Hello ${staff?.name || m.fromName || ''},\n\nThanks, we have your request. Its ticket number is ${out.ticket_no}.\nReply to this email to add more details.`,
+  });
+  return { action: 'created', ticket_no: out.ticket_no };
 }
 
 // Login page "Contact admin for access/issues": 5 per hour per computer.
@@ -504,6 +582,8 @@ r.post('/tickets/:no/convert', (req, res) => {
   const at = nowIso();
   tx(() => {
     run('UPDATE tickets SET wp_id = ?, updated_at = ? WHERE id = ?', wp.id, at, t.id);
+    run('UPDATE work_packages SET source = ? WHERE id = ?', t.channel === 'email' ? 'email' : 'ticket', wp.id);
+    wp.source = t.channel === 'email' ? 'email' : 'ticket';
     systemLine(t.id, `Converted to task ${wp.key}`, req.user.name, at);
     // the ticket's own files and those on public replies go with the task (same stored file, no copy)
     for (const a of all(`SELECT a.* FROM ticket_attachments a LEFT JOIN ticket_messages m ON m.id = a.message_id

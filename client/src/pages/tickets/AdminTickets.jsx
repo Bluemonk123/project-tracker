@@ -136,7 +136,55 @@ function Email() {
   const { data, error, loading, reload } = useLoad(() => api.get('/admin/email'), []);
   if (error) return <ErrorBox error={error} />;
   if (loading && !data) return <Loading />;
-  return <EmailForm key={JSON.stringify(data)} data={data} onSaved={reload} />;
+  return <>
+    <EmailForm key={JSON.stringify([data.main, data.backup])} data={data} onSaved={reload} />
+    <InboundForm key={JSON.stringify(data.inbound)} data={data} onSaved={reload} />
+  </>;
+}
+
+// Incoming mail: emails sent to the support mailbox become tickets (Email channel); replies go back on their ticket.
+function InboundForm({ data, onSaved }) {
+  const [f, setF] = useState({ ...data.inbound, pass: '' });
+  const [last, setLast] = useState(data.inbound_last);
+  const [busy, run] = useAsync();
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
+  const save = async (e) => { e.preventDefault(); if (await run(() => api.put('/admin/email/inbound', f), f.enabled ? 'Email intake is on' : 'Incoming mail settings saved')) onSaved(); };
+  const check = async () => { const r = await run(() => api.post('/admin/email/inbound/check', f)); if (r) setLast(r); };
+  return (
+    <form className="panel" onSubmit={save}>
+      <div className="panel-head"><h3>Incoming email (tickets by email)</h3><span className="xs muted">Emails sent to the support mailbox become tickets; replies to alert emails are added to their ticket.</span></div>
+      <div className="panel-body stack">
+        <label className="row small"><input type="checkbox" checked={!!f.enabled} onChange={set('enabled')} /><b>Turn email intake on</b></label>
+        <fieldset className="tk-mailbox">
+          <legend className="small"><b>Support mailbox (IMAP)</b></legend>
+          <div className="grid-3" style={{ gap: 12 }}>
+            <Field label="Incoming mail server (IMAP)"><input type="text" placeholder="outlook.office365.com" value={f.host} onChange={set('host')} /></Field>
+            <Field label="Port"><input type="number" min={1} max={65535} value={f.port} onChange={set('port')} /></Field>
+            <Field label="Security"><label className="row small" style={{ height: 34 }}><input type="checkbox" checked={f.secure !== false} onChange={set('secure')} />SSL/TLS (port 993)</label></Field>
+            <Field label="User name"><input type="text" autoComplete="off" placeholder="support@company.com" value={f.user} onChange={set('user')} /></Field>
+            <Field label="Password" hint={data.inbound.has_pass ? 'Saved. Leave empty to keep it.' : 'For Gmail or Microsoft 365, an app password.'}><input type="password" autoComplete="new-password" value={f.pass} onChange={set('pass')} /></Field>
+            <Field label="Folder"><input type="text" value={f.folder} onChange={set('folder')} /></Field>
+            <Field label="Support email address" hint="Alert emails ask people to reply here."><input type="email" placeholder="support@company.com" value={f.address} onChange={set('address')} /></Field>
+            <Field label="Check every">
+              <select value={f.minutes} onChange={set('minutes')}>{[1, 2, 5, 10, 15].map(m => <option key={m} value={m}>{m} minute{m === 1 ? '' : 's'}</option>)}</select>
+            </Field>
+          </div>
+        </fieldset>
+        {last && (
+          <div className={`tk-inbound-status ${last.ok ? 'ok' : 'bad'}`}>
+            Last check {new Date(last.at).toLocaleString()}: {last.ok
+              ? `${last.read} new email${last.read === 1 ? '' : 's'} — ${last.created} new ticket${last.created === 1 ? '' : 's'}, ${last.replies} repl${last.replies === 1 ? 'y' : 'ies'}, ${last.skipped} skipped (automatic replies, duplicates).`
+              : `could not read the mailbox — ${last.error}`}
+          </div>
+        )}
+        <p className="xs muted" style={{ margin: 0 }}>Each email is marked as read once it is handled. Out-of-office replies, bounces and mailing lists are skipped. Only the person who raised a ticket can add to it by email; anyone else starts a new ticket. Up to 2 attachments of 5 MB are kept, with the same checks as uploads.</p>
+      </div>
+      <div className="modal-foot">
+        <button type="button" className="btn" disabled={busy || !f.host || !f.user} onClick={check}>Check now</button>
+        <button className="btn primary" disabled={busy}>Save incoming email</button>
+      </div>
+    </form>
+  );
 }
 function EmailForm({ data, onSaved }) {
   const [main, setMain] = useState({ ...BLANK, ...(data.main || {}), pass: '' });
@@ -150,7 +198,7 @@ function EmailForm({ data, onSaved }) {
   const test = async () => { const r = await run(() => api.post('/admin/email/test')); if (r) window.alert(`Test email sent to ${r.to} through the ${r.via} mailbox.`); };
   return (
     <form className="panel" onSubmit={save}>
-      <div className="panel-head"><h3>Email</h3><span className="xs muted">The company mailbox that sends ticket alerts to requesters. Leave empty and nothing is emailed.</span></div>
+      <div className="panel-head"><h3>Outgoing email (SMTP)</h3><span className="xs muted">The company mailbox that sends ticket alerts to requesters. Leave empty and nothing is emailed.</span></div>
       <div className="panel-body stack">
         <MailboxFields title="Main mailbox" m={main} setM={setMain} hasPass={data.main?.has_pass} />
         {showBackup

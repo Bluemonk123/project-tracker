@@ -18,6 +18,7 @@ import projectBoardRoutes from './routes/projectboard.js';
 import { backupCopyRoutes, scheduleCopies } from './routes/backupcopy.js';
 import { publicTicketRoutes, ticketRoutes } from './routes/tickets.js';
 import emailRoutes from './routes/email.js';
+import { scheduleInbound } from './inbound.js';
 
 // CSRF protection (double-submit token): every browser gets a random pt_csrf cookie, and every
 // request that changes something must echo it in the X-CSRF-Token header. Another site can make
@@ -115,4 +116,5 @@ export function startServer() {
   });
   scheduleBackups();
   scheduleCopies();
+  scheduleInbound();
 }

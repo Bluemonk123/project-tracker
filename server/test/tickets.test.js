@@ -410,3 +410,58 @@ test('remarks: several per task, each for a chosen person who is alerted', async
   assert.equal((await other.del(`/remarks/${rid}`)).status, 403);
   assert.equal((await admin.del(`/remarks/${rid}`)).data.remarks.length, 1);
 });
+
+test('email intake: new email -> ticket, reply -> same ticket, auto-replies and duplicates skipped', async () => {
+  const { simpleParser } = await import('mailparser');
+  const { handleParsed, stripQuoted, checkMailbox } = await import('../inbound.js');
+  const mail = (headers, body) => simpleParser(Buffer.from(`${headers.join('\r\n')}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${body}`));
+  let out = handleParsed(await mail(['From: "Nora Client" <nora@client.com>', 'To: support@office.local', 'Subject: Fwd: Invoice page broken', 'Message-ID: <a1@client.com>'], 'The invoice page shows a blank screen.'));
+  assert.equal(out.action, 'created', JSON.stringify(out));
+  const t = get('SELECT * FROM tickets WHERE ticket_no = ?', out.ticket_no);
+  assert.equal(t.channel, 'email'); assert.equal(t.subject, 'Invoice page broken'); assert.equal(t.raised_by, 'Nora Client');
+  assert.equal(t.requester_email, 'nora@client.com'); assert.equal(t.requester_kind, 'guest'); assert.equal(t.email_message_id, '<a1@client.com>');
+  // same email again: skipped
+  assert.equal(handleParsed(await mail(['From: nora@client.com', 'Subject: Invoice page broken', 'Message-ID: <a1@client.com>'], 'x')).reason, 'already added');
+  // reply to our alert (ticket number in In-Reply-To), quoted text dropped, pending ticket reopens
+  run("UPDATE tickets SET status = 'pending' WHERE id = ?", t.id);
+  out = handleParsed(await mail(['From: Nora <NORA@client.com>', `Subject: Re: [Project Tracker] Reply on ticket ${t.ticket_no}`, `In-Reply-To: <ticket-${t.ticket_no}-abc@office.local>`, 'Message-ID: <a2@client.com>'],
+    `It happens in Chrome too.\r\n\r\nOn Tue, 17 Nov 2026 at 10:00, Helpdesk wrote:\r\n> Which browser?`));
+  assert.equal(out.action, 'reply', JSON.stringify(out));
+  const msgs = all("SELECT * FROM ticket_messages WHERE ticket_id = ? AND author_type = 'requester'", t.id);
+  assert.equal(msgs.at(-1).body, 'It happens in Chrome too.');
+  assert.equal(get('SELECT status FROM tickets WHERE id = ?', t.id).status, 'open');
+  // someone else quoting the ticket number gets a new ticket, not a reply on Nora's
+  out = handleParsed(await mail(['From: mallory@else.com', `Subject: ticket ${t.ticket_no}`, 'Message-ID: <m1@else.com>'], 'hi'));
+  assert.equal(out.action, 'created');
+  run('DELETE FROM tickets WHERE ticket_no = ?', out.ticket_no);
+  // a member of staff emailing in is matched to their account
+  out = handleParsed(await mail(['From: Sam <sam@office.local>', 'Subject: Laptop slow', 'Message-ID: <s1@office.local>'], 'Very slow'));
+  assert.equal(get('SELECT requester_user_id FROM tickets WHERE ticket_no = ?', out.ticket_no).requester_user_id, ids.staff);
+  // out-of-office and bounces are ignored
+  assert.equal(handleParsed(await mail(['From: nora@client.com', 'Subject: Out of office', 'Auto-Submitted: auto-replied', 'Message-ID: <oo@client.com>'], 'away')).action, 'skipped');
+  assert.equal(handleParsed(await mail(['From: MAILER-DAEMON@client.com', 'Subject: Undeliverable', 'Message-ID: <b1@client.com>'], 'bounce')).action, 'skipped');
+  assert.equal(stripQuoted('New text\n\n-----Original Message-----\nFrom: x'), 'New text');
+  // an unreachable mail server is reported, not thrown
+  const r = await checkMailbox({ cfg: { host: '127.0.0.1', port: 1, secure: false, user: 'x', pass: 'y', folder: 'INBOX' } });
+  assert.equal(r.ok, false);
+  assert.ok(r.error);
+});
+
+test('email settings: incoming mailbox saved without echoing the password; task source', async () => {
+  let r = await admin.put('/admin/email/inbound', { enabled: true, host: '', user: '' });
+  assert.equal(r.status, 400);
+  r = await admin.put('/admin/email/inbound', { enabled: false, host: 'imap.example.com', port: 993, user: 'support@example.com', pass: 'imap-secret', address: 'support@example.com', minutes: 5 });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  r = await admin.get('/admin/email');
+  assert.equal(r.data.inbound.host, 'imap.example.com'); assert.equal(r.data.inbound.has_pass, true); assert.equal(r.data.inbound.minutes, 5);
+  assert.equal(JSON.stringify(r.data).includes('imap-secret'), false);
+  assert.equal((await agent.put('/admin/email/inbound', { host: 'x' })).status, 403);
+  // source: converted from a web ticket = ticket; created in the project = project
+  assert.equal((await admin.get(`/work-packages/${ids.wp.id}`)).data.source, 'ticket');
+  const plain = (await admin.post('/work-packages', { project_id: ids.proj.id, subject: 'Plain task' })).data;
+  assert.equal(plain.source, 'project');
+  const emailTicket = get("SELECT ticket_no FROM tickets WHERE channel = 'email' AND wp_id IS NULL ORDER BY id LIMIT 1").ticket_no;
+  const wp = (await admin.post(`/tickets/${emailTicket}/convert`, { project_id: ids.proj.id })).data;
+  assert.equal(wp.source, 'email');
+  assert.equal((await admin.get(`/work-packages?source=email&status=all`)).data.rows.map(x => x.id).includes(wp.id), true);
+});

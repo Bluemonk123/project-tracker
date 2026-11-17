@@ -972,3 +972,9 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .remark-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .remark-list li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface); }
 .remark-body { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 2px; }
+.src-tag { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); font-weight: 600; padding: 1px 7px; border-radius: 10px; white-space: nowrap; background: var(--sunken); color: var(--ink-2); }
+.src-tag.ticket { background: color-mix(in srgb, #E5484D 13%, transparent); color: #B8323A; }
+.src-tag.email { background: color-mix(in srgb, #3091ec 14%, transparent); color: #1F6FB8; }
+.tk-inbound-status { font-size: var(--fs-sm); padding: 8px 12px; border-radius: var(--r-sm); background: var(--sunken); }
+.tk-inbound-status.ok { background: var(--ok-soft); color: var(--ok); }
+.tk-inbound-status.bad { background: var(--danger-soft); color: var(--danger); }

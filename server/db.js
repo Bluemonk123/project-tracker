@@ -251,6 +251,16 @@ function migrate() {
   // a ticket converted into a task stays linked to it
   if (!all('PRAGMA table_info(tickets)').some(c => c.name === 'wp_id')) db.exec('ALTER TABLE tickets ADD COLUMN wp_id INTEGER REFERENCES work_packages(id) ON DELETE SET NULL');
   db.exec('CREATE INDEX IF NOT EXISTS idx_tickets_wp ON tickets(wp_id)');
+  // tickets raised by email keep the email's Message-ID (so the same email is never added twice)
+  if (!all('PRAGMA table_info(tickets)').some(c => c.name === 'email_message_id')) db.exec('ALTER TABLE tickets ADD COLUMN email_message_id TEXT');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_tickets_msgid ON tickets(email_message_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_ticket_messages_msgid ON ticket_messages(email_message_id)');
+  // where a task came from: project (created in the project), ticket, or email (a ticket that arrived by email)
+  if (!all('PRAGMA table_info(work_packages)').some(c => c.name === 'source')) {
+    db.exec("ALTER TABLE work_packages ADD COLUMN source TEXT NOT NULL DEFAULT 'project'");
+    run(`UPDATE work_packages SET source = CASE WHEN (SELECT channel FROM tickets t WHERE t.wp_id = work_packages.id LIMIT 1) = 'email' THEN 'email' ELSE 'ticket' END
+         WHERE id IN (SELECT wp_id FROM tickets WHERE wp_id IS NOT NULL)`);
+  }
   for (const [k, v] of [['ticket_sla_hours_urgent', 4], ['ticket_sla_hours_high', 8], ['ticket_sla_hours_normal', 24]]) {
     if (getSetting(k) === null) setSetting(k, v);
   }

@@ -7,7 +7,7 @@ import { Loading, ErrorBox, Avatar, useAsync } from '../components/ui.jsx';
 import NewWpModal from './NewWpModal.jsx';
 import { LogTimeModal } from './Time.jsx';
 import RaiseTicketModal from './tickets/RaiseTicketModal.jsx';
-import { TicketPriority, SlaBadge } from './tickets/common.jsx';
+import { TicketPriority, SlaBadge, SourceTag } from './tickets/common.jsx';
 import { RemarksModal } from './Remarks.jsx';
 import { addDays, diffDays, fmtDate, startOfWeek, today, parseDate } from '../lib/format.js';
 
@@ -44,6 +44,7 @@ function Card({ w, column, onDragStart, onDragEnd, dragging, onLog, onRemarks })
       onDragEnd={onDragEnd}>
       <div className="kb-meta">#{w.key} - {w.project_name}{w.ticket_no ? <span className="kb-ticket" title="Converted from this ticket"> · Ticket #{w.ticket_no}</span> : null}</div>
       <div className="kb-title"><span className="kb-type" style={{ color: w.type_color }}>{w.type_name.toUpperCase()}</span> {w.subject}</div>
+      {w.source && w.source !== 'project' && <div style={{ marginTop: 4 }}><SourceTag source={w.source} /></div>}
       {(est > 0 || spent > 0 || w.can_log) && (
         <div className="kb-hours">
           <span className={`kb-hours-val${over ? ' over' : ''}`} title={`Logged ${h(spent)}${est ? ` of ${h(est)} estimated` : ''}${w.range_hours ? `; ${h(w.range_hours)} in this period` : ''}`}>
