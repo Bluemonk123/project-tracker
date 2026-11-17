@@ -14,13 +14,13 @@ import { SourceTag } from './tickets/common.jsx';
 import ModuleInput from './ModuleInput.jsx';
 
 // Problem / Solution: Markdown text with its own Edit button
-function TextSection({ title, value, canEdit, busy, onSave, empty }) {
+function TextSection({ title, value, canEdit, busy, onSave, empty, className = '' }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(value || '');
   useEffect(() => { if (!editing) setText(value || ''); }, [value, editing]);
   const save = async () => { if (await onSave(text)) setEditing(false); };
   return (
-    <section className="wp-psol-part">
+    <section className={`wp-psol-part step${value ? ' done' : ''} ${className}`}>
       <div className="section-title">{title}
         {canEdit && !editing && <span className="actions"><button className="btn sm ghost" onClick={() => setEditing(true)}><Icon name="edit" />Edit</button></span>}
       </div>
@@ -320,15 +320,15 @@ export default function WpDetail() {
           </div>
 
           <div className="wp-psol">
-            <div className="wp-module">
+            <div className={`wp-module step${wp.module ? ' done' : ''}`}>
               <span className="section-title" style={{ margin: 0 }}>Module</span>
               <div className="grow"><ModuleInput projectId={wp.project_id} value={wp.module || ''} disabled={!can.edit || busy} onSave={(v) => update({ module: v })} /></div>
             </div>
             <TextSection title="Problem" value={wp.description} canEdit={can.edit} busy={busy} onSave={(v) => update({ description: v })}
               empty={can.edit ? 'No problem described yet. Add details, steps to reproduce or acceptance criteria.' : 'Not described.'} />
-            <TextSection title="Solution" value={wp.solution} canEdit={can.edit} busy={busy} onSave={(v) => update({ solution: v })}
+            <TextSection className="solution" title="Solution" value={wp.solution} canEdit={can.edit} busy={busy} onSave={(v) => update({ solution: v })}
               empty={can.edit ? 'No solution yet. Write how it was solved when it is.' : 'No solution yet.'} />
-            <section className="wp-psol-part plain">
+            <section className={`wp-psol-part plain step${wp.attachments.length ? ' done' : ''}`}>
               <div className="section-title">Photos, PDF and ZIP files <span className="muted">({wp.attachments.length} of {wp.max_files})</span>
                 {can.upload && wp.attachments.length < wp.max_files && (
                   <span className="actions">
@@ -355,7 +355,7 @@ export default function WpDetail() {
                 </div>
               )}
             </section>
-            <section className="wp-psol-part plain">
+            <section className={`wp-psol-part plain step${wp.links.length ? ' done' : ''}`}>
               <div className="section-title">Links <span className="muted">({wp.links.length})</span></div>
               {wp.links.length > 0 && (
                 <div className="panel" style={{ marginBottom: 8 }}>
@@ -372,6 +372,14 @@ export default function WpDetail() {
               {(can.edit || can.comment) && <LinkEditor links={[]} onChange={async (ls) => { const l = ls[ls.length - 1]; if (l && await run(() => api.post(`/work-packages/${wp.id}/links`, l), 'Link added')) reload(); }} />}
             </section>
           </div>
+
+          {can.comment && (
+            <div className="wp-comment-box">
+              <div className="section-title">Add a comment</div>
+              <MarkdownEditor value={comment} onChange={setComment} rows={3} placeholder="Write a comment. Type @ to notify someone." onSubmitShortcut={postComment} mentionUsers={members.length ? members : undefined} />
+              <div className="row" style={{ marginTop: 6 }}><button className="btn primary sm" disabled={busy || !comment.trim()} onClick={postComment}>Comment</button><span className="xs muted">Ctrl + Enter to send. Comments show under the Comments tab and in Activity.</span></div>
+            </div>
+          )}
 
           <div className="wp-tabs" role="tablist" aria-label="Stages, relations and child work packages">
             {!isMilestone && <button type="button" role="tab" aria-selected={curTab === 'stages'} className={curTab === 'stages' ? 'active' : ''} onClick={() => setTab('stages')}>Stages</button>}
@@ -409,18 +417,12 @@ export default function WpDetail() {
                 </div>
               ) : <p className="small muted">Link work that blocks, follows or duplicates this one.</p>}
             </>}
-            {curTab === 'comments' && <>
-            <div className="wp-comments">
-              {talk.map(j => <Journal key={j.id} j={j} label={label} canEditOwn onSaved={reload} />)}
-              {!talk.length && <p className="small muted" style={{ margin: '4px 0 8px' }}>No comments yet.</p>}
-              {can.comment && (
-                <div className="stack tight" style={{ marginTop: 8 }}>
-                  <MarkdownEditor value={comment} onChange={setComment} rows={3} placeholder="Write a comment. Type @ to notify someone." onSubmitShortcut={postComment} mentionUsers={members.length ? members : undefined} />
-                  <div className="row"><button className="btn primary sm" disabled={busy || !comment.trim()} onClick={postComment}>Comment</button><span className="xs muted">Ctrl + Enter to send</span></div>
-                </div>
-              )}
-            </div>
-            </>}
+            {curTab === 'comments' && (
+              <div className="wp-comments">
+                {talk.map(j => <Journal key={j.id} j={j} label={label} canEditOwn onSaved={reload} />)}
+                {!talk.length && <p className="small muted" style={{ margin: '4px 0 8px' }}>No comments yet.</p>}
+              </div>
+            )}
             {curTab === 'children' && <>
               <div className="section-title">Child work packages <span className="muted">({wp.children.length})</span>
                 {can.create && <span className="actions"><button className="btn sm ghost" onClick={() => setModal('child')}><Icon name="plus" />Add child</button></span>}
