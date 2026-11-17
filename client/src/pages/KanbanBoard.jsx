@@ -5,9 +5,8 @@ import { useApp, useLoad } from '../context.jsx';
 import Icon from '../components/Icon.jsx';
 import { Loading, ErrorBox, Avatar, useAsync } from '../components/ui.jsx';
 import NewWpModal from './NewWpModal.jsx';
-import { LogTimeModal } from './Time.jsx';
 import RaiseTicketModal from './tickets/RaiseTicketModal.jsx';
-import { TicketPriority, SlaBadge, SourceTag, CritTag } from './tickets/common.jsx';
+import { SlaBadge } from './tickets/common.jsx';
 import { RemarksModal } from './Remarks.jsx';
 import { addDays, diffDays, fmtDate, startOfWeek, today, parseDate } from '../lib/format.js';
 
@@ -29,56 +28,45 @@ function cardDates(w) {
   return `${fmtDate(s)} – ${fmtDate(e)}`;
 }
 
-function Card({ w, column, onDragStart, onDragEnd, dragging, onLog, onRemarks }) {
+// "P2 - High" -> "P2"; ticket priorities map to P1-P3
+const prioShort = (name) => (/^P\d/i.test(name || '') ? String(name).split(/[\s-]/)[0].toUpperCase() : String(name || '').slice(0, 3));
+const TICKET_P = { urgent: 'P1', high: 'P2', normal: 'P3' };
+const hrs = (n) => `${Math.round((n || 0) * 100) / 100}hr`;
+
+function Who({ id, name }) {
+  return name ? <Avatar id={id} name={name} size="sm" />
+    : <span className="kb-unassigned" title="Unassigned" aria-label="Unassigned"><Icon name="userOff" size={14} /></span>;
+}
+
+// One task: project and estimate on top, subject, then one line of person · P/C · type.
+function Card({ w, onDragStart, onDragEnd, dragging, onRemarks }) {
   const nav = useNavigate();
   const overdue = !w.is_closed && w.due_date && w.due_date < today();
   const dates = cardDates(w);
-  const primary = column.statuses[0];
   const est = w.estimated_hours || 0, spent = w.spent_hours || 0;
-  const over = est > 0 && spent > est;
+  const tip = [`${w.key} · ${w.status_name}`, w.assignee_name ? `Assigned to ${w.assignee_name}` : 'Unassigned', w.priority_name && `Priority ${w.priority_name}`,
+    `Criticality ${w.criticality_name || 'not set (C0)'}`, dates && `Dates ${dates}${overdue ? ' (overdue)' : ''}`, `Logged ${hrs(spent)} of ${hrs(est)} estimated`,
+    w.ticket_no && `From ticket #${w.ticket_no}`].filter(Boolean).join('\n');
   return (
-    <article className={`kb-card${dragging ? ' dragging' : ''}`} style={{ '--tc': w.type_color }}
+    <article className={`kb-card${dragging ? ' dragging' : ''}${overdue ? ' overdue' : ''}`} style={{ '--tc': w.type_color }} title={tip}
       draggable={w.can_edit} tabIndex={0} role="link" aria-label={`${w.key} ${w.subject}`}
       onClick={() => nav(`/wp/${w.id}`)} onKeyDown={(e) => { if (e.key === 'Enter') nav(`/wp/${w.id}`); }}
       onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(w.id)); e.dataTransfer.effectAllowed = 'move'; onDragStart(w.id); }}
       onDragEnd={onDragEnd}>
-      <div className="kb-meta">#{w.key} - {w.project_name}{w.ticket_no ? <span className="kb-ticket" title="Converted from this ticket"> · Ticket #{w.ticket_no}</span> : null}</div>
+      <div className="kb-top">
+        <span className="kb-project">{w.project_name}</span>
+        <span className={`kb-est${est > 0 && spent > est ? ' over' : ''}`} title={`Estimated ${hrs(est)}${spent ? `, logged ${hrs(spent)}` : ''}`}>{hrs(est)}</span>
+      </div>
       <div className="kb-title">{w.subject}</div>
-      {(w.criticality_name || (w.source && w.source !== 'project')) && (
-        <div className="kb-tags">
-          {w.criticality_name && <CritTag name={w.criticality_name} color={w.criticality_color} />}
-          {w.source && w.source !== 'project' && <SourceTag source={w.source} />}
-        </div>
-      )}
-      {(est > 0 || spent > 0 || w.can_log) && (
-        <div className="kb-hours">
-          <span className={`kb-hours-val${over ? ' over' : ''}`} title={`Logged ${h(spent)}${est ? ` of ${h(est)} estimated` : ''}${w.range_hours ? `; ${h(w.range_hours)} in this period` : ''}`}>
-            <Icon name="clock" size={12} />{est > 0 ? <>{h(spent).replace(' h', '')} / {h(est)}</> : h(spent)}
-          </span>
-          {est > 0 && <span className="kb-hours-bar"><span style={{ width: `${Math.min(100, (spent / est) * 100)}%` }} className={over ? 'over' : ''} /></span>}
-          {w.can_log && (
-            <button type="button" className="kb-log" title="Log time on this task" aria-label={`Log time on ${w.key}`}
-              onClick={(e) => { e.stopPropagation(); onLog(w); }} onKeyDown={(e) => e.stopPropagation()} draggable={false}><Icon name="plus" size={12} />Log</button>
-          )}
-        </div>
-      )}
-      {(w.remarks_count > 0 || w.can_remark) && (
-        <button type="button" className={`kb-remarks${w.remarks_count ? ' has' : ''}`} draggable={false}
-          title={w.remarks_count ? `${w.remarks_count} remark${w.remarks_count === 1 ? '' : 's'}` : 'Add a remark'}
-          aria-label={`Remarks on ${w.key}: ${w.remarks_count}`}
-          onClick={(e) => { e.stopPropagation(); onRemarks(w); }} onKeyDown={(e) => e.stopPropagation()}>
-          <Icon name="chat" size={13} />{w.remarks_count ? `${w.remarks_count} remark${w.remarks_count === 1 ? '' : 's'}` : 'Add remark'}
-        </button>
-      )}
-      <div className="kb-foot">
-        {w.assignee_name ? <Avatar id={w.assignee_id} name={w.assignee_name} size="sm" /> : <span />}
+      <div className="kb-line">
+        <Who id={w.assignee_id} name={w.assignee_name} />
+        <span className="kb-pc" style={{ '--pcol': w.priority_color, '--ccol': w.criticality_color || '#8A93A0' }}>
+          <b>{prioShort(w.priority_name)}</b> - <b className="c">{w.criticality_name || 'C0'}</b>
+        </span>
         {w.remarks_count > 0 && (
           <button type="button" className="kb-rc" draggable={false} title={`${w.remarks_count} remark${w.remarks_count === 1 ? '' : 's'}`}
             onClick={(e) => { e.stopPropagation(); onRemarks(w); }} onKeyDown={(e) => e.stopPropagation()}><Icon name="chat" size={12} />{w.remarks_count}</button>
         )}
-        {primary && w.status_id !== primary.id && <span className="kb-status" style={{ '--c': w.status_color }}>{w.status_name}</span>}
-        <span className="spacer" />
-        {dates && <span className={`kb-dates${overdue ? ' overdue' : ''}`}>{dates}</span>}
         <span className="kb-type-pill" style={{ '--c': w.type_color }}>{w.type_name}</span>
       </div>
     </article>
@@ -91,17 +79,20 @@ function TicketCard({ t, draggable, onDragStart, onDragEnd, dragging }) {
   const open = () => nav(`/ticket-board?ticket=${t.ticket_no}`);
   return (
     <article className={`kb-card${dragging ? ' dragging' : ''}`} style={{ '--tc': '#E5484D' }} tabIndex={0} role="link" aria-label={`Ticket ${t.ticket_no} ${t.subject_display}`}
-      title={draggable ? 'Drag onto a task column to turn this ticket into a task' : undefined}
+      title={`Ticket #${t.ticket_no} · raised by ${t.requester_display}${draggable ? '\nDrag onto a task column to turn it into a task' : ''}`}
       draggable={draggable} onDragStart={(e) => { e.dataTransfer.setData('text/plain', `ticket:${t.ticket_no}`); e.dataTransfer.effectAllowed = 'move'; onDragStart?.(); }}
       onDragEnd={onDragEnd}
       onClick={open} onKeyDown={(e) => { if (e.key === 'Enter') open(); }}>
-      <div className="kb-meta">#{t.ticket_no} - {t.group_name} · {t.requester_display}</div>
-      <div className="kb-title">{t.subject_display}</div>
-      <div className="kb-foot">
-        {t.assignee_name ? <Avatar id={t.assignee_id} name={t.assignee_name} size="sm" /> : <span className="xs muted">Unassigned</span>}
-        <TicketPriority priority={t.priority} />
-        <span className="spacer" />
+      <div className="kb-top">
+        <span className="kb-project">{t.group_name}</span>
         <SlaBadge sla={t.sla} />
+      </div>
+      <div className="kb-title">{t.subject_display}</div>
+      <div className="kb-line">
+        <Who id={t.assignee_id} name={t.assignee_name} />
+        <span className="kb-pc" style={{ '--pcol': { urgent: '#C2453B', high: '#C98A1B', normal: '#3B6EA8' }[t.priority], '--ccol': '#8A93A0' }}>
+          <b>{TICKET_P[t.priority] || 'P3'}</b> - <b className="c">C0</b>
+        </span>
         <span className="kb-type-pill" style={{ '--c': '#E5484D' }}>Ticket</span>
       </div>
     </article>
@@ -120,7 +111,6 @@ export default function KanbanBoard({ project }) {
   const [dragId, setDragId] = useState(null);
   const [over, setOver] = useState(null);
   const [adding, setAdding] = useState(null);
-  const [logging, setLogging] = useState(null);
   const [raising, setRaising] = useState(false);
   // Closed and Rejected share the last column, with a switcher (remembered in this browser)
   const [endTab, setEndTab] = useState(() => { try { return localStorage.getItem('pt-board-end') === 'rejected' ? 'rejected' : 'closed'; } catch { return 'closed'; } });
@@ -296,7 +286,7 @@ export default function KanbanBoard({ project }) {
                   )}
                 </div>
                 <div className="kb-cards">
-                  {items.map(w => <Card key={w.id} w={w} column={col} dragging={dragId === w.id} onLog={setLogging} onRemarks={setRemarksFor} onDragStart={setDragId} onDragEnd={() => { setDragId(null); setOver(null); }} />)}
+                  {items.map(w => <Card key={w.id} w={w} dragging={dragId === w.id} onRemarks={setRemarksFor} onDragStart={setDragId} onDragEnd={() => { setDragId(null); setOver(null); }} />)}
                   {!items.length && <div className="kb-empty">{needle ? 'No matching cards' : 'Nothing here for this period'}</div>}
                 </div>
               </section>
@@ -319,7 +309,6 @@ export default function KanbanBoard({ project }) {
           }}
           onClose={() => setConverting(null)} onCreated={() => { setConverting(null); reload(); }} />
       )}
-      {logging && <LogTimeModal wp={logging} onClose={() => setLogging(null)} onSaved={reload} />}
       {adding && (
         <NewWpModal projectId={project?.id || (projectId ? Number(projectId) : undefined)} title={`New task in ${adding.name}`}
           defaults={{

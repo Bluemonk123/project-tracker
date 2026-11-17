@@ -1017,3 +1017,20 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .kb.dense .kb-rc { display: inline-flex; align-items: center; gap: 3px; border: 0; background: var(--surface-2); color: var(--ink-2); border-radius: 8px; padding: 0 6px; font: inherit; font-size: 11px; cursor: pointer; }
 .kb.dense .tk-sla, .kb.dense .tk-prio { font-size: 11px; }
 @media (max-width: 860px) { .kb-board { height: auto; } .kb-cards { overflow: visible; } }
+
+/* Task Board card v3: project + estimate / subject / person · P-C · type */
+.kb-top { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--ink-3); }
+.kb-project { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 550; }
+.kb-est { flex: none; font-size: 12px; font-weight: 650; color: var(--ink-2); font-variant-numeric: tabular-nums; background: var(--sunken); border-radius: 6px; padding: 0 6px; line-height: 19px; }
+.kb-est.over { color: var(--danger); background: var(--danger-soft); }
+.kb-line { display: flex; align-items: center; gap: 6px; margin-top: 9px; flex-wrap: nowrap; min-width: 0; }
+.kb-line .kb-type-pill { margin-left: auto; }
+.kb-unassigned { width: 22px; height: 22px; flex: none; border-radius: 50%; display: inline-grid; place-items: center; color: var(--ink-3); background: var(--sunken); border: 1px dashed color-mix(in srgb, var(--ink-3) 60%, transparent); }
+.kb-pc { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; color: var(--ink-3); white-space: nowrap; padding: 0 6px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--line-2); line-height: 19px; }
+.kb-pc b { font-weight: 700; color: var(--pcol); }
+.kb-pc b.c { color: var(--ccol); }
+.kb-card .kb-rc { display: inline-flex; align-items: center; gap: 3px; border: 0; background: var(--surface-2); color: var(--ink-2); border-radius: 8px; padding: 0 6px; font: inherit; font-size: 11px; line-height: 19px; cursor: pointer; }
+.kb-card.overdue { box-shadow: inset 3px 0 0 var(--danger), 0 1px 2px rgba(0, 0, 0, 0.05); }
+.kb.dense .kb-top { font-size: 11px; }
+.kb.dense .kb-line { margin-top: 5px; gap: 5px; }
+.kb.dense .kb-line .avatar, .kb.dense .kb-unassigned { width: 20px; height: 20px; font-size: 9px; }
