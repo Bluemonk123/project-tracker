@@ -146,8 +146,25 @@ export default function KanbanBoard({ project }) {
   const rows = (data?.rows || []).filter(r => matches(r.subject, r.key, r.assignee_name, r.project_name, r.ticket_no));
   const tickets = data?.tickets ? data.tickets.filter(t => matches(t.subject_display, t.ticket_no, t.assignee_name, t.requester_display)) : null;
   // Compact cards fit many more on screen (remembered in this browser)
-  const [dense, setDense] = useState(() => { try { return localStorage.getItem('pt-board-density') === 'compact'; } catch { return false; } });
-  const toggleDense = (v) => { setDense(v); try { localStorage.setItem('pt-board-density', v ? 'compact' : 'comfortable'); } catch { /* ignore */ } };
+  const dense = true; // compact cards only
+  // Export: the tasks on the board right now (with the current filters and Find), with their details, as a CSV file for Excel
+  const exportCsv = () => {
+    const cols = [['key', 'ID'], ['project_name', 'Project'], ['type_name', 'Type'], ['subject', 'Subject'], ['module', 'Module'],
+      ['description', 'Problem'], ['solution', 'Solution'], ['board_column', 'Stage'], ['status_name', 'Status'], ['priority_name', 'Priority'],
+      ['location', 'Location'], ['assignee_name', 'Assignee'], ['requested_by', 'Requester'], ['source', 'Source'], ['ticket_no', 'From ticket'],
+      ['start_date', 'Start date'], ['due_date', 'Due date'], ['closed_on', 'Closed on'], ['estimated_hours', 'Estimated hours'], ['spent_hours', 'Spent hours'],
+      ['author_name', 'Created by'], ['created_at', 'Created'], ['updated_at', 'Updated']];
+    const STAGE = { new: 'New', design: 'In Design', develop: 'In Develop', testing: 'In Testing', closed: 'Closed', rejected: 'Rejected' };
+    const val = (r, k) => (k === 'board_column' ? STAGE[r[k]] || r[k] : k === 'location' ? LOCATIONS[r[k]] || '' : k === 'source' ? ({ project: 'Project', ticket: 'Ticket', email: 'Email' }[r[k]] || '') : r[k]);
+    const esc = (v) => { const t = v == null ? '' : String(v); return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+    const lines = [cols.map(c => c[1]).join(','), ...rows.map(r => cols.map(([k]) => esc(val(r, k))).join(','))];
+    const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `task-board-${from}-to-${to}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
   // the board fills the rest of the window; each column scrolls on its own, headers stay in view
   const boardRef = useRef(null);
   const [boardTop, setBoardTop] = useState(260);
@@ -227,10 +244,9 @@ export default function KanbanBoard({ project }) {
           <label className="kb-field kb-find"><span>Find</span>
             <input type="search" placeholder="Subject, ID or person" value={find} onChange={(e) => setFind(e.target.value)} />
           </label>
-          <div className="kb-density" role="group" aria-label="Card size">
-            <button type="button" className={!dense ? 'active' : ''} aria-pressed={!dense} onClick={() => toggleDense(false)} title="Full cards">Comfortable</button>
-            <button type="button" className={dense ? 'active' : ''} aria-pressed={dense} onClick={() => toggleDense(true)} title="Small cards: fit many more on screen">Compact</button>
-          </div>
+          <button type="button" className="btn sm kb-export" onClick={exportCsv} disabled={!rows.length} title="Download the tasks shown on the board (current filters) with their details, for Excel">
+            <Icon name="download" />Export{rows.length ? ` (${rows.length})` : ''}
+          </button>
         </div>
       </div>
 
