@@ -284,6 +284,7 @@ function migrate() {
   {
     const wcols = all('PRAGMA table_info(work_packages)').map(c => c.name);
     if (!wcols.includes('requested_by')) db.exec('ALTER TABLE work_packages ADD COLUMN requested_by TEXT');
+    if (!wcols.includes('location')) db.exec('ALTER TABLE work_packages ADD COLUMN location TEXT'); // local / staging / production / external
     if (!wcols.includes('module')) db.exec('ALTER TABLE work_packages ADD COLUMN module TEXT'); // which part of the application
     if (!wcols.includes('solution')) db.exec('ALTER TABLE work_packages ADD COLUMN solution TEXT'); // how it was solved (the description is the problem)
     if (!wcols.includes('closed_on')) {

@@ -1082,3 +1082,5 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .wp-psol-part, .wp-psol-part.plain, .wp-psol-part + .wp-psol-part, .wp-psol > .wp-psol-part:nth-of-type(2) { background: none !important; }
 .wp-psol .wp-psol-part.solution { background: color-mix(in srgb, var(--ok-soft) 35%, var(--surface)) !important; }
 .wp-comment-box { margin-top: 18px; }
+.wp-head-select { width: auto; height: 26px; font-size: 12px; font-weight: 650; padding: 0 26px 0 8px; border-radius: 6px; border-color: var(--line); color: var(--ink-2); }
+.wp-head-select[aria-label="Stage"] { border-color: color-mix(in srgb, var(--sc, var(--line)) 70%, transparent); background-color: color-mix(in srgb, var(--sc, transparent) 18%, var(--surface)); color: var(--ink); }

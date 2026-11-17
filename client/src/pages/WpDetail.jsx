@@ -47,7 +47,7 @@ function RequestedBy({ value, disabled, onSave }) {
 }
 
 const FIELD_LABELS = {
-  type_id: 'Type', subject: 'Subject', module: 'Module', description: 'Problem', solution: 'Solution', status_id: 'Status', priority_id: 'Priority', criticality_id: 'Criticality', requested_by: 'Requested by',
+  type_id: 'Type', subject: 'Subject', location: 'Location', module: 'Module', description: 'Problem', solution: 'Solution', status_id: 'Status', priority_id: 'Priority', criticality_id: 'Criticality', requested_by: 'Requested by',
   assignee_id: 'Assignee', responsible_id: 'Accountable', parent_id: 'Parent', version_id: 'Version', category_id: 'Category',
   start_date: 'Start date', due_date: 'Due date', estimated_hours: 'Estimated hours', done_ratio: '% done', project_id: 'Project',
   relation_added: 'Relation', attachment: 'File', link_added: 'Link',
@@ -55,6 +55,7 @@ const FIELD_LABELS = {
 };
 
 // The five board stages. Design, Develop and Testing each have their own person and time activity.
+export const LOCATIONS = { local: 'On Local', staging: 'On Staging', production: 'On Production', external: 'On External' };
 export const STAGES = [
   { key: 'new', name: 'New', color: '#8FD9C4' },
   { key: 'design', name: 'In Design', color: '#B79BDB', field: 'designer', role: 'Designer', activity: 'Design' },
@@ -131,6 +132,7 @@ function useLabeler(info) {
     switch (field) {
       case 'type_id': return meta.types.find(t => t.id === v)?.name ?? v;
       case 'status_id': return meta.statuses.find(t => t.id === v)?.name ?? v;
+      case 'location': return LOCATIONS[v] || 'Not set';
       case 'priority_id': return meta.priorities.find(t => t.id === v)?.name ?? v;
       case 'criticality_id': return v == null ? 'Not set' : (meta.criticalities || []).find(t => t.id === v)?.name ?? v;
       case 'assignee_id': case 'responsible_id': case 'designer_id': case 'developer_id': case 'tester_id': return userById(v)?.name ?? `user ${v}`;
@@ -299,6 +301,16 @@ export default function WpDetail() {
                 {meta.types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             ) : <TypeLabel name={wp.type_name} color={wp.type_color} />}
+            <select className="wp-head-select" value={wp.location || ''} disabled={!can.edit} aria-label="Location" title="Where the work is"
+              onChange={(e) => update({ location: e.target.value || null })}>
+              <option value="">Location…</option>
+              {Object.entries(LOCATIONS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
+            <select className="wp-head-select" value={wp.board_column || ''} disabled={!can.edit} aria-label="Stage" title="Stage on the Task Board"
+              style={{ '--sc': STAGES.concat({ key: 'rejected', color: '#C25B6B' }).find(x => x.key === wp.board_column)?.color }}
+              onChange={(e) => { const st = meta.statuses.filter(x => x.board_column === e.target.value).sort((a, b) => a.position - b.position)[0]; if (st) update({ status_id: st.id }); }}>
+              {STAGES.map(st => <option key={st.key} value={st.key} disabled={!meta.statuses.some(x => x.board_column === st.key)}>{st.name}</option>)}
+            </select>
             <span className="spacer" />
             <button className="btn sm" onClick={toggleWatch} title="Watchers get notified about changes"><Icon name="eye" />{wp.watching ? 'Unwatch' : 'Watch'}</button>
             <MoreMenu>

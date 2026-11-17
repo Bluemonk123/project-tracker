@@ -559,3 +559,11 @@ test('users can be added without a password and set one later', async () => {
   assert.equal((await c.post('/auth/login', { email: 'mehak@example.com', password: 'anything1' })).status, 401);
   assert.equal((await admin.post('/admin/users', { name: 'X', email: 'x@example.com', password: 'short' })).status, 400);
 });
+
+test('tasks: location (local / staging / production / external)', async () => {
+  const w = (await admin.post('/work-packages', { project_id: ids.proj.id, subject: 'Where is it', location: 'staging' })).data;
+  assert.equal(w.location, 'staging');
+  assert.equal((await admin.patch(`/work-packages/${w.id}`, { location: 'moon' })).status, 400);
+  assert.equal((await admin.patch(`/work-packages/${w.id}`, { location: 'production' })).data.location, 'production');
+  assert.equal((await admin.patch(`/work-packages/${w.id}`, { location: null })).data.location, null);
+});
