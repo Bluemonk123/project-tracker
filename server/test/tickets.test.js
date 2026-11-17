@@ -486,3 +486,34 @@ test('priority levels P1-P4 and criticality C1-C3 on tasks', async () => {
   assert.equal((await admin.post('/admin/criticalities', { name: 'C4', color: '#888888' })).status, 201);
   assert.equal((await agent.post('/admin/criticalities', { name: 'C5' })).status, 403);
 });
+
+test('import tasks (admin): dates, status, source, requester, closed date and remarks kept', async () => {
+  const meta = (await admin.get('/meta')).data;
+  const st = (col) => meta.statuses.find(s => s.board_column === col).id;
+  const p2 = meta.priorities.find(p => p.name.startsWith('P2')).id;
+  const c1 = meta.criticalities.find(c => c.name === 'C1').id;
+  const rows = [
+    { ref: 'S.No 1', subject: 'Inactivate accounts', description: 'Source Method: Mail - Ankita', status_id: st('closed'), priority_id: p2, criticality_id: c1,
+      source: 'email', requested_by: 'Ankita', created_on: '2025-10-31', updated_on: '2026-01-08', closed_on: '2026-02-23',
+      remarks: [{ author: 'Asha', body: 'old remark' }, { author: 'Suresh', body: 'Corrected manually' }] },
+    { ref: 'S.No 2', subject: 'Sales tagging', status_id: st('develop'), priority_id: p2, source: 'ticket', requested_by: 'Kiran Bala', created_on: '2025-10-29' },
+  ];
+  assert.equal((await agent.post('/admin/import/tasks', { project_id: ids.proj.id, rows })).status, 403);
+  assert.equal((await admin.post('/admin/import/tasks', { project_id: ids.proj.id, rows: [{ ...rows[0], created_on: '31/10/2025' }] })).status, 400);
+  const r = await admin.post('/admin/import/tasks', { project_id: ids.proj.id, rows });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.created, 2);
+  const w = (await admin.get(`/work-packages/${r.data.items[0].id}`)).data;
+  assert.equal(w.source, 'email'); assert.equal(w.requested_by, 'Ankita'); assert.equal(w.closed_on, '2026-02-23');
+  assert.equal(w.created_at.slice(0, 10), '2025-10-31'); assert.equal(w.criticality_name, 'C1');
+  assert.deepEqual(w.remarks.map(x => [x.created_by_name, x.body]).sort(), [['Asha Admin', 'old remark'], ['Suresh', 'Corrected manually']].sort());
+  const w2 = (await admin.get(`/work-packages/${r.data.items[1].id}`)).data;
+  assert.equal(w2.closed_on, null); assert.equal(w2.board_column, 'develop');
+  // closing in the app sets the closed date; reopening clears it
+  await admin.patch(`/work-packages/${w2.id}`, { status_id: st('closed') });
+  assert.ok((await admin.get(`/work-packages/${w2.id}`)).data.closed_on);
+  await admin.patch(`/work-packages/${w2.id}`, { status_id: st('new') });
+  assert.equal((await admin.get(`/work-packages/${w2.id}`)).data.closed_on, null);
+  await admin.patch(`/work-packages/${w2.id}`, { requested_by: 'Anuj' });
+  assert.equal((await admin.get(`/work-packages/${w2.id}`)).data.requested_by, 'Anuj');
+});

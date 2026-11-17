@@ -13,8 +13,17 @@ import { fmtDate, fmtDateTime, fmtHours, fmtSize, timeAgo } from '../lib/format.
 import { RemarksList } from './Remarks.jsx';
 import { SourceTag } from './tickets/common.jsx';
 
+// Who asked for this work (free text, e.g. a client contact)
+function RequestedBy({ value, disabled, onSave }) {
+  const [v, setV] = useState(value);
+  useEffect(() => setV(value), [value]);
+  return <input type="text" value={v} maxLength={100} disabled={disabled} placeholder="Nobody named" aria-label="Requested by"
+    onChange={(e) => setV(e.target.value)} onBlur={() => { if (v.trim() !== value.trim()) onSave(v.trim()); }}
+    onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setV(value); }} />;
+}
+
 const FIELD_LABELS = {
-  type_id: 'Type', subject: 'Subject', description: 'Description', status_id: 'Status', priority_id: 'Priority', criticality_id: 'Criticality',
+  type_id: 'Type', subject: 'Subject', description: 'Description', status_id: 'Status', priority_id: 'Priority', criticality_id: 'Criticality', requested_by: 'Requested by',
   assignee_id: 'Assignee', responsible_id: 'Accountable', parent_id: 'Parent', version_id: 'Version', category_id: 'Category',
   start_date: 'Start date', due_date: 'Due date', estimated_hours: 'Estimated hours', done_ratio: '% done', project_id: 'Project',
   relation_added: 'Relation', attachment: 'File', link_added: 'Link',
@@ -277,6 +286,7 @@ export default function WpDetail() {
           <div className="small muted" style={{ marginTop: 6 }}>
             Created by {wp.author_name || 'someone'} {timeAgo(wp.created_at)}, updated {timeAgo(wp.updated_at)}
             {' · '}<SourceTag source={wp.source} />
+            {wp.closed_on && <> · Closed {fmtDate(wp.closed_on)}</>}
             {wp.ticket && <> · From ticket {can.open_ticket ? <Link to={`/ticket-board?ticket=${wp.ticket.ticket_no}`}>#{wp.ticket.ticket_no}</Link> : `#${wp.ticket.ticket_no}`}</>}
           </div>
 
@@ -411,6 +421,8 @@ export default function WpDetail() {
               ))}
               <span className="k">Priority</span>
               <span className="v">{sel('priority_id', [...meta.priorities].reverse())}</span>
+              <span className="k">Requested by</span>
+              <span className="v"><RequestedBy value={wp.requested_by || ''} disabled={!can.edit || busy} onSave={(v) => update({ requested_by: v })} /></span>
               <span className="k">Criticality</span>
               <span className="v">{sel('criticality_id', [...(meta.criticalities || [])].reverse(), { empty: 'Not set' })}</span>
               <span className="k">Version</span>

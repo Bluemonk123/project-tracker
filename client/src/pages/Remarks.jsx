@@ -45,9 +45,9 @@ export function RemarksList({ wpId, remarks, canAdd, canEdit, onChange }) {
         <ul className="remark-list">
           {remarks.map(rm => (
             <li key={rm.id}>
-              <Avatar id={rm.user_id} name={rm.user_name || '?'} size="sm" />
+              <Avatar id={rm.user_id || rm.created_by || 0} name={rm.user_name || rm.created_by_name || '?'} size="sm" />
               <div className="grow" style={{ minWidth: 0 }}>
-                <div className="small"><b>For {rm.user_name || 'a removed user'}</b> <span className="xs muted">· by {rm.created_by_name || 'someone'} · <span title={fmtDateTime(rm.created_at)}>{timeAgo(rm.created_at)}</span></span></div>
+                <div className="small">{rm.user_id ? <><b>For {rm.user_name || 'a removed user'}</b> <span className="xs muted">· by {rm.created_by_name || 'someone'}</span></> : <b>{rm.created_by_name || 'Remark'}</b>} <span className="xs muted">· <span title={fmtDateTime(rm.created_at)}>{fmtDateTime(rm.created_at)}</span></span></div>
                 <div className="remark-body">{rm.body}</div>
               </div>
               {(rm.created_by === user.id || canEdit) && (

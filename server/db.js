@@ -259,6 +259,16 @@ function migrate() {
       setSetting('migration_levels_v1', '1');
     });
   }
+  // Tasks: who asked for the work, and when it was closed; remarks can name an author who has no account (imports)
+  {
+    const wcols = all('PRAGMA table_info(work_packages)').map(c => c.name);
+    if (!wcols.includes('requested_by')) db.exec('ALTER TABLE work_packages ADD COLUMN requested_by TEXT');
+    if (!wcols.includes('closed_on')) {
+      db.exec('ALTER TABLE work_packages ADD COLUMN closed_on TEXT');
+      run(`UPDATE work_packages SET closed_on = date(updated_at) WHERE status_id IN (SELECT id FROM statuses WHERE is_closed = 1)`);
+    }
+    if (!all('PRAGMA table_info(wp_remarks)').some(c => c.name === 'author_name')) db.exec('ALTER TABLE wp_remarks ADD COLUMN author_name TEXT');
+  }
   // ---------- Ticket Board (helpdesk) ----------
   const nCols = all('PRAGMA table_info(notifications)').map(c => c.name);
   if (!nCols.includes('ticket_id')) db.exec('ALTER TABLE notifications ADD COLUMN ticket_id INTEGER REFERENCES tickets(id) ON DELETE CASCADE');

@@ -1034,3 +1034,5 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .kb.dense .kb-top { font-size: 11px; }
 .kb.dense .kb-line { margin-top: 5px; gap: 5px; }
 .kb.dense .kb-line .avatar, .kb.dense .kb-unassigned { width: 20px; height: 20px; font-size: 9px; }
+/* card subject: at most two lines (full text in the tooltip and on the task page) */
+.kb-card .kb-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

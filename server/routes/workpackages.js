@@ -222,10 +222,65 @@ r.get('/board', (req, res) => {
   res.json({ columns, rows, tickets, can_convert });
 });
 
+// ---------- import (administrators): many tasks at once, keeping their own dates, status, source and remarks ----------
+// Body: { project_id, rows: [{ ref, subject, description, status_id, priority_id, criticality_id, type_id, source, requested_by,
+//          created_on, updated_on, closed_on, remarks: [{ author, body }] }] }. Each row is checked before anything is saved.
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+r.post('/admin/import/tasks', (req, res) => {
+  if (!req.user.is_admin) fail(403, 'Only administrators can import tasks.');
+  const p = resolveProject(req.body.project_id);
+  const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
+  if (!rows.length || rows.length > 1000) fail(400, 'Send between 1 and 1000 rows.');
+  const defType = (get("SELECT id FROM types WHERE name = 'Task'") || get('SELECT id FROM types ORDER BY position LIMIT 1')).id;
+  const users = all("SELECT id, name FROM users WHERE status = 'active'");
+  const findUser = (name) => {
+    const n = String(name || '').trim().toLowerCase();
+    if (!n) return null;
+    return users.find(u => u.name.toLowerCase() === n) || users.find(u => u.name.toLowerCase().split(/\s+/)[0] === n.split(/\s+/)[0]) || null;
+  };
+  const clean = rows.map((x, i) => {
+    const where = `Row ${x.ref ?? i + 1}`;
+    const subject = String(x.subject || '').trim().slice(0, 255);
+    if (!subject) fail(400, `${where}: subject is required.`);
+    const status = get('SELECT id, is_closed, board_column FROM statuses WHERE id = ?', Number(x.status_id)) || fail(400, `${where}: unknown status.`);
+    if (!get('SELECT id FROM priorities WHERE id = ?', Number(x.priority_id))) fail(400, `${where}: unknown priority.`);
+    if (x.criticality_id && !get('SELECT id FROM criticalities WHERE id = ?', Number(x.criticality_id))) fail(400, `${where}: unknown criticality.`);
+    for (const k of ['created_on', 'updated_on', 'closed_on']) if (x[k] && !DAY.test(x[k])) fail(400, `${where}: ${k} must be YYYY-MM-DD.`);
+    if (!x.created_on) fail(400, `${where}: created_on is required.`);
+    return {
+      ...x, subject, status, priority_id: Number(x.priority_id), criticality_id: x.criticality_id ? Number(x.criticality_id) : null,
+      type_id: x.type_id ? Number(x.type_id) : defType, source: ['project', 'ticket', 'email'].includes(x.source) ? x.source : 'project',
+      requested_by: String(x.requested_by || '').trim().slice(0, 100) || null,
+      remarks: (Array.isArray(x.remarks) ? x.remarks : []).filter(m => String(m?.body || '').trim()),
+    };
+  });
+  const created = tx(() => clean.map(x => {
+    const number = nextNumber(p.id);
+    const at = `${x.created_on} 04:30:00`; // 10:00 India time
+    const upd = `${x.updated_on || x.closed_on || x.created_on} 04:30:00`;
+    const pos = get('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM work_packages WHERE project_id = ?', p.id).p;
+    const id = run(`INSERT INTO work_packages(project_id, number, type_id, subject, description, status_id, priority_id, criticality_id, author_id,
+                      source, requested_by, closed_on, done_ratio, position, created_at, updated_at)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      p.id, number, x.type_id, x.subject, x.description || null, x.status.id, x.priority_id, x.criticality_id, req.user.id,
+      x.source, x.requested_by, x.status.is_closed ? (x.closed_on || null) : null, x.status.is_closed ? 100 : 0, pos, at, upd).id;
+    run('INSERT INTO wp_stages(wp_id, stage, user_id, entered_at) VALUES(?,?,?,?)', id, x.status.board_column || 'develop', req.user.id, at);
+    run('INSERT INTO journals(wp_id, user_id, notes, changes, created_at) VALUES(?,?,?,?,?)', id, req.user.id,
+      x.ref ? `Imported (${x.ref})` : 'Imported', JSON.stringify({ created: [null, true] }), at);
+    x.remarks.forEach((m, j) => {
+      const u = findUser(m.author);
+      run('INSERT INTO wp_remarks(wp_id, user_id, body, created_by, author_name, created_at) VALUES(?,?,?,?,?,?)',
+        id, null, String(m.body).trim().slice(0, 2000), u?.id ?? null, u ? null : String(m.author || '').trim().slice(0, 100) || null, `${x.updated_on || x.created_on} 04:3${Math.min(j, 9)}:00`);
+    });
+    return { ref: x.ref, id, key: `${p.identifier}-${number}` };
+  }));
+  res.status(201).json({ created: created.length, items: created });
+});
+
 // ---------- remarks: several short notes per task, each addressed to a chosen person ----------
 const canRemark = (req, wp) => can(req, 'wp.comment', wp.project_id) || canEditWp(req, wp);
 function remarksOf(wpId) {
-  return all(`SELECT r.id, r.body, r.user_id, r.created_by, r.created_at, u.name AS user_name, c.name AS created_by_name
+  return all(`SELECT r.id, r.body, r.user_id, r.created_by, r.created_at, u.name AS user_name, COALESCE(c.name, r.author_name) AS created_by_name
               FROM wp_remarks r LEFT JOIN users u ON u.id = r.user_id LEFT JOIN users c ON c.id = r.created_by
               WHERE r.wp_id = ? ORDER BY r.created_at DESC, r.id DESC`, wpId);
 }
@@ -350,6 +405,7 @@ function readFields(b) {
     status_id: intOrNull(b.status_id) ?? undefined,
     priority_id: intOrNull(b.priority_id) ?? undefined,
     criticality_id: intOrNull(b.criticality_id),
+    requested_by: b.requested_by === undefined ? undefined : (String(b.requested_by || '').trim().slice(0, 100) || null),
     assignee_id: intOrNull(b.assignee_id),
     responsible_id: intOrNull(b.responsible_id),
     designer_id: intOrNull(b.designer_id),
@@ -419,13 +475,14 @@ export function createWp(req, projectId, body, { journalNote } = {}) {
     const pos = get('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM work_packages WHERE project_id = ?', projectId).p;
     const { id } = run(`INSERT INTO work_packages(project_id, number, type_id, subject, description, status_id, priority_id, assignee_id,
         responsible_id, author_id, parent_id, version_id, category_id, start_date, due_date, estimated_hours, done_ratio, position,
-        designer_id, developer_id, tester_id, criticality_id)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        designer_id, developer_id, tester_id, criticality_id, requested_by)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       projectId, number, f.type_id, f.subject, f.description || null, f.status_id, f.priority_id, f.assignee_id || null,
       f.responsible_id || null, req.user.id, f.parent_id || null, f.version_id || null, f.category_id || null,
       f.start_date || null, f.due_date || null, f.estimated_hours ?? null, f.done_ratio ?? 0, f.position ?? pos,
-      f.designer_id || null, f.developer_id || null, f.tester_id || null, f.criticality_id || null);
+      f.designer_id || null, f.developer_id || null, f.tester_id || null, f.criticality_id || null, f.requested_by || null);
     enterStage(id, stage, req.user.id);
+    if (get('SELECT is_closed FROM statuses WHERE id = ?', f.status_id)?.is_closed) run("UPDATE work_packages SET closed_on = date('now') WHERE id = ?", id);
     run('INSERT INTO journals(wp_id, user_id, notes, changes) VALUES(?,?,?,?)', id, req.user.id, journalNote || null, JSON.stringify({ created: [null, true] }));
     addLinks(id, body.links, req.user.id);
     watch(id, req.user.id); watch(id, f.assignee_id); watch(id, f.responsible_id);
@@ -499,7 +556,7 @@ r.get('/work-packages/:id', (req, res) => {
   });
 });
 
-const TRACKED = ['type_id', 'subject', 'description', 'status_id', 'priority_id', 'criticality_id', 'assignee_id', 'responsible_id', 'parent_id',
+const TRACKED = ['type_id', 'subject', 'description', 'status_id', 'priority_id', 'criticality_id', 'requested_by', 'assignee_id', 'responsible_id', 'parent_id',
   'version_id', 'category_id', 'start_date', 'due_date', 'estimated_hours', 'done_ratio', 'designer_id', 'developer_id', 'tester_id'];
 
 export function updateWp(req, wp, body) {
@@ -551,6 +608,12 @@ export function updateWp(req, wp, body) {
         keys.push('number');
       }
       run(`UPDATE work_packages SET ${keys.map(k => `${k} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`, ...keys.map(k => set[k]), wp.id);
+    }
+    // closed on: set when the task reaches a closed status, cleared when it is reopened
+    if (changes.status_id) {
+      const nowClosed = !!get('SELECT is_closed FROM statuses WHERE id = ?', changes.status_id[1])?.is_closed;
+      if (nowClosed && !wp.is_closed) run("UPDATE work_packages SET closed_on = date('now') WHERE id = ?", wp.id);
+      if (!nowClosed && wp.is_closed) run('UPDATE work_packages SET closed_on = NULL WHERE id = ?', wp.id);
     }
     const note = body.notes ? String(body.notes) : null;
     const meaningful = Object.keys(changes).filter(k => k !== 'position');
