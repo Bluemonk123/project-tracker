@@ -231,6 +231,12 @@ function migrate() {
     });
   }
 
+  // Teams: the "Account Manager" role was renamed "Project Manager"
+  if (getSetting('migration_team_role_pm_v1') === null) {
+    run(`UPDATE team_members SET current_roles = replace(current_roles, '"Account Manager"', '"Project Manager"'),
+         proposed_roles = replace(proposed_roles, '"Account Manager"', '"Project Manager"')`);
+    setSetting('migration_team_role_pm_v1', '1');
+  }
   // ---------- Ticket Board (helpdesk) ----------
   const nCols = all('PRAGMA table_info(notifications)').map(c => c.name);
   if (!nCols.includes('ticket_id')) db.exec('ALTER TABLE notifications ADD COLUMN ticket_id INTEGER REFERENCES tickets(id) ON DELETE CASCADE');

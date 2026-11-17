@@ -348,7 +348,7 @@ r.delete('/projects/:pid/news/:nid', (req, res) => {
 // ---------- teams ----------
 // Roles a team member can have now (current) and be moving to (proposed).
 export const TEAM_ROLES = ['Backend Developer', 'Frontend Developer', 'Functional Testing', 'UAT', 'Product Master', 'DevOps',
-  'Product Manager', 'Account Manager', 'Business Analyst', 'Client Facing', 'System Admin'];
+  'Product Manager', 'Project Manager', 'Business Analyst', 'Client Facing', 'System Admin'];
 const roleList = (v) => { try { return JSON.parse(v || '[]'); } catch { return []; } };
 function checkRoles(v, label) {
   if (v === undefined) return undefined;
