@@ -43,7 +43,7 @@ function Card({ w, column, onDragStart, onDragEnd, dragging, onLog, onRemarks })
       onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(w.id)); e.dataTransfer.effectAllowed = 'move'; onDragStart(w.id); }}
       onDragEnd={onDragEnd}>
       <div className="kb-meta">#{w.key} - {w.project_name}{w.ticket_no ? <span className="kb-ticket" title="Converted from this ticket"> · Ticket #{w.ticket_no}</span> : null}</div>
-      <div className="kb-title"><span className="kb-type" style={{ color: w.type_color }}>{w.type_name.toUpperCase()}</span> {w.subject}</div>
+      <div className="kb-title">{w.subject}</div>
       {(w.criticality_name || (w.source && w.source !== 'project')) && (
         <div className="kb-tags">
           {w.criticality_name && <CritTag name={w.criticality_name} color={w.criticality_color} />}
@@ -62,14 +62,6 @@ function Card({ w, column, onDragStart, onDragEnd, dragging, onLog, onRemarks })
           )}
         </div>
       )}
-      {(w.assignee_name || dates || (primary && w.status_id !== primary.id)) && (
-        <div className="kb-foot">
-          {w.assignee_name ? <Avatar id={w.assignee_id} name={w.assignee_name} size="sm" /> : <span />}
-          {primary && w.status_id !== primary.id && <span className="kb-status" style={{ '--c': w.status_color }}>{w.status_name}</span>}
-          <span className="spacer" />
-          {dates && <span className={`kb-dates${overdue ? ' overdue' : ''}`}>{dates}</span>}
-        </div>
-      )}
       {(w.remarks_count > 0 || w.can_remark) && (
         <button type="button" className={`kb-remarks${w.remarks_count ? ' has' : ''}`} draggable={false}
           title={w.remarks_count ? `${w.remarks_count} remark${w.remarks_count === 1 ? '' : 's'}` : 'Add a remark'}
@@ -78,6 +70,13 @@ function Card({ w, column, onDragStart, onDragEnd, dragging, onLog, onRemarks })
           <Icon name="chat" size={13} />{w.remarks_count ? `${w.remarks_count} remark${w.remarks_count === 1 ? '' : 's'}` : 'Add remark'}
         </button>
       )}
+      <div className="kb-foot">
+        {w.assignee_name ? <Avatar id={w.assignee_id} name={w.assignee_name} size="sm" /> : <span />}
+        {primary && w.status_id !== primary.id && <span className="kb-status" style={{ '--c': w.status_color }}>{w.status_name}</span>}
+        <span className="spacer" />
+        {dates && <span className={`kb-dates${overdue ? ' overdue' : ''}`}>{dates}</span>}
+        <span className="kb-type-pill" style={{ '--c': w.type_color }}>{w.type_name}</span>
+      </div>
     </article>
   );
 }
@@ -93,12 +92,13 @@ function TicketCard({ t, draggable, onDragStart, onDragEnd, dragging }) {
       onDragEnd={onDragEnd}
       onClick={open} onKeyDown={(e) => { if (e.key === 'Enter') open(); }}>
       <div className="kb-meta">#{t.ticket_no} - {t.group_name} · {t.requester_display}</div>
-      <div className="kb-title"><span className="kb-type" style={{ color: '#E5484D' }}>TICKET</span> {t.subject_display}</div>
+      <div className="kb-title">{t.subject_display}</div>
       <div className="kb-foot">
         {t.assignee_name ? <Avatar id={t.assignee_id} name={t.assignee_name} size="sm" /> : <span className="xs muted">Unassigned</span>}
         <TicketPriority priority={t.priority} />
         <span className="spacer" />
         <SlaBadge sla={t.sla} />
+        <span className="kb-type-pill" style={{ '--c': '#E5484D' }}>Ticket</span>
       </div>
     </article>
   );

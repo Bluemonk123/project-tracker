@@ -980,3 +980,5 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .tk-inbound-status.bad { background: var(--danger-soft); color: var(--danger); }
 .crit-tag { display: inline-flex; align-items: center; font-size: var(--fs-xs); font-weight: 700; padding: 1px 7px; border-radius: 4px; white-space: nowrap; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); letter-spacing: .03em; }
 .kb-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+.kb-type-pill { display: inline-flex; align-items: center; font-size: 10.5px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; white-space: nowrap; color: var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); }
+.kb-foot .kb-type-pill { margin-left: auto; }
