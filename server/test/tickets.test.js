@@ -342,3 +342,14 @@ test('delete: administrators only, files removed, numbers never reused', async (
   const next = (await staff.post('/tickets/raise', form({ description: 'Next' }))).data.ticket_no;
   assert.equal(next, no + 1);
 });
+
+test('Task Board: open tickets in a first column for Ticket Board users only', async () => {
+  const q = '/board?from=2020-01-01&to=2030-12-31';
+  const r = await agent.get(q);
+  assert.equal(r.status, 200);
+  assert.ok(Array.isArray(r.data.tickets));
+  assert.ok(r.data.tickets.length > 0);
+  assert.ok(r.data.tickets.every(t => t.status !== 'solved'));
+  assert.equal((await agent.get(q + '&assignee_id=none')).data.tickets.every(t => !t.assignee_id), true);
+  assert.equal((await staff.get(q)).data.tickets, null);
+});

@@ -6,6 +6,8 @@ import Icon from '../components/Icon.jsx';
 import { Loading, ErrorBox, Avatar, useAsync } from '../components/ui.jsx';
 import NewWpModal from './NewWpModal.jsx';
 import { LogTimeModal } from './Time.jsx';
+import RaiseTicketModal from './tickets/RaiseTicketModal.jsx';
+import { TicketPriority, SlaBadge } from './tickets/common.jsx';
 import { addDays, diffDays, fmtDate, startOfWeek, today, parseDate } from '../lib/format.js';
 
 const h = (n) => `${Math.round((n || 0) * 100) / 100} h`;
@@ -65,6 +67,25 @@ function Card({ w, column, onDragStart, onDragEnd, dragging, onLog }) {
   );
 }
 
+// A helpdesk ticket in the first column: opens it on the Ticket Board.
+function TicketCard({ t }) {
+  const nav = useNavigate();
+  const open = () => nav(`/ticket-board?ticket=${t.ticket_no}`);
+  return (
+    <article className="kb-card" style={{ '--tc': '#E5484D' }} tabIndex={0} role="link" aria-label={`Ticket ${t.ticket_no} ${t.subject_display}`}
+      onClick={open} onKeyDown={(e) => { if (e.key === 'Enter') open(); }}>
+      <div className="kb-meta">#{t.ticket_no} - {t.group_name} · {t.requester_display}</div>
+      <div className="kb-title"><span className="kb-type" style={{ color: '#E5484D' }}>TICKET</span> {t.subject_display}</div>
+      <div className="kb-foot">
+        {t.assignee_name ? <Avatar id={t.assignee_id} name={t.assignee_name} size="sm" /> : <span className="xs muted">Unassigned</span>}
+        <TicketPriority priority={t.priority} />
+        <span className="spacer" />
+        <SlaBadge sla={t.sla} />
+      </div>
+    </article>
+  );
+}
+
 export default function KanbanBoard({ project }) {
   const { activeUsers, projects, user } = useApp();
   const [sp, setSp] = useSearchParams();
@@ -78,6 +99,7 @@ export default function KanbanBoard({ project }) {
   const [over, setOver] = useState(null);
   const [adding, setAdding] = useState(null);
   const [logging, setLogging] = useState(null);
+  const [raising, setRaising] = useState(false);
   const [, run] = useAsync();
 
   const set = (changes) => {
@@ -90,7 +112,8 @@ export default function KanbanBoard({ project }) {
   useEffect(() => { // refresh when a ticket or task is raised from the top bar
     const again = () => reload();
     window.addEventListener('pt-wp-created', again);
-    return () => window.removeEventListener('pt-wp-created', again);
+    window.addEventListener('pt-ticket-created', again);
+    return () => { window.removeEventListener('pt-wp-created', again); window.removeEventListener('pt-ticket-created', again); };
   });
 
   const span = Math.max(1, diffDays(to, from) + 1);
@@ -165,6 +188,18 @@ export default function KanbanBoard({ project }) {
       <ErrorBox error={error} />
       {loading && !data ? <Loading /> : (
         <div className="kb-board">
+          {data?.tickets && (
+            <section className="kb-col" aria-label="Tickets">
+              <div className="kb-col-head" style={{ '--cc': '#E5484D' }}>
+                <div className="kb-col-title"><h2>Tickets</h2><span className="kb-count">{data.tickets.length}</span></div>
+                <button type="button" className="kb-add" onClick={() => setRaising(true)} title="Raise a ticket" aria-label="Raise a ticket"><Icon name="plus" /></button>
+              </div>
+              <div className="kb-cards">
+                {data.tickets.map(t => <TicketCard key={t.id} t={t} />)}
+                {!data.tickets.length && <div className="kb-empty">No open tickets</div>}
+              </div>
+            </section>
+          )}
           {columns.map(col => {
             const items = byColumn(col);
             return (
@@ -192,6 +227,7 @@ export default function KanbanBoard({ project }) {
           })}
         </div>
       )}
+      {raising && <RaiseTicketModal onClose={() => setRaising(false)} />}
       {logging && <LogTimeModal wp={logging} onClose={() => setLogging(null)} onSaved={reload} />}
       {adding && (
         <NewWpModal projectId={project?.id || (projectId ? Number(projectId) : undefined)} title={`New task in ${adding.name}`}

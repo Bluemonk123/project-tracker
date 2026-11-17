@@ -417,6 +417,21 @@ r.get('/ticket-board', (req, res) => {
   });
 });
 
+// Unsolved tickets for the Task Board's first column (most urgent first). assignee: 'me' | 'none' | user id | undefined
+export function boardTickets(req, assignee) {
+  const now = Date.now(), hours = slaHours();
+  let rows = all(`${BASE_SELECT} WHERE t.status <> 'solved'`).map(t => decorate(t, now, hours));
+  if (assignee === 'me') rows = rows.filter(t => t.assignee_id === req.user.id);
+  else if (assignee === 'none') rows = rows.filter(t => !t.assignee_id);
+  else if (/^\d+$/.test(assignee || '')) rows = rows.filter(t => t.assignee_id === Number(assignee));
+  const rank = { breached: 0, warn: 1, ok: 2, paused: 3, none: 4 }, prio = { urgent: 0, high: 1, normal: 2 };
+  rows.sort((a, b) => rank[a.sla.state] - rank[b.sla.state] || prio[a.priority] - prio[b.priority] || a.raised_on.localeCompare(b.raised_on));
+  return rows.slice(0, 200).map(t => ({
+    id: t.id, ticket_no: t.ticket_no, subject_display: t.subject_display, status: t.status, priority: t.priority, group_name: t.group_name,
+    assignee_id: t.assignee_id, assignee_name: t.assignee_name, requester_display: t.requester_display, sla: t.sla, age: t.age,
+  }));
+}
+
 // --- Ticket screen
 function findTicket(no) {
   if (!/^\d{8}$/.test(String(no))) fail(404, 'Ticket not found.');

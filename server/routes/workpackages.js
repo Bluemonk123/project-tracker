@@ -3,6 +3,7 @@ import { get, all, run, tx } from '../db.js';
 import { need, can, fail, visibleProjectIds } from '../access.js';
 import { requireText, dateOrNull, intOrNull, numOrNull, notify, mentionedUserIds, todayISO } from '../util.js';
 import { resolveProject } from './projects.js';
+import { boardTickets } from './tickets.js';
 
 const r = Router();
 
@@ -177,7 +178,9 @@ r.get('/board', (req, res) => {
   } else projectIds = visibleProjectIds(req, 'wp.view');
   const statuses = all('SELECT id, name, color, board_column, is_closed, position FROM statuses ORDER BY position, id');
   const columns = BOARD_COLUMNS.map(c => ({ ...c, statuses: statuses.filter(st => st.board_column === c.key) }));
-  if (!projectIds.length) return res.json({ columns, rows: [] });
+  // helpdesk tickets in a first "Tickets" column: company-wide board only, for people who can open the Ticket Board
+  const tickets = !q.project_id && can(req, 'tickets.view') ? boardTickets(req, q.assignee_id) : null;
+  if (!projectIds.length) return res.json({ columns, rows: [], tickets });
   const where = [`wp.project_id IN (${projectIds.map(() => '?').join(',')})`];
   const params = [...projectIds];
   // dated work overlapping the range; undated work that is still open, or was closed/changed in the range
@@ -201,7 +204,7 @@ r.get('/board', (req, res) => {
                                  AND spent_on BETWEEN ? AND ? GROUP BY wp_id`, ...rows.map(w => w.id), q.from, q.to).map(x => [x.wp_id, x.h]));
     for (const w of rows) w.range_hours = inRange.get(w.id) || 0;
   }
-  res.json({ columns, rows });
+  res.json({ columns, rows, tickets });
 });
 
 r.get('/work-packages/export.csv', (req, res) => {
