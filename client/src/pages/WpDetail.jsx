@@ -12,6 +12,7 @@ import { LogTimeModal } from './Time.jsx';
 import { fmtDate, fmtDateTime, fmtHours, fmtSize, timeAgo } from '../lib/format.js';
 import { RemarksList } from './Remarks.jsx';
 import { SourceTag } from './tickets/common.jsx';
+import ModuleInput from './ModuleInput.jsx';
 
 // Problem / Solution: Markdown text with its own Edit button
 function TextSection({ title, value, canEdit, busy, onSave, empty }) {
@@ -47,7 +48,7 @@ function RequestedBy({ value, disabled, onSave }) {
 }
 
 const FIELD_LABELS = {
-  type_id: 'Type', subject: 'Subject', description: 'Problem', solution: 'Solution', status_id: 'Status', priority_id: 'Priority', criticality_id: 'Criticality', requested_by: 'Requested by',
+  type_id: 'Type', subject: 'Subject', module: 'Module', description: 'Problem', solution: 'Solution', status_id: 'Status', priority_id: 'Priority', criticality_id: 'Criticality', requested_by: 'Requested by',
   assignee_id: 'Assignee', responsible_id: 'Accountable', parent_id: 'Parent', version_id: 'Version', category_id: 'Category',
   start_date: 'Start date', due_date: 'Due date', estimated_hours: 'Estimated hours', done_ratio: '% done', project_id: 'Project',
   relation_added: 'Relation', attachment: 'File', link_added: 'Link',
@@ -313,6 +314,10 @@ export default function WpDetail() {
           </div>
 
           <div className="wp-psol">
+            <div className="wp-module">
+              <span className="section-title" style={{ margin: 0 }}>Module</span>
+              <div className="grow"><ModuleInput projectId={wp.project_id} value={wp.module || ''} disabled={!can.edit || busy} onSave={(v) => update({ module: v })} /></div>
+            </div>
             <TextSection title="Problem" value={wp.description} canEdit={can.edit} busy={busy} onSave={(v) => update({ description: v })}
               empty={can.edit ? 'No problem described yet. Add details, steps to reproduce or acceptance criteria.' : 'Not described.'} />
             <TextSection title="Solution" value={wp.solution} canEdit={can.edit} busy={busy} onSave={(v) => update({ solution: v })}

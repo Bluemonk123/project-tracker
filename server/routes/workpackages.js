@@ -89,6 +89,7 @@ export function buildFilter(req, q) {
   inFilter('wp.type_id', q.type_id);
   inFilter('wp.priority_id', q.priority_id);
   inFilter('wp.criticality_id', q.criticality_id);
+  if (q.module) { where.push('wp.module = ?'); params.push(String(q.module)); }
   // source: project / ticket / email (comma-separated for several)
   const sources = String(q.source || '').split(',').filter(x => ['project', 'ticket', 'email'].includes(x));
   if (sources.length) { where.push(`wp.source IN (${sources.map(() => '?').join(',')})`); params.push(...sources); }
@@ -260,10 +261,10 @@ r.post('/admin/import/tasks', (req, res) => {
     const upd = `${x.updated_on || x.closed_on || x.created_on} 04:30:00`;
     const pos = get('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM work_packages WHERE project_id = ?', p.id).p;
     const id = run(`INSERT INTO work_packages(project_id, number, type_id, subject, description, status_id, priority_id, criticality_id, author_id,
-                      source, requested_by, closed_on, done_ratio, position, created_at, updated_at, solution)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                      source, requested_by, closed_on, done_ratio, position, created_at, updated_at, solution, module)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       p.id, number, x.type_id, x.subject, x.description || null, x.status.id, x.priority_id, x.criticality_id, req.user.id,
-      x.source, x.requested_by, x.status.is_closed ? (x.closed_on || null) : null, x.status.is_closed ? 100 : 0, pos, at, upd, String(x.solution || '').trim() || null).id;
+      x.source, x.requested_by, x.status.is_closed ? (x.closed_on || null) : null, x.status.is_closed ? 100 : 0, pos, at, upd, String(x.solution || '').trim() || null, String(x.module || '').trim().slice(0, 80) || null).id;
     run('INSERT INTO wp_stages(wp_id, stage, user_id, entered_at) VALUES(?,?,?,?)', id, x.status.board_column || 'develop', req.user.id, at);
     run('INSERT INTO journals(wp_id, user_id, notes, changes, created_at) VALUES(?,?,?,?,?)', id, req.user.id,
       x.ref ? `Imported (${x.ref})` : 'Imported', JSON.stringify({ created: [null, true] }), at);
@@ -284,6 +285,12 @@ function remarksOf(wpId) {
               FROM wp_remarks r LEFT JOIN users u ON u.id = r.user_id LEFT JOIN users c ON c.id = r.created_by
               WHERE r.wp_id = ? ORDER BY r.created_at DESC, r.id DESC`, wpId);
 }
+// modules already used in a project (suggestions for the Module field)
+r.get('/projects/:pid/modules', (req, res) => {
+  const p = resolveProject(req.params.pid);
+  need(req, 'wp.view', p.id);
+  res.json(all("SELECT module, COUNT(*) AS n FROM work_packages WHERE project_id = ? AND module IS NOT NULL AND module <> '' GROUP BY module ORDER BY module COLLATE NOCASE", p.id));
+});
 r.get('/work-packages/:id/remarks', (req, res) => {
   const wp = loadWp(req.params.id);
   need(req, 'wp.view', wp.project_id);
@@ -316,7 +323,7 @@ r.delete('/remarks/:id', (req, res) => {
 r.get('/work-packages/export.csv', (req, res) => {
   const { where, params } = buildFilter(req, req.query);
   const rows = all(`${BASE_SELECT} WHERE ${where} ORDER BY ${orderBy(req.query.sort)} LIMIT 10000`, ...params);
-  const cols = [['key', 'ID'], ['project_name', 'Project'], ['type_name', 'Type'], ['subject', 'Subject'], ['status_name', 'Status'],
+  const cols = [['key', 'ID'], ['project_name', 'Project'], ['type_name', 'Type'], ['subject', 'Subject'], ['module', 'Module'], ['status_name', 'Status'],
     ['priority_name', 'Priority'], ['criticality_name', 'Criticality'], ['source', 'Source'], ['assignee_name', 'Assignee'], ['responsible_name', 'Accountable'],
     ['designer_name', 'Designer'], ['developer_name', 'Developer'], ['tester_name', 'Tester'], ['version_name', 'Version'],
     ['start_date', 'Start date'], ['due_date', 'Due date'], ['estimated_hours', 'Estimated hours'], ['spent_hours', 'Spent hours'],
@@ -402,6 +409,7 @@ function readFields(b) {
     type_id: intOrNull(b.type_id) ?? undefined,
     subject: b.subject !== undefined ? requireText(b.subject, 'Subject') : undefined,
     description: b.description,
+    module: b.module === undefined ? undefined : (String(b.module || '').trim().replace(/\s+/g, ' ').slice(0, 80) || null),
     solution: b.solution === undefined ? undefined : (String(b.solution || '').trim() || null),
     status_id: intOrNull(b.status_id) ?? undefined,
     priority_id: intOrNull(b.priority_id) ?? undefined,
@@ -476,12 +484,12 @@ export function createWp(req, projectId, body, { journalNote } = {}) {
     const pos = get('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM work_packages WHERE project_id = ?', projectId).p;
     const { id } = run(`INSERT INTO work_packages(project_id, number, type_id, subject, description, status_id, priority_id, assignee_id,
         responsible_id, author_id, parent_id, version_id, category_id, start_date, due_date, estimated_hours, done_ratio, position,
-        designer_id, developer_id, tester_id, criticality_id, requested_by, solution)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        designer_id, developer_id, tester_id, criticality_id, requested_by, solution, module)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       projectId, number, f.type_id, f.subject, f.description || null, f.status_id, f.priority_id, f.assignee_id || null,
       f.responsible_id || null, req.user.id, f.parent_id || null, f.version_id || null, f.category_id || null,
       f.start_date || null, f.due_date || null, f.estimated_hours ?? null, f.done_ratio ?? 0, f.position ?? pos,
-      f.designer_id || null, f.developer_id || null, f.tester_id || null, f.criticality_id || null, f.requested_by || null, f.solution || null);
+      f.designer_id || null, f.developer_id || null, f.tester_id || null, f.criticality_id || null, f.requested_by || null, f.solution || null, f.module || null);
     enterStage(id, stage, req.user.id);
     if (get('SELECT is_closed FROM statuses WHERE id = ?', f.status_id)?.is_closed) run("UPDATE work_packages SET closed_on = date('now') WHERE id = ?", id);
     run('INSERT INTO journals(wp_id, user_id, notes, changes) VALUES(?,?,?,?)', id, req.user.id, journalNote || null, JSON.stringify({ created: [null, true] }));
@@ -557,7 +565,7 @@ r.get('/work-packages/:id', (req, res) => {
   });
 });
 
-const TRACKED = ['type_id', 'subject', 'description', 'solution', 'status_id', 'priority_id', 'criticality_id', 'requested_by', 'assignee_id', 'responsible_id', 'parent_id',
+const TRACKED = ['type_id', 'subject', 'module', 'description', 'solution', 'status_id', 'priority_id', 'criticality_id', 'requested_by', 'assignee_id', 'responsible_id', 'parent_id',
   'version_id', 'category_id', 'start_date', 'due_date', 'estimated_hours', 'done_ratio', 'designer_id', 'developer_id', 'tester_id'];
 
 export function updateWp(req, wp, body) {

@@ -229,7 +229,7 @@ function GroupRows({ label, rows, colSpan, project, selected, onToggle, onOpen }
           <td><TypeLabel name={r.type_name} color={r.type_color} /></td>
           <td className="subject">
             <Link to={`/wp/${r.id}`} style={{ color: 'var(--ink)' }} className="ellipsis" title={r.subject}>{r.subject}</Link>
-            {r.parent_key && <div className="xs muted ellipsis">in {r.parent_key} {r.parent_subject}</div>}
+            {(r.module || r.parent_key) && <div className="xs muted ellipsis">{r.module && <span className="wl-module">{r.module}</span>}{r.module && r.parent_key ? ' · ' : ''}{r.parent_key && <>in {r.parent_key} {r.parent_subject}</>}</div>}
           </td>
           <td><StatusPill name={r.status_name} color={r.status_color} /></td>
           <td><Person id={r.assignee_id} name={r.assignee_name} /></td>

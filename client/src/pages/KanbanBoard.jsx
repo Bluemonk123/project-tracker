@@ -44,7 +44,7 @@ function Card({ w, onDragStart, onDragEnd, dragging, onRemarks }) {
   const overdue = !w.is_closed && w.due_date && w.due_date < today();
   const dates = cardDates(w);
   const est = w.estimated_hours || 0, spent = w.spent_hours || 0;
-  const tip = [w.subject, `${w.key} · ${w.status_name}`, w.requested_by && `Requested by ${w.requested_by}`, w.assignee_name ? `Assigned to ${w.assignee_name}` : 'Unassigned', w.priority_name && `Priority ${w.priority_name}`,
+  const tip = [w.subject, w.module && `Module: ${w.module}`, `${w.key} · ${w.status_name}`, w.requested_by && `Requested by ${w.requested_by}`, w.assignee_name ? `Assigned to ${w.assignee_name}` : 'Unassigned', w.priority_name && `Priority ${w.priority_name}`,
     `Criticality ${w.criticality_name || 'not set (C0)'}`, dates && `Dates ${dates}${overdue ? ' (overdue)' : ''}`, `Logged ${hrs(spent)} of ${hrs(est)} estimated`,
     w.ticket_no && `From ticket #${w.ticket_no}`].filter(Boolean).join('\n');
   return (

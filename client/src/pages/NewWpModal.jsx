@@ -4,6 +4,7 @@ import { api, qs } from '../api.js';
 import { useApp } from '../context.jsx';
 import { Modal, Field, MarkdownEditor, UserSelect, ErrorBox } from '../components/ui.jsx';
 import Icon from '../components/Icon.jsx';
+import ModuleInput from './ModuleInput.jsx';
 import { fmtSize } from '../lib/format.js';
 
 // Loads members / versions / categories for a project (used by forms)
@@ -240,6 +241,9 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
       <Field label="Task headline">
         <input type="text" value={f.subject} onChange={(e) => set('subject', e.target.value)} placeholder="Short summary, e.g. Add OTP login to the customer app" required
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submit(false); }} />
+      </Field>
+      <Field label="Module" hint="Which part of the application. Pick one already used in this project or type a new one.">
+        <ModuleInput projectId={projectId} value={f.module || ''} onChange={(v) => set('module', v)} />
       </Field>
       <Field label="Problem">
         <MarkdownEditor value={f.description} onChange={(v) => set('description', v)} rows={5} placeholder="What is wrong or what is needed: details, steps to reproduce, acceptance criteria…" onSubmitShortcut={() => submit(false)} />

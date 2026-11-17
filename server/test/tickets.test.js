@@ -527,3 +527,14 @@ test('tasks: subject, problem (description) and solution', async () => {
   const j = (await admin.get(`/work-packages/${r.data.id}`)).data.journals.at(-1);
   assert.ok(JSON.parse(j.changes).solution);
 });
+
+test('tasks: module field with suggestions and filter', async () => {
+  const a = (await admin.post('/work-packages', { project_id: ids.proj.id, subject: 'Merge contacts', module: 'Account Master' })).data;
+  assert.equal(a.module, 'Account Master');
+  await admin.post('/work-packages', { project_id: ids.proj.id, subject: 'Invoice PDF', module: 'Invoices' });
+  const mods = (await admin.get(`/projects/${ids.proj.id}/modules`)).data.map(x => x.module);
+  assert.ok(mods.includes('Account Master') && mods.includes('Invoices'));
+  const rows = (await admin.get(`/work-packages?project_id=${ids.proj.id}&module=Invoices&status=all`)).data.rows;
+  assert.deepEqual(rows.map(x => x.subject), ['Invoice PDF']);
+  assert.equal((await admin.patch(`/work-packages/${a.id}`, { module: '' })).data.module, null);
+});
