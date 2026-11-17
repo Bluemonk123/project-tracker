@@ -547,3 +547,15 @@ test('working calendar: priority days, off days, holidays drive due dates', asyn
   const hid = (await admin.get('/work-calendar')).data.holidays[0].id;
   assert.equal((await admin.del(`/holidays/${hid}`)).status, 200);
 });
+
+test('users can be added without a password and set one later', async () => {
+  const meta = (await admin.get('/meta')).data;
+  const emp = meta.roles.find(r => r.name === 'Employee').id;
+  const r = await admin.post('/admin/users', { name: 'Mehak', email: 'mehak@example.com', global_role_id: emp });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal((await admin.get('/admin/users')).data.find(u => u.id === r.data.id).has_password, 0);
+  const c = client();
+  assert.equal((await c.post('/auth/login', { email: 'mehak@example.com', password: '' })).status, 401);
+  assert.equal((await c.post('/auth/login', { email: 'mehak@example.com', password: 'anything1' })).status, 401);
+  assert.equal((await admin.post('/admin/users', { name: 'X', email: 'x@example.com', password: 'short' })).status, 400);
+});

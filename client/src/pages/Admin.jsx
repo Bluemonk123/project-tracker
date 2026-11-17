@@ -39,8 +39,8 @@ function UserModal({ user, onClose, onSaved }) {
             <option value="">None</option>{globalRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
         </Field>
-        <Field label={user ? 'Set a new password' : 'Password'} hint={user ? 'Leave empty to keep the current password. They will be asked to change it.' : 'At least 8 characters. Share it with the person; they can change it later.'}>
-          <div className="row"><input type="text" value={f.password} onChange={(e) => set('password', e.target.value)} required={!user} minLength={8} autoComplete="off" /><button type="button" className="btn" onClick={gen}>Generate</button></div>
+        <Field label={user ? 'Set a new password' : 'Password'} hint={user ? (user.has_password ? 'Leave empty to keep the current password. They will be asked to change it.' : 'No password yet: set one so they can sign in.') : 'At least 8 characters, or leave empty and set it later (they cannot sign in until then).'}>
+          <div className="row"><input type="text" value={f.password} onChange={(e) => set('password', e.target.value)} minLength={8} autoComplete="off" /><button type="button" className="btn" onClick={gen}>Generate</button></div>
         </Field>
         {isAdmin && <Field label="Administrator"><label className="check"><input type="checkbox" checked={f.is_admin} onChange={(e) => set('is_admin', e.target.checked)} />Full access to everything, including this page</label></Field>}
         <Field label="Teams" className="span-2">
@@ -88,7 +88,7 @@ function Users() {
                 <td className="hide-sm small soft">{u.teams || '—'}</td>
                 <td className="num">{u.project_count}</td>
                 <td className="hide-sm small muted">{u.last_login_at ? timeAgo(u.last_login_at) : 'Never'}</td>
-                <td>{u.status === 'locked' ? <span className="tag danger">Locked</span> : <span className="tag ok">Active</span>}</td>
+                <td>{u.status === 'locked' ? <span className="tag danger">Locked</span> : <span className="tag ok">Active</span>}{!u.has_password && <span className="tag signal" style={{ marginLeft: 6 }} title="Set a password so they can sign in">No password yet</span>}</td>
                 <td className="num">
                   <MoreMenu>
                     <button className="menu-item" onClick={() => setModal({ user: u })}><Icon name="edit" size={16} />Edit</button>

@@ -27,7 +27,7 @@ r.get('/meta', (_req, res) => {
 r.get('/admin/users', (req, res) => {
   need(req, 'admin.users');
   res.json(all(`
-    SELECT u.id, u.name, u.email, u.job_title, u.is_admin, u.status, u.global_role_id, u.created_at, u.last_login_at,
+    SELECT u.id, u.name, u.email, u.job_title, u.is_admin, u.status, u.global_role_id, u.created_at, u.last_login_at, (u.password_hash <> '') AS has_password,
            r.name AS global_role_name,
            (SELECT COUNT(*) FROM project_members pm WHERE pm.user_id = u.id) AS project_count,
            (SELECT GROUP_CONCAT(t.name, ', ') FROM team_members tm JOIN teams t ON t.id = tm.team_id WHERE tm.user_id = u.id) AS teams
@@ -48,12 +48,13 @@ r.post('/admin/users', (req, res) => {
   const email = requireText(req.body.email, 'Email').toLowerCase();
   if (!/^\S+@\S+$/.test(email)) fail(400, 'Enter a valid email address.');
   if (get('SELECT id FROM users WHERE email = ?', email)) fail(400, 'A user with this email already exists.');
+  // the password can be left empty and set later: until then the person cannot sign in (but can be assigned work)
   const pw = String(req.body.password || '');
-  if (pw.length < 8) fail(400, 'Password must be at least 8 characters.');
+  if (pw && pw.length < 8) fail(400, 'Password must be at least 8 characters.');
   if (req.body.is_admin && !req.user.is_admin) fail(403, 'Only administrators can create administrators.');
   const { id } = run(`INSERT INTO users(name, email, password_hash, is_admin, global_role_id, job_title, must_change_password)
                       VALUES(?,?,?,?,?,?,1)`,
-    name, email, hashPassword(pw), req.body.is_admin ? 1 : 0, checkGlobalRole(req.body.global_role_id), req.body.job_title || null);
+    name, email, pw ? hashPassword(pw) : '', req.body.is_admin ? 1 : 0, checkGlobalRole(req.body.global_role_id), req.body.job_title || null);
   if (Array.isArray(req.body.team_ids)) for (const t of req.body.team_ids) run(`INSERT OR IGNORE INTO team_members(team_id, user_id, position)
     VALUES(?, ?, (SELECT COALESCE(MAX(position), -1) + 1 FROM team_members WHERE team_id = ?))`, t, id, t);
   res.status(201).json({ id });
