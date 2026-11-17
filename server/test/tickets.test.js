@@ -517,3 +517,13 @@ test('import tasks (admin): dates, status, source, requester, closed date and re
   await admin.patch(`/work-packages/${w2.id}`, { requested_by: 'Anuj' });
   assert.equal((await admin.get(`/work-packages/${w2.id}`)).data.requested_by, 'Anuj');
 });
+
+test('tasks: subject, problem (description) and solution', async () => {
+  let r = await admin.post('/work-packages', { project_id: ids.proj.id, subject: 'Export slow', description: 'Takes 5 minutes', solution: 'Added an index' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.solution, 'Added an index');
+  r = await admin.patch(`/work-packages/${r.data.id}`, { solution: 'Added an index and caching' });
+  assert.equal(r.data.solution, 'Added an index and caching');
+  const j = (await admin.get(`/work-packages/${r.data.id}`)).data.journals.at(-1);
+  assert.ok(JSON.parse(j.changes).solution);
+});

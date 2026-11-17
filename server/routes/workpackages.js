@@ -260,10 +260,10 @@ r.post('/admin/import/tasks', (req, res) => {
     const upd = `${x.updated_on || x.closed_on || x.created_on} 04:30:00`;
     const pos = get('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM work_packages WHERE project_id = ?', p.id).p;
     const id = run(`INSERT INTO work_packages(project_id, number, type_id, subject, description, status_id, priority_id, criticality_id, author_id,
-                      source, requested_by, closed_on, done_ratio, position, created_at, updated_at)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                      source, requested_by, closed_on, done_ratio, position, created_at, updated_at, solution)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       p.id, number, x.type_id, x.subject, x.description || null, x.status.id, x.priority_id, x.criticality_id, req.user.id,
-      x.source, x.requested_by, x.status.is_closed ? (x.closed_on || null) : null, x.status.is_closed ? 100 : 0, pos, at, upd).id;
+      x.source, x.requested_by, x.status.is_closed ? (x.closed_on || null) : null, x.status.is_closed ? 100 : 0, pos, at, upd, String(x.solution || '').trim() || null).id;
     run('INSERT INTO wp_stages(wp_id, stage, user_id, entered_at) VALUES(?,?,?,?)', id, x.status.board_column || 'develop', req.user.id, at);
     run('INSERT INTO journals(wp_id, user_id, notes, changes, created_at) VALUES(?,?,?,?,?)', id, req.user.id,
       x.ref ? `Imported (${x.ref})` : 'Imported', JSON.stringify({ created: [null, true] }), at);
@@ -402,6 +402,7 @@ function readFields(b) {
     type_id: intOrNull(b.type_id) ?? undefined,
     subject: b.subject !== undefined ? requireText(b.subject, 'Subject') : undefined,
     description: b.description,
+    solution: b.solution === undefined ? undefined : (String(b.solution || '').trim() || null),
     status_id: intOrNull(b.status_id) ?? undefined,
     priority_id: intOrNull(b.priority_id) ?? undefined,
     criticality_id: intOrNull(b.criticality_id),
@@ -475,12 +476,12 @@ export function createWp(req, projectId, body, { journalNote } = {}) {
     const pos = get('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM work_packages WHERE project_id = ?', projectId).p;
     const { id } = run(`INSERT INTO work_packages(project_id, number, type_id, subject, description, status_id, priority_id, assignee_id,
         responsible_id, author_id, parent_id, version_id, category_id, start_date, due_date, estimated_hours, done_ratio, position,
-        designer_id, developer_id, tester_id, criticality_id, requested_by)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        designer_id, developer_id, tester_id, criticality_id, requested_by, solution)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       projectId, number, f.type_id, f.subject, f.description || null, f.status_id, f.priority_id, f.assignee_id || null,
       f.responsible_id || null, req.user.id, f.parent_id || null, f.version_id || null, f.category_id || null,
       f.start_date || null, f.due_date || null, f.estimated_hours ?? null, f.done_ratio ?? 0, f.position ?? pos,
-      f.designer_id || null, f.developer_id || null, f.tester_id || null, f.criticality_id || null, f.requested_by || null);
+      f.designer_id || null, f.developer_id || null, f.tester_id || null, f.criticality_id || null, f.requested_by || null, f.solution || null);
     enterStage(id, stage, req.user.id);
     if (get('SELECT is_closed FROM statuses WHERE id = ?', f.status_id)?.is_closed) run("UPDATE work_packages SET closed_on = date('now') WHERE id = ?", id);
     run('INSERT INTO journals(wp_id, user_id, notes, changes) VALUES(?,?,?,?)', id, req.user.id, journalNote || null, JSON.stringify({ created: [null, true] }));
@@ -556,7 +557,7 @@ r.get('/work-packages/:id', (req, res) => {
   });
 });
 
-const TRACKED = ['type_id', 'subject', 'description', 'status_id', 'priority_id', 'criticality_id', 'requested_by', 'assignee_id', 'responsible_id', 'parent_id',
+const TRACKED = ['type_id', 'subject', 'description', 'solution', 'status_id', 'priority_id', 'criticality_id', 'requested_by', 'assignee_id', 'responsible_id', 'parent_id',
   'version_id', 'category_id', 'start_date', 'due_date', 'estimated_hours', 'done_ratio', 'designer_id', 'developer_id', 'tester_id'];
 
 export function updateWp(req, wp, body) {

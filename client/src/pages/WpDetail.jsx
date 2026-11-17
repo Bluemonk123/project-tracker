@@ -13,6 +13,30 @@ import { fmtDate, fmtDateTime, fmtHours, fmtSize, timeAgo } from '../lib/format.
 import { RemarksList } from './Remarks.jsx';
 import { SourceTag } from './tickets/common.jsx';
 
+// Problem / Solution: Markdown text with its own Edit button
+function TextSection({ title, value, canEdit, busy, onSave, empty }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(value || '');
+  useEffect(() => { if (!editing) setText(value || ''); }, [value, editing]);
+  const save = async () => { if (await onSave(text)) setEditing(false); };
+  return (
+    <section className="wp-psol-part">
+      <div className="section-title">{title}
+        {canEdit && !editing && <span className="actions"><button className="btn sm ghost" onClick={() => setEditing(true)}><Icon name="edit" />Edit</button></span>}
+      </div>
+      {editing ? (
+        <div className="stack tight">
+          <MarkdownEditor value={text} onChange={setText} rows={8} autoFocus onSubmitShortcut={save} />
+          <div className="row">
+            <button className="btn primary sm" disabled={busy} onClick={save}>Save {title.toLowerCase()}</button>
+            <button className="btn sm" onClick={() => { setText(value || ''); setEditing(false); }}>Cancel</button>
+          </div>
+        </div>
+      ) : value ? <Markdown text={value} /> : <p className="muted small">{empty}</p>}
+    </section>
+  );
+}
+
 // Who asked for this work (free text, e.g. a client contact)
 function RequestedBy({ value, disabled, onSave }) {
   const [v, setV] = useState(value);
@@ -23,7 +47,7 @@ function RequestedBy({ value, disabled, onSave }) {
 }
 
 const FIELD_LABELS = {
-  type_id: 'Type', subject: 'Subject', description: 'Description', status_id: 'Status', priority_id: 'Priority', criticality_id: 'Criticality', requested_by: 'Requested by',
+  type_id: 'Type', subject: 'Subject', description: 'Problem', solution: 'Solution', status_id: 'Status', priority_id: 'Priority', criticality_id: 'Criticality', requested_by: 'Requested by',
   assignee_id: 'Assignee', responsible_id: 'Accountable', parent_id: 'Parent', version_id: 'Version', category_id: 'Category',
   start_date: 'Start date', due_date: 'Due date', estimated_hours: 'Estimated hours', done_ratio: '% done', project_id: 'Project',
   relation_added: 'Relation', attachment: 'File', link_added: 'Link',
@@ -206,12 +230,10 @@ export default function WpDetail() {
   const info = useProjectInfo(wp?.project_id);
   const label = useLabeler(info);
   const [subject, setSubject] = useState('');
-  const [editingDesc, setEditingDesc] = useState(false);
-  const [desc, setDesc] = useState('');
   const [comment, setComment] = useState('');
   const [modal, setModal] = useState(null);
   const [busy, run] = useAsync();
-  useEffect(() => { if (wp) { setSubject(wp.subject); setDesc(wp.description || ''); } }, [wp]);
+  useEffect(() => { if (wp) setSubject(wp.subject); }, [wp]);
   useEffect(() => { if (wp) document.title = `${wp.key} ${wp.subject}`; }, [wp]);
 
   if (loading && !wp) return <div className="content"><Loading /></div>;
@@ -290,18 +312,12 @@ export default function WpDetail() {
             {wp.ticket && <> · From ticket {can.open_ticket ? <Link to={`/ticket-board?ticket=${wp.ticket.ticket_no}`}>#{wp.ticket.ticket_no}</Link> : `#${wp.ticket.ticket_no}`}</>}
           </div>
 
-          <div className="section-title">Description
-            {can.edit && !editingDesc && <span className="actions"><button className="btn sm ghost" onClick={() => setEditingDesc(true)}><Icon name="edit" />Edit</button></span>}
+          <div className="wp-psol">
+            <TextSection title="Problem" value={wp.description} canEdit={can.edit} busy={busy} onSave={(v) => update({ description: v })}
+              empty={can.edit ? 'No problem described yet. Add details, steps to reproduce or acceptance criteria.' : 'Not described.'} />
+            <TextSection title="Solution" value={wp.solution} canEdit={can.edit} busy={busy} onSave={(v) => update({ solution: v })}
+              empty={can.edit ? 'No solution yet. Write how it was solved when it is.' : 'No solution yet.'} />
           </div>
-          {editingDesc ? (
-            <div className="stack tight">
-              <MarkdownEditor value={desc} onChange={setDesc} rows={10} autoFocus onSubmitShortcut={async () => { if (await update({ description: desc })) setEditingDesc(false); }} />
-              <div className="row">
-                <button className="btn primary sm" disabled={busy} onClick={async () => { if (await update({ description: desc })) setEditingDesc(false); }}>Save description</button>
-                <button className="btn sm" onClick={() => { setDesc(wp.description || ''); setEditingDesc(false); }}>Cancel</button>
-              </div>
-            </div>
-          ) : wp.description ? <Markdown text={wp.description} /> : <p className="muted small">{can.edit ? 'No description yet. Add details, acceptance criteria or links.' : 'No description.'}</p>}
 
           <div className="section-title">Remarks <span className="muted">({wp.remarks.length})</span></div>
           <RemarksList wpId={wp.id} remarks={wp.remarks} canAdd={can.remark} canEdit={can.edit} onChange={(remarks) => setData(d => ({ ...d, remarks }))} />

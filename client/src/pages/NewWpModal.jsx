@@ -241,8 +241,11 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
         <input type="text" value={f.subject} onChange={(e) => set('subject', e.target.value)} placeholder="Short summary, e.g. Add OTP login to the customer app" required
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submit(false); }} />
       </Field>
-      <Field label="Task description">
-        <MarkdownEditor value={f.description} onChange={(v) => set('description', v)} rows={5} placeholder="What needs to be done, acceptance criteria, steps to reproduce…" onSubmitShortcut={() => submit(false)} />
+      <Field label="Problem">
+        <MarkdownEditor value={f.description} onChange={(v) => set('description', v)} rows={5} placeholder="What is wrong or what is needed: details, steps to reproduce, acceptance criteria…" onSubmitShortcut={() => submit(false)} />
+      </Field>
+      <Field label="Solution" hint="Optional. How it was or will be solved; can be filled in later.">
+        <MarkdownEditor value={f.solution || ''} onChange={(v) => set('solution', v)} rows={3} placeholder="The fix or answer…" onSubmitShortcut={() => submit(false)} />
       </Field>
       {canUpload && (
         <Field label={`Attach photos, PDF or ZIP (max ${MAX_FILES})`}>

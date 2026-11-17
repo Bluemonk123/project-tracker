@@ -1036,3 +1036,8 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .kb.dense .kb-line .avatar, .kb.dense .kb-unassigned { width: 20px; height: 20px; font-size: 9px; }
 /* card subject: at most two lines (full text in the tooltip and on the task page) */
 .kb-card .kb-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* task page: Problem and Solution kept together under the subject */
+.wp-psol { margin-top: 14px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface); }
+.wp-psol-part { padding: 2px 16px 14px; }
+.wp-psol-part + .wp-psol-part { border-top: 1px solid var(--line-2); background: color-mix(in srgb, var(--ok-soft) 35%, var(--surface)); border-radius: 0 0 var(--r) var(--r); }
+.wp-psol .section-title { margin-top: 12px; }
