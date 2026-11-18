@@ -196,13 +196,11 @@ export default function KanbanBoard({ project }) {
         <div className="kb-titlebar">
         {!project && <h1>Task Board</h1>}
         <div className="kb-sprint" role="group" aria-label="Sprint">
-          <Icon name="flag" size={16} />
-          <SprintPicker sprints={sprints} value={sprintId} currentId={sl.data?.current_id} withProject={projectIds.length !== 1}
+          <SprintPicker sprints={sprints} value={sprintId} currentId={sl.data?.current_id}
             onChange={(id) => set({ sprint: id === (sl.data?.current_id || null) ? '' : id ? String(id) : (sl.data?.current_id ? 'all' : '') })} />
           {sprint ? (
             <span className="kb-sprint-info">
               {sprint.id === sl.data?.current_id && <b>Current sprint</b>}
-              {projectIds.length !== 1 && sprint.project_name && <span>{sprint.project_name}</span>}
               {sprint.version_name && <span>Version {sprint.version_name}</span>}
               <span>{sprintWhen(sprint)}</span>
               <span>{sprint.done}/{sprint.total} done</span>
@@ -214,7 +212,7 @@ export default function KanbanBoard({ project }) {
           {sprint?.state === 'planned' && sprint.can_manage && <SprintSchedule s={sprint} onChanged={() => { sl.reload(); reload(); }} />}
           {sprint?.state === 'current' && sprint.can_end && <button type="button" className="btn sm" onClick={() => setEnding(true)} title="End the sprint today"><Icon name="stop" size={13} />End now</button>}
           <span className="spacer" />
-          <Link to="/sprint-planning" className="btn sm ghost"><Icon name="flag" size={14} />Sprint Planning</Link>
+          <Link to="/sprint-planning" className="btn icon sm ghost" title="Open Sprint Planning" aria-label="Open Sprint Planning"><Icon name="flag" size={16} /></Link>
         </div>
         </div>
         <div className="kb-filters" role="group" aria-label="Board filters">
