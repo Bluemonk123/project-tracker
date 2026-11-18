@@ -160,14 +160,16 @@ export default function SprintPlanning() {
   const [limit, setLimit] = useState(500);
   const [busy, run] = useAsync();
 
-  const tab = TABS.find(t => t.key === sp.get('tab')) || TABS[0];
+  // ?sprint=<id>: only that sprint's tasks (e.g. from the Sprints column in All work)
+  const sprintFilter = /^\d+$/.test(sp.get('sprint') || '') ? Number(sp.get('sprint')) : null;
+  const tab = sprintFilter ? { key: 'sprint', q: { sprint_id: sprintFilter }, status: 'all' } : TABS.find(t => t.key === sp.get('tab')) || TABS[0];
   const f = Object.fromEntries(FILTERS.map(k => [k, sp.get(k) || undefined]));
   const status = f.status || tab.status;
   const base = { ...f, version_id: idList(f.project_id).length === 1 ? f.version_id : undefined, status, sort: sp.get('sort') || 'priority:desc,id:asc' };
   const query = { ...base, ...tab.q, limit };
   const up = useLoad(() => api.get('/work-packages' + qs(query)), [JSON.stringify(query)]);
   // how many tasks each tab has with the same filters
-  const counts = useLoad(() => Promise.all(TABS.map(t => api.get('/work-packages' + qs({ ...base, status: f.status || t.status, ...t.q, limit: 1 })).then(r => r.total))), [JSON.stringify(base)]);
+  const counts = useLoad(() => (sprintFilter ? null : Promise.all(TABS.map(t => api.get('/work-packages' + qs({ ...base, status: f.status || t.status, ...t.q, limit: 1 })).then(r => r.total)))), [JSON.stringify(base), sprintFilter]);
   const sl = useLoad(() => api.get('/sprints' + qs({ project_id: f.project_id, version_id: idList(f.project_id).length === 1 ? f.version_id : undefined })), [f.project_id, f.version_id]);
   const projectIds = idList(f.project_id);
   const oneProject = projectIds.length === 1 ? projectIds[0] : null; // versions belong to one project
@@ -175,6 +177,9 @@ export default function SprintPlanning() {
   const sprints = sl.data?.sprints || [];
   const live = sprints.filter(s => s.state !== 'ended');
   const ended = sprints.filter(s => s.state === 'ended').reverse();
+  const focus = sprints.find(s => s.id === sprintFilter) || null;
+  useEffect(() => { if (focus?.state === 'ended') setShowEnded(true); }, [focus?.id, focus?.state]);
+  useEffect(() => { if (focus) setTimeout(() => document.getElementById(`sprint-${focus.id}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 150); }, [focus?.id]);
   const shownIds = [...live, ...(showEnded ? ended : [])].map(s => s.id);
   const st = useLoad(() => (shownIds.length ? api.get('/work-packages' + qs({ sprint_id: shownIds.join(','), status: 'all', sort: 'status:asc,id:asc', limit: 2000 })) : { rows: [] }), [shownIds.join(',')]);
   const bySprint = useMemo(() => {
@@ -191,7 +196,7 @@ export default function SprintPlanning() {
     setSp(n, { replace: true }); setSelected([]);
   };
   const setParam = (k, v) => setParams(k === 'project_id' ? { project_id: v, ...(idList(v).length === 1 && idList(v)[0] === oneProject ? {} : { version_id: '' }) } : { [k]: v });
-  const filtered = FILTERS.some(k => sp.get(k));
+  const filtered = FILTERS.some(k => sp.get(k)) || !!sprintFilter;
   const exportUrl = '/api/work-packages/export.csv' + qs({ ...base, ...tab.q, sort: undefined, file: tab.key === 'none' ? 'upcoming' : undefined });
 
   // the selected tasks' project, when they are all in one (sprints of that project are offered)
@@ -235,6 +240,8 @@ export default function SprintPlanning() {
 
       <div className="filterbar sp-filters" role="group" aria-label="Filters">
         <ProjectMultiSelect value={projectIds} onChange={(ids) => setParam('project_id', ids.join(','))} />
+        <SprintPicker sprints={sprints} value={sprintFilter} currentId={sl.data?.current_id} noneLabel="Any sprint" withProject={projectIds.length !== 1}
+          onChange={(id) => setParams({ sprint: id ? String(id) : '', tab: '' })} />
         <select value={oneProject ? f.version_id || '' : ''} onChange={(e) => setParam('version_id', e.target.value)} aria-label="Version" disabled={!oneProject} title={oneProject ? 'Version' : 'Choose one project to pick one of its versions'}>
           <option value="">{oneProject ? 'Any version' : 'Version (choose one project)'}</option>
           {oneProject && <option value="none">No version</option>}
@@ -267,14 +274,24 @@ export default function SprintPlanning() {
         {/* ---------- tasks: not in a sprint / current / future / completed / all ---------- */}
         <section className={`panel sp-upcoming${over === 'upcoming' ? ' drop' : ''}`} aria-label="Tasks"
           {...dropProps('upcoming', (ids) => { const inSprint = ids.filter(id => !rows.some(r => r.id === id && !r.sprint_id)); if (tab.key === 'none') move(inSprint, null); })}>
+          {sprintFilter ? (
+            <div className="sp-filter-head">
+              <Icon name="flag" size={15} />
+              <span>Tasks in <span className="sp-code">{sprintCode(sprintFilter)}</span> <b>{focus?.name || ''}</b></span>
+              {focus && <span className={`sp-state ${focus.state}`}>{SPRINT_STATE[focus.state]}</span>}
+              <span className="spacer" />
+              <button type="button" className="btn sm ghost" onClick={() => setParams({ sprint: '' })}><Icon name="x" size={13} />Show all tasks</button>
+            </div>
+          ) : (
           <div className="sp-tabs" role="tablist" aria-label="Which tasks">
             {TABS.map((t, i) => (
               <button type="button" key={t.key} role="tab" aria-selected={tab.key === t.key} className={tab.key === t.key ? 'active' : ''}
-                onClick={() => { setParams({ tab: t.key === 'none' ? '' : t.key, status: '' }); setLimit(500); }}>
+                onClick={() => { setParams({ tab: t.key === 'none' ? '' : t.key, status: '', sprint: '' }); setLimit(500); }}>
                 {t.label}<span className="kb-count">{counts.data ? counts.data[i] : '…'}</span>
               </button>
             ))}
           </div>
+          )}
           {selected.length > 0 && (
             <div className="bulkbar">
               <b className="small">{selected.length} selected</b>
@@ -346,7 +363,7 @@ export default function SprintPlanning() {
             <div key={state} className="sp-group">
               <h3 className="sp-group-title">{SPRINT_STATE[state]} sprint{list.length > 1 ? 's' : ''} <span className="kb-count">{list.length}</span></h3>
               {list.map(s => (
-                <SprintGroup key={s.id} s={s} tasks={bySprint.get(s.id) || []} over={over === `s${s.id}`} isAdmin={sl.data.is_admin} withProject={projectIds.length !== 1}
+                <SprintGroup key={s.id} s={s} focused={s.id === sprintFilter} tasks={bySprint.get(s.id) || []} over={over === `s${s.id}`} isAdmin={sl.data.is_admin} withProject={projectIds.length !== 1}
                   dropProps={dropProps(`s${s.id}`, (ids) => (s.can_add ? move(ids.filter(id => !(bySprint.get(s.id) || []).some(t => t.id === id)), s) : run(async () => { throw new Error(`${s.name} has started, so only an administrator can add tasks to it.`); })))}
                   onDragTask={dragStart} onRemove={(t) => move([t.id], null)} onEnd={() => setModal({ end: s })}
                   onEdit={() => setModal({ sprint: s })} onDelete={() => remove(s)} onChanged={reloadAll} />
@@ -359,7 +376,7 @@ export default function SprintPlanning() {
             </button>
           )}
           {showEnded && ended.map(s => (
-            <SprintGroup key={s.id} s={s} tasks={bySprint.get(s.id) || []} over={over === `s${s.id}`} isAdmin={sl.data.is_admin} withProject={projectIds.length !== 1}
+            <SprintGroup key={s.id} s={s} focused={s.id === sprintFilter} tasks={bySprint.get(s.id) || []} over={over === `s${s.id}`} isAdmin={sl.data.is_admin} withProject={projectIds.length !== 1}
               dropProps={s.can_add ? dropProps(`s${s.id}`, (ids) => move(ids, s)) : {}}
               onDragTask={dragStart} onRemove={(t) => move([t.id], null)} onEdit={() => setModal({ sprint: s })} onDelete={() => remove(s)} onChanged={reloadAll} />
           ))}
@@ -378,13 +395,13 @@ export default function SprintPlanning() {
   );
 }
 
-function SprintGroup({ s, tasks, over, isAdmin, withProject, dropProps, onDragTask, onRemove, onEnd, onEdit, onDelete, onChanged }) {
+function SprintGroup({ s, focused, tasks, over, isAdmin, withProject, dropProps, onDragTask, onRemove, onEnd, onEdit, onDelete, onChanged }) {
   const [open, setOpen] = useState(s.state !== 'ended');
   const canMoveOut = isAdmin || s.state === 'planned';
   const est = tasks.reduce((t, r) => t + (r.estimated_hours || 0), 0);
   const exportUrl = '/api/work-packages/export.csv' + qs({ sprint_id: s.id, status: 'all' });
   return (
-    <section className={`panel sp-sprint ${s.state}${over ? ' drop' : ''}`} aria-label={s.name} {...dropProps}>
+    <section id={`sprint-${s.id}`} className={`panel sp-sprint ${s.state}${over ? ' drop' : ''}${focused ? ' focused' : ''}`} aria-label={s.name} {...dropProps}>
       <div className="sp-sprint-head">
         <button type="button" className="sp-sprint-toggle" onClick={() => setOpen(o => !o)} aria-expanded={open}>
           <Icon name={open ? 'chevronDown' : 'chevronRight'} size={16} />
