@@ -5,6 +5,7 @@ import { Router } from 'express';
 import { get, all, tx } from '../db.js';
 import { fail, can, visibleProjectIds } from '../access.js';
 import { createWp } from './workpackages.js';
+import { templateXlsx } from '../xlsx.js';
 
 const r = Router();
 const MAX_ROWS = 1000;
@@ -124,6 +125,35 @@ r.post('/work-packages/import', (req, res) => {
     return { row: x.row, id: wp.id, key: wp.key };
   }));
   res.status(201).json({ created: created.length, skipped: checked.length - valid.length, items: created });
+});
+
+// Excel template with dropdowns filled from this app: projects, types, priorities, people and locations.
+r.get('/work-packages/import/template.xlsx', (req, res) => {
+  const L = lookups(req);
+  const people = L.users.map(u => u.name).sort((a, b) => a.localeCompare(b));
+  const columns = [
+    { title: 'Subject', width: 42, note: 'Required (or fill Problem: its start becomes the subject)' },
+    { title: 'Project', width: 24, list: L.projects.map(p => p.name), note: 'Leave empty to use the project chosen when uploading' },
+    { title: 'Type', width: 14, list: L.types.map(t => t.name) },
+    { title: 'Priority', width: 16, list: L.priorities.map(p => p.name), note: 'Empty: the default priority' },
+    { title: 'Module', width: 18, note: 'Free text, e.g. Login' },
+    { title: 'Problem', width: 48, note: 'What is wrong or what is needed' },
+    { title: 'Solution', width: 36 },
+    { title: 'Location', width: 16, list: ['On Local', 'On Staging', 'On Production', 'On External'] },
+    { title: 'Requested by', width: 20, list: people, strict: false, note: 'Choose a person, or type another name' },
+    { title: 'Assignee', width: 20, list: people },
+    { title: 'Estimated hours', width: 15, note: 'A number, e.g. 4' },
+    { title: 'Start date', width: 14, note: 'YYYY-MM-DD or DD/MM/YYYY. Empty: the upload day' },
+    { title: 'Due date', width: 14, note: 'YYYY-MM-DD or DD/MM/YYYY. Empty: set from the priority' },
+  ];
+  const pr = L.priorities.find(p => /^p2\b/i.test(p.name)) || L.priorities[0];
+  const example = ['Login page shows error 500', '', L.types.find(t => t.name === 'Bug')?.name || L.types[0]?.name || '', pr?.name || '', 'Login',
+    'Users see an error after entering the password', '', 'On Staging', req.user.name, '', 4, '', ''];
+  const buf = templateXlsx({ columns, example });
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="task-upload-template.xlsx"');
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(buf);
 });
 
 export default r;

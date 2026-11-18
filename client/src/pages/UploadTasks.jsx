@@ -139,7 +139,8 @@ export default function UploadTasksModal({ defaultProject, onClose, onDone }) {
         </button>
       </>}>
       <p className="small" style={{ marginTop: 0 }}>Upload a <b>CSV</b> or <b>Excel (.xlsx)</b> file with one task per row. The tasks start in <b>New</b> and are not in any sprint, so you can pick them into sprints afterwards.
-        {' '}<a href={templateUrl} download="task-upload-template.csv">Download the template</a>.</p>
+        {' '}<a href="/api/work-packages/import/template.xlsx" download><Icon name="download" size={13} /> Download the Excel template</a>
+        {' '}(with dropdowns for Project, Type, Priority, Location, Requested by and Assignee) or the <a href={templateUrl} download="task-upload-template.csv">CSV template</a>.</p>
       <div className="form-grid">
         <Field label="Project" hint="For rows without a Project column (or with it empty).">
           <select value={projectId} onChange={(e) => { setProjectId(e.target.value); if (file) verify(file, e.target.value); }}>

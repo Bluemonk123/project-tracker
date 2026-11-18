@@ -796,3 +796,19 @@ test('bulk upload of tasks: check, then import valid rows (not in any sprint)', 
   assert.equal((await admin.post('/work-packages/import', { rows: Array(1001).fill({ subject: 'x' }), project_id: ids.project })).status, 400);
   assert.ok([401, 403].includes((await outsider.post('/work-packages/import', { rows: [{ subject: 'x' }], dry_run: true })).status));
 });
+
+test('task upload template: an Excel file with dropdown lists that the upload reader can read back', async () => {
+  const res = await fetch(`${base}/work-packages/import/template.xlsx`, { headers: { cookie: admin.cookie() } });
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type'), /spreadsheetml/);
+  const buf = Buffer.from(await res.arrayBuffer());
+  assert.equal(buf.subarray(0, 2).toString(), 'PK');
+  const { readSheet } = await import('read-excel-file/node');
+  const rows = await readSheet(buf);
+  assert.equal(rows[0][0], 'Subject'); assert.equal(rows[0][9], 'Assignee');
+  assert.equal(rows[1][0], 'Login page shows error 500'); assert.equal(rows[1][10], 4);
+  // the lists sheet and the dropdowns are in the file
+  const lists = await readSheet(buf, { sheet: 'Lists' });
+  assert.ok(lists[0].includes('Type') && lists[0].includes('Location'));
+  assert.ok(lists.some(r => r.includes('On Staging')));
+});
