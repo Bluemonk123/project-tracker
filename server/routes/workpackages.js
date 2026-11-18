@@ -7,6 +7,7 @@ import { boardTickets, solveLinkedTickets } from './tickets.js';
 import { dueFor } from '../calendar.js';
 import { checkSprintMove, sprintState } from '../sprints.js';
 
+const norm = (v) => String(v ?? '').trim();
 const r = Router();
 
 const BASE_SELECT = `
@@ -106,6 +107,7 @@ export function buildFilter(req, q) {
   const sources = String(q.source || '').split(',').filter(x => ['project', 'ticket', 'email'].includes(x));
   if (sources.length) { where.push(`wp.source IN (${sources.map(() => '?').join(',')})`); params.push(...sources); }
   inFilter('wp.assignee_id', q.assignee_id);
+  if (norm(q.requested_by)) { where.push('LOWER(TRIM(wp.requested_by)) = ?'); params.push(norm(q.requested_by).toLowerCase()); }
   inFilter('wp.responsible_id', q.responsible_id);
   inFilter('wp.author_id', q.author_id);
   inFilter('wp.designer_id', q.designer_id);
@@ -220,6 +222,7 @@ r.get('/board', (req, res) => {
   if (q.assignee_id === 'me') { where.push('wp.assignee_id = ?'); params.push(req.user.id); }
   else if (q.assignee_id === 'none') where.push('wp.assignee_id IS NULL');
   else if (/^\d+$/.test(q.assignee_id || '')) { where.push('wp.assignee_id = ?'); params.push(Number(q.assignee_id)); }
+  if (norm(q.requested_by)) { where.push('LOWER(TRIM(wp.requested_by)) = ?'); params.push(norm(q.requested_by).toLowerCase()); } // Requestor filter
   if (/^\d+$/.test(q.type_id || '')) { where.push('wp.type_id = ?'); params.push(Number(q.type_id)); }
   if (q.version_id === 'none') where.push('wp.version_id IS NULL');
   else if (/^\d+$/.test(q.version_id || '')) { where.push('wp.version_id = ?'); params.push(Number(q.version_id)); }

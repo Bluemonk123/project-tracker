@@ -98,7 +98,11 @@ export default function KanbanBoard({ project }) {
   const def = thisWeek();
   const from = sp.get('from') || def.from;
   const to = sp.get('to') || def.to;
-  const employee = sp.get('employee') || '';
+  // Team Member: whose tasks (assignee); Requestor: who asked for them ("Requested by")
+  const employee = sp.get('member') || sp.get('employee') || '';
+  const requester = sp.get('requester') || '';
+  const teamsLoad = useLoad(() => api.get('/teams'), []);
+  const reqLoad = useLoad(() => api.get('/work-packages-requesters'), []);
   const projectId = project ? String(project.id) : (sp.get('project') || ''); // one or more project ids, comma separated
   const projectIds = idList(projectId);
   const oneProject = projectIds.length === 1 ? projectIds[0] : null; // versions belong to one project
@@ -131,7 +135,7 @@ export default function KanbanBoard({ project }) {
   const sprintId = sprintParam === 'all' ? null : /^\d+$/.test(sprintParam) ? Number(sprintParam) : (sl.data?.current_id || null);
   const sprint = sprints.find(x => x.id === sprintId) || null;
   const waiting = !sprintParam && !sl.data && !sl.error; // the default sprint is not known yet
-  const filters = { assignee_id: employee || undefined, project_id: projectId || undefined, version_id: versionId || undefined, type_id: typeId || undefined, location: location || undefined };
+  const filters = { assignee_id: employee || undefined, requested_by: requester || undefined, project_id: projectId || undefined, version_id: versionId || undefined, type_id: typeId || undefined, location: location || undefined };
   const query = sprintId ? { ...filters, sprint_id: sprintId } : { ...filters, from, to, undated: undated ? undefined : 0 };
   const { data, error, loading, reload, setData } = useLoad(() => (waiting ? null : api.get('/board' + qs(query))), [JSON.stringify(query), waiting]);
   useEffect(() => { // refresh when a ticket or task is raised from the top bar
@@ -189,6 +193,7 @@ export default function KanbanBoard({ project }) {
   return (
     <div className={`content wide kb${dense ? ' dense' : ''}`}>
       <div className="kb-head">
+        <div className="kb-titlebar">
         {!project && <h1>Task Board</h1>}
         <div className="kb-sprint" role="group" aria-label="Sprint">
           <Icon name="flag" size={16} />
@@ -211,6 +216,7 @@ export default function KanbanBoard({ project }) {
           <span className="spacer" />
           <Link to="/sprint-planning" className="btn sm ghost"><Icon name="flag" size={14} />Sprint Planning</Link>
         </div>
+        </div>
         <div className="kb-filters" role="group" aria-label="Board filters">
           {!sprintId && <>
           <div className="kb-range">
@@ -226,12 +232,24 @@ export default function KanbanBoard({ project }) {
             <input type="date" value={to} min={from} onChange={(e) => e.target.value && set({ to: e.target.value })} />
           </label>
           </>}
-          <label className="kb-field"><span>Employee</span>
-            <select value={employee} onChange={(e) => set({ employee: e.target.value })}>
-              <option value="">All employees</option>
+          <label className="kb-field"><span>Requestor</span>
+            <select value={requester} onChange={(e) => set({ requester: e.target.value })}>
+              <option value="">All requestors</option>
+              {requester && !(reqLoad.data || []).some(x => x.name.toLowerCase() === requester.toLowerCase()) && <option value={requester}>{requester}</option>}
+              {(reqLoad.data || []).map(x => <option key={x.name} value={x.name}>{x.name}</option>)}
+            </select>
+          </label>
+          <label className="kb-field"><span>Team Member</span>
+            <select value={employee} onChange={(e) => set({ member: e.target.value, employee: '' })}>
+              <option value="">All team members</option>
               <option value="me">Me</option>
               <option value="none">Unassigned</option>
-              {people.filter(u => u.id !== user.id).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              {(teamsLoad.data || []).filter(t => t.members.length).map(t => (
+                <optgroup key={t.id} label={t.name}>
+                  {t.members.map(m => <option key={`${t.id}-${m.id}`} value={m.id}>{m.name}{m.job_title ? ` · ${m.job_title}` : ''}</option>)}
+                </optgroup>
+              ))}
+              {/^\d+$/.test(employee) && !(teamsLoad.data || []).some(t => t.members.some(m => String(m.id) === employee)) && <option value={employee}>{people.find(u => String(u.id) === employee)?.name || 'Selected person'}</option>}
             </select>
           </label>
           {!project && (
@@ -261,7 +279,7 @@ export default function KanbanBoard({ project }) {
             </select>
           </label>
           {!sprintId && <label className="check small kb-undated"><input type="checkbox" checked={undated} onChange={(e) => set({ undated: e.target.checked ? '' : '0' })} /><span>Show open items<br />without dates</span></label>}
-          {(employee || (!project && projectId) || (!sprintId && (!isThisWeek || !undated)) || typeId || location || sprintParam || versionId) && (
+          {(employee || requester || (!project && projectId) || (!sprintId && (!isThisWeek || !undated)) || typeId || location || sprintParam || versionId) && (
             <button className="btn sm ghost" onClick={() => setSp({}, { replace: true })}>Reset</button>
           )}
           <span className="spacer" />

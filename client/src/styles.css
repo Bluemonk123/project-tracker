@@ -1241,3 +1241,9 @@ a.wl-nosprint:hover { color: var(--ink); text-decoration: underline; }
   .sp-sprints { position: static; max-height: none; overflow: visible; }
   .sp-sprint.open .sp-tasks { max-height: 50vh; }
 }
+/* Task Board: page title and the sprint bar share one row */
+.kb-titlebar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.kb-titlebar > h1 { margin: 0; flex: none; }
+.kb-titlebar > .kb-sprint { flex: 1 1 560px; min-width: 0; }
+@media (max-width: 640px) { .kb-titlebar > .kb-sprint { flex-basis: 100%; } }
+.kb-filters .proj-multi-btn { height: 32px; }

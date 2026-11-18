@@ -815,3 +815,15 @@ test('task upload template: an Excel file with dropdown lists that the upload re
   assert.ok(lists[0].includes('Type') && lists[0].includes('Location'));
   assert.ok(lists.some(r => r.includes('On Staging')) && lists.some(r => r.includes('In Testing')) && lists.some(r => r.includes('Rejected')));
 });
+
+test('task board: Requestor filter (requested_by) and the list of requestors', async () => {
+  const a = (await admin.post('/work-packages', { project_id: ids.project, subject: 'Req filter A', requested_by: 'Kavya Rao' })).data;
+  const b = (await admin.post('/work-packages', { project_id: ids.project, subject: 'Req filter B', requested_by: 'Someone Else' })).data;
+  const list = (await admin.get('/work-packages-requesters')).data;
+  assert.ok(list.some(x => x.name === 'Kavya Rao'));
+  const board = (await admin.get('/board?from=2000-01-01&to=2100-01-01&requested_by=kavya%20rao')).data;
+  const idsOn = board.rows.map(x => x.id);
+  assert.ok(idsOn.includes(a.id) && !idsOn.includes(b.id));
+  const rows = (await admin.get('/work-packages?status=all&requested_by=Kavya Rao')).data.rows.map(x => x.id);
+  assert.deepEqual(rows, [a.id]);
+});

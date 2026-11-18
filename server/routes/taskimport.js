@@ -166,4 +166,14 @@ r.get('/work-packages/import/template.xlsx', (req, res) => {
   res.send(buf);
 });
 
+// The names in "Requested by" across the tasks the person can see (Task Board -> Requestor filter).
+r.get('/work-packages-requesters', (req, res) => {
+  const ids = visibleProjectIds(req, 'wp.view');
+  if (!ids.length) return res.json([]);
+  const rows = all(`SELECT TRIM(requested_by) AS name, COUNT(*) AS n FROM work_packages
+                    WHERE project_id IN (${ids.map(() => '?').join(',')}) AND TRIM(COALESCE(requested_by, '')) <> ''
+                    GROUP BY LOWER(TRIM(requested_by)) ORDER BY LOWER(TRIM(requested_by))`, ...ids);
+  res.json(rows);
+});
+
 export default r;
