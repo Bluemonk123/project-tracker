@@ -103,12 +103,15 @@ seedDefaults();
 function migrate() {
   if (getSetting('migration_positions_v1') === null) {
     tx(() => {
-      for (const name of ['Account manager', 'Business analyst']) {
-        const r = DEFAULT_ROLES.find(x => x.name === name);
-        if (!get("SELECT id FROM roles WHERE name = ? AND scope = 'project'", name)) {
+      // (the role then called "Account manager" is "Project manager" in DEFAULT_ROLES now)
+      const newNames = !!get("SELECT id FROM roles WHERE name = 'Product manager' AND scope = 'project'");
+      for (const [name, def] of [['Account manager', 'Project manager'], ['Business analyst', 'Business analyst']]) {
+        const r = DEFAULT_ROLES.find(x => x.name === def);
+        const use = newNames ? def : name; // older databases get the old name; it is renamed further down
+        if (!get("SELECT id FROM roles WHERE name = ? AND scope = 'project'", use)) {
           const pos = get('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM roles').p;
           run('INSERT INTO roles(name, scope, description, permissions, builtin, position) VALUES(?,?,?,?,0,?)',
-            r.name, 'project', r.description, JSON.stringify(r.permissions), pos);
+            use, 'project', r.description, JSON.stringify(r.permissions), pos);
         }
       }
       // Existing project managers become the active PM of their project.
@@ -182,7 +185,9 @@ function migrate() {
   if (!techCols.includes('version_updated_by')) db.exec('ALTER TABLE project_technologies ADD COLUMN version_updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL');
   if (getSetting('migration_tech_perms_v1') === null) {
     tx(() => {
-      const grant = { 'Project manager': ['tech.manage', 'tech.version'], 'Team lead': ['tech.manage', 'tech.version'],
+      // the full-rights role is "Project manager" in databases that still have "Account manager", else "Product manager"
+      const fullRole = get("SELECT id FROM roles WHERE scope = 'project' AND name = 'Account manager'") ? 'Project manager' : 'Product manager';
+      const grant = { [fullRole]: ['tech.manage', 'tech.version'], 'Team lead': ['tech.manage', 'tech.version'],
         'Business analyst': ['tech.version'], Developer: ['tech.version'] };
       for (const [name, keys] of Object.entries(grant)) {
         const role = get("SELECT id, permissions FROM roles WHERE scope = 'project' AND name = ?", name);
@@ -219,8 +224,8 @@ function migrate() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_attach_docs ON attachments(container_type, container_id, doc_slot)');
   if (getSetting('migration_board_perms_v1') === null) {
     tx(() => {
-      const grant = { 'Project manager': ['project.brief', 'project.documents'], 'Team lead': ['project.documents'],
-        'Account manager': ['project.brief', 'project.documents'], 'Business analyst': ['project.brief', 'project.documents'] };
+      const grant = { 'Product manager': ['project.brief', 'project.documents'], 'Team lead': ['project.documents'],
+        'Account manager': ['project.brief', 'project.documents'], 'Project manager': ['project.brief', 'project.documents'], 'Business analyst': ['project.brief', 'project.documents'] };
       for (const [name, keys] of Object.entries(grant)) {
         const role = get("SELECT id, permissions FROM roles WHERE scope = 'project' AND name = ?", name);
         if (!role) continue;
@@ -236,7 +241,18 @@ function migrate() {
     run(`UPDATE team_members SET current_roles = replace(current_roles, '"Account Manager"', '"Project Manager"'),
          proposed_roles = replace(proposed_roles, '"Account Manager"', '"Project Manager"')`);
     setSetting('migration_team_role_pm_v1', '1');
+  }  // Project roles renamed: "Project manager" -> "Product manager", then "Account manager" -> "Project manager".
+  // Only on databases that still have "Account manager" (new databases are created with the new names).
+  if (!getSetting('roles_pm_rename_v1')) {
+    tx(() => {
+      if (get("SELECT id FROM roles WHERE scope = 'project' AND name = 'Account manager'")) {
+        run("UPDATE roles SET name = 'Product manager' WHERE scope = 'project' AND name = 'Project manager'");
+        run("UPDATE roles SET name = 'Project manager' WHERE scope = 'project' AND name = 'Account manager'");
+      }
+      setSetting('roles_pm_rename_v1', '1');
+    });
   }
+
   // Task Board: a last "Rejected" column. The existing Rejected status moves there (or one is added).
   if (getSetting('migration_rejected_col_v1') === null) {
     const rj = get("SELECT id FROM statuses WHERE lower(name) = 'rejected'");

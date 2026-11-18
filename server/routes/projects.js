@@ -90,7 +90,7 @@ r.post('/projects', (req, res) => {
   if (get('SELECT id FROM projects WHERE identifier = ?', identifier)) fail(400, 'Another project already uses this short key.');
   const f = projectFields(b);
   if (!f.name) fail(400, 'Project name is required.');
-  const pmRole = get("SELECT id FROM roles WHERE scope = 'project' AND name = 'Project manager'") || get("SELECT id FROM roles WHERE scope='project' ORDER BY position LIMIT 1");
+  const pmRole = get("SELECT id FROM roles WHERE scope = 'project' AND name = 'Product manager'") || get("SELECT id FROM roles WHERE scope='project' ORDER BY position LIMIT 1");
   const id = tx(() => {
     const { id } = run(`INSERT INTO projects(name, identifier, description, color, status, status_explanation, parent_id, manager_id, start_date, end_date, created_by)
                         VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
@@ -242,7 +242,7 @@ r.delete('/projects/:pid/members/:mid', (req, res) => {
   res.json({ ok: true });
 });
 
-// ---------- key people (PM / AM / BA / DT) ----------
+// ---------- key people (codes PM / AM / BA / DT = Product Manager / Project Manager / Business Analyst / Development Team) ----------
 r.get('/projects/:pid/positions', (req, res) => {
   const p = resolveProject(req.params.pid);
   need(req, 'project.view', p.id);
@@ -391,7 +391,7 @@ r.get('/teams', (req, res) => {
 
 r.get('/team-roles', (_req, res) => res.json(TEAM_ROLES));
 
-// The projects a person is in, with their role and occupancy and each project's Project Manager and Account Manager.
+// The projects a person is in, with their role and occupancy and each project's Product Manager (pm) and Project Manager (am).
 r.get('/users/:id/projects', (req, res) => {
   const user = get('SELECT id, name, email, job_title FROM users WHERE id = ?', req.params.id) || fail(404, 'User not found.');
   const vis = visibleProjectIds(req);

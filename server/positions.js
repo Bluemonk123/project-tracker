@@ -1,4 +1,5 @@
-// Key people of a project (PM / AM / BA / DT) and their link status.
+// Key people of a project and their link status. Codes stored: PM, AM, BA, DT; shown as
+// PM = Product Manager (short PdM), AM = Project Manager (short PM), BA = Business Analyst, DT = Development Team.
 //   active   = at least one person is mapped and still active        -> link icon
 //   broken   = someone was mapped before, but nobody is mapped now   -> broken link icon
 //              (removed from the position, removed from the project, locked or deleted user)
@@ -7,8 +8,8 @@ import { all, get, run, tx } from './db.js';
 import { fail } from './access.js';
 
 export const POSITIONS = [
-  { code: 'PM', label: 'Project Manager', multiple: false, role: 'Project manager' },
-  { code: 'AM', label: 'Account Manager', multiple: false, role: 'Account manager' },
+  { code: 'PM', short: 'PdM', label: 'Product Manager', multiple: false, role: 'Product manager' },
+  { code: 'AM', short: 'PM', label: 'Project Manager', multiple: false, role: 'Project manager' },
   { code: 'BA', label: 'Business Analyst', multiple: false, role: 'Business analyst' },
   { code: 'DT', label: 'Development Team', multiple: true, role: 'Developer' },
 ];

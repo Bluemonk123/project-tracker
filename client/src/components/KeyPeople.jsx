@@ -6,6 +6,8 @@ import { Modal, Field, UserSelect, MultiUserPicker, Person, useAsync } from './u
 import { fmtDate, utc, isoDate } from '../lib/format.js';
 
 export const POSITION_ORDER = ['PM', 'AM', 'BA', 'DT'];
+// What the codes show: PM is the Product Manager (PdM), AM the Project Manager (PM)
+export const POSITION_SHORT = { PM: 'PdM', AM: 'PM', BA: 'BA', DT: 'DT' };
 export const STATUS = {
   active: { icon: 'link', label: 'Active link', tone: 'ok' },
   broken: { icon: 'linkBroken', label: 'Broken link', tone: 'danger' },
@@ -22,7 +24,7 @@ function describe(slot) {
   return 'Nobody mapped yet';
 }
 
-// Compact row of four chips for tables: PM · AM · BA · DT
+// Compact row of four chips for tables: PdM · PM · BA · DT
 export function KeyPeopleStrip({ positions }) {
   if (!positions) return null;
   return (
@@ -33,7 +35,7 @@ export function KeyPeopleStrip({ positions }) {
         return (
           <span key={code} className={`kp-chip ${st.tone}`} title={`${slot.label}: ${st.label}. ${describe(slot)}`}
             aria-label={`${slot.label}: ${st.label}`}>
-            <b>{code}</b><Icon name={st.icon} size={14} />
+            <b>{POSITION_SHORT[code]}</b><Icon name={st.icon} size={14} />
             {code === 'DT' && slot.active.length > 1 && <span className="kp-n">{slot.active.length}</span>}
           </span>
         );
@@ -103,7 +105,7 @@ export function KeyPeoplePanel({ project, onChanged }) {
             <li key={code} className="kp-row">
               <span className={`kp-icon ${st.tone}`} title={st.label}><Icon name={st.icon} size={18} /></span>
               <div className="grow" style={{ minWidth: 0 }}>
-                <div className="row" style={{ gap: 8 }}><b className="kp-code">{code}</b><span className="small soft">{slot.label}</span></div>
+                <div className="row" style={{ gap: 8 }}><b className="kp-code">{POSITION_SHORT[code]}</b><span className="small soft">{slot.label}</span></div>
                 {slot.status === 'active' ? (
                   <div className="row wrap" style={{ gap: '4px 12px', marginTop: 4 }}>
                     {slot.active.map(p => <Person key={p.id} id={p.user_id} name={p.name} />)}

@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { api, csrfHeaders, qs } from '../api.js';
 import { useApp, useLoad } from '../context.jsx';
 import Icon from '../components/Icon.jsx';
-import { STATUS, POSITION_ORDER } from '../components/KeyPeople.jsx';
+import { STATUS, POSITION_ORDER, POSITION_SHORT } from '../components/KeyPeople.jsx';
 import { Loading, ErrorBox, Empty, Field, Modal, Markdown, MarkdownEditor, Person, ProjectStatus, Popover, MoreMenu, UserSelect, confirmDialog, useAsync } from '../components/ui.jsx';
 import { fmtSize, timeAgo, fmtDateTime, fmtDate } from '../lib/format.js';
 import { OccupancySelect } from './project/Members.jsx';
@@ -346,8 +346,8 @@ function LinksModal({ title, value, onClose, onSave }) {
   );
 }
 
-// Short codes for project roles, shown in the same chip style as PM / AM / BA / DT.
-const ROLE_CODE = { 'Project manager': 'PM', 'Team lead': 'TL', 'Account manager': 'AM', 'Business analyst': 'BA', Developer: 'DEV', 'QA / Tester': 'QA', Viewer: 'VW' };
+// Short codes for project roles, shown in the same chip style as PdM / PM / BA / DT.
+const ROLE_CODE = { 'Product manager': 'PdM', 'Project manager': 'PM', 'Team lead': 'TL', 'Business analyst': 'BA', Developer: 'DEV', 'QA / Tester': 'QA', Viewer: 'VW' };
 const roleCode = (name) => ROLE_CODE[name] || name.split(/[\s/]+/).filter(Boolean).map(w => w[0]).join('').slice(0, 3).toUpperCase();
 
 function TeamRow({ code, tone, icon, label, title, children }) {
@@ -383,7 +383,7 @@ function ProjectTeam({ data, reload }) {
               const slot = positions[code];
               const st = STATUS[slot.status];
               return (
-                <TeamRow key={code} code={code} tone={st.tone} icon={st.icon} label={slot.label} title={st.label}>
+                <TeamRow key={code} code={POSITION_SHORT[code]} tone={st.tone} icon={st.icon} label={slot.label} title={st.label}>
                   {slot.status === 'active' ? slot.active.map(x => <Person key={x.user_id ?? x.id} id={x.user_id ?? x.id} name={x.name} />)
                     : slot.status === 'broken' ? <span className="text-danger small">{slot.removed[0]?.name} removed</span>
                     : <span className="muted small">Not mapped</span>}

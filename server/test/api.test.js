@@ -55,7 +55,7 @@ test('first-run setup creates the administrator', async () => {
 test('admin creates users, roles and a team', async () => {
   const meta = (await admin.get('/meta')).data;
   ids.devRole = meta.roles.find(r => r.name === 'Developer').id;
-  ids.pmRole = meta.roles.find(r => r.name === 'Project manager').id;
+  ids.pmRole = meta.roles.find(r => r.name === 'Product manager').id;
   ids.employee = meta.roles.find(r => r.name === 'Employee').id;
   let r = await admin.post('/admin/users', { name: 'Dev One', email: 'dev@office.local', password: 'password1', global_role_id: ids.employee });
   assert.equal(r.status, 201, JSON.stringify(r.data)); ids.dev = r.data.id;

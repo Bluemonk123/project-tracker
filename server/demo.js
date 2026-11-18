@@ -34,7 +34,7 @@ tx(() => {
     ['Meera Iyer', 'meera@office.local', 'Employee', 'QA engineer'],
     ['Karan Mehta', 'karan@office.local', 'Employee', 'Mobile developer'],
     ['Sneha Kapoor', 'sneha@office.local', 'Employee', 'Business analyst'],
-    ['Arjun Nair', 'arjun@office.local', 'Employee', 'Account manager'],
+    ['Arjun Nair', 'arjun@office.local', 'Employee', 'Project manager'],
   ];
   const u = {};
   for (const [name, email, r, title] of people) {
@@ -108,8 +108,8 @@ tx(() => {
              VALUES('project',?,?,?,?,?,?,?,?,datetime('now', ?))`, pid, pid, `CRM-release-notes-${ver}.txt`, stored, 'text/plain', Buffer.byteLength(body), u[p.manager], `rn:${rn}`, `-${days} days`);
       }
     }
-    run('INSERT INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', pid, adminId, role('Project manager', 'project'));
-    run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', pid, u[p.manager], role('Project manager', 'project'));
+    run('INSERT INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', pid, adminId, role('Product manager', 'project'));
+    run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', pid, u[p.manager], role('Product manager', 'project'));
     for (const [m, r] of p.members) run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', pid, u[m], role(r, 'project'));
     // Key people: CRM fully mapped, HRMS has a broken AM link and no BA, SALES has a broken BA link
     setPosition(pid, 'PM', [u[p.manager]], adminId);
@@ -217,7 +217,7 @@ tx(() => {
            VALUES(?,?,?,?,?,?,?,?,?)`, pid, c.name, c.category, v, c.source, c.package_id, c.eol_slug, i, u[p.manager]);
     });
     run('INSERT INTO wiki_pages(project_id, title, content, updated_by) VALUES(?,?,?,?)', pid, 'Overview',
-      `# ${p.name}\n\n${p.desc}\n\n## Environments\n| Name | Address |\n|---|---|\n| Test | http://test-${p.key.toLowerCase()}.office.local |\n| Live | http://${p.key.toLowerCase()}.office.local |\n\n## Contacts\n- Project manager: ${p.manager}\n`, u[p.manager]);
+      `# ${p.name}\n\n${p.desc}\n\n## Environments\n| Name | Address |\n|---|---|\n| Test | http://test-${p.key.toLowerCase()}.office.local |\n| Live | http://${p.key.toLowerCase()}.office.local |\n\n## Contacts\n- Product manager: ${p.manager}\n`, u[p.manager]);
     run('INSERT INTO news(project_id, title, body, author_id) VALUES(?,?,?,?)', pid, 'Sprint 7 started', 'Focus this sprint: the dashboard. Please log time daily.', u[p.manager]);
   }
 });

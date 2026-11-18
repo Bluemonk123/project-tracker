@@ -60,7 +60,7 @@ export const DEFAULT_ROLES = [
     permissions: [],
   },
   {
-    name: 'Project manager', scope: 'project', builtin: 1,
+    name: 'Product manager', scope: 'project', builtin: 1,
     description: 'Runs a project: members, planning, meetings.',
     permissions: ALL_PROJECT_KEYS.filter(k => k !== 'project.archive'),
   },
@@ -72,7 +72,7 @@ export const DEFAULT_ROLES = [
       'tech.manage', 'tech.version', 'project.documents'],
   },
   {
-    name: 'Account manager', scope: 'project', builtin: 0,
+    name: 'Project manager', scope: 'project', builtin: 0,
     description: 'Owns the client relationship: follows progress, meetings and time.',
     permissions: ['project.view', 'wp.view', 'wp.create', 'wp.comment', 'time.log', 'time.view_all',
       'meetings.view', 'meetings.manage', 'wiki.view', 'files.upload', 'news.manage', 'project.brief', 'project.documents'],

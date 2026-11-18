@@ -24,8 +24,8 @@ export default function NewProjectModal({ onClose }) {
           <input type="text" value={f.name} required placeholder="e.g. Customer Portal"
             onChange={(e) => set('name', e.target.value)} />
         </Field>
-        <Field label="Project Manager (PM)"><UserSelect value={f.manager_id} onChange={(v) => set('manager_id', v)} placeholder="Not mapped yet" /></Field>
-        <Field label="Account Manager (AM)"><UserSelect value={f.am_id} onChange={(v) => set('am_id', v)} placeholder="Not mapped yet" /></Field>
+        <Field label="Product Manager (PdM)"><UserSelect value={f.manager_id} onChange={(v) => set('manager_id', v)} placeholder="Not mapped yet" /></Field>
+        <Field label="Project Manager (PM)"><UserSelect value={f.am_id} onChange={(v) => set('am_id', v)} placeholder="Not mapped yet" /></Field>
         <Field label="Business Analyst (BA)"><UserSelect value={f.ba_id} onChange={(v) => set('ba_id', v)} placeholder="Not mapped yet" /></Field>
         <Field label="Development Team (DT)" className="span-2" hint="You can also map or change these later from the project's overview."><MultiUserPicker value={f.dt_ids} onChange={(v) => set('dt_ids', v)} /></Field>
         <Field label="Start date"><input type="date" value={f.start_date} onChange={(e) => set('start_date', e.target.value)} /></Field>

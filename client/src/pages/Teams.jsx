@@ -138,7 +138,7 @@ function MemberList({ team, roles, canManage, reload, onProjects }) {
   );
 }
 
-// The projects a person is in, with their Project Manager and Account Manager.
+// The projects a person is in, with their Product Manager and Project Manager.
 function UserProjects({ member, onClose }) {
   const { data, error, loading } = useLoad(() => api.get(`/users/${member.id}/projects`), [member.id]);
   const who = (list) => (list?.length ? list.map(x => (
@@ -150,7 +150,7 @@ function UserProjects({ member, onClose }) {
       {loading && !data ? <Loading /> : !data?.projects.length ? <Empty title="No projects">{member.name} is not a member of any project you can see.</Empty> : (
         <div className="table-wrap">
           <table className="table">
-            <thead><tr><th>Project</th><th>Role</th><th className="num">Occupancy</th><th>Project Manager</th><th>Account Manager</th></tr></thead>
+            <thead><tr><th>Project</th><th>Role</th><th className="num">Occupancy</th><th>Product Manager</th><th>Project Manager</th></tr></thead>
             <tbody>
               {data.projects.map(p => (
                 <tr key={p.id}>
