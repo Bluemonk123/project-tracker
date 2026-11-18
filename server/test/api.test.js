@@ -827,3 +827,20 @@ test('task board: Requestor filter (requested_by) and the list of requestors', a
   const rows = (await admin.get('/work-packages?status=all&requested_by=Kavya Rao')).data.rows.map(x => x.id);
   assert.deepEqual(rows, [a.id]);
 });
+
+test('manager overview: totals, stages, sprints, projects and people', async () => {
+  const r = await admin.get('/reports/overview');
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const d = r.data;
+  assert.ok(d.columns.length === 6 && d.totals.projects >= 1);
+  assert.ok(typeof d.stages.new === 'number' && typeof d.totals.unpicked === 'number');
+  assert.ok(Array.isArray(d.sprints.current) && Array.isArray(d.sprints.planned));
+  const p = d.projects.find(x => x.id === ids.project);
+  assert.ok(p && p.stages && typeof p.unpicked === 'number');
+  assert.ok(Array.isArray(d.people) && Array.isArray(d.teams));
+  // the project filter
+  const one = (await admin.get(`/reports/overview?project_id=${ids.project}`)).data;
+  assert.deepEqual(one.projects.map(x => x.id), [ids.project]);
+  // others without the report permission cannot see it
+  assert.ok([401, 403].includes((await outsider.get('/reports/overview')).status));
+});
