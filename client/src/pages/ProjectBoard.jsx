@@ -20,6 +20,7 @@ export default function ProjectBoard() {
     <div className="content">
       <div className="page-head">
         <div className="grow"><h1>Project Board</h1><p>Brief, customer, team and key documents of every project.</p></div>
+        <Link className="btn" to="/technologies"><Icon name="layers" />Tech Stack</Link>
       </div>
       {!list.length ? <div className="panel"><Empty title="No projects yet">Create a project to see it here.</Empty></div> : <>
         <div className="pb-tabs" role="tablist" aria-label="Projects">
@@ -44,9 +45,9 @@ function ProjectSheet({ projectId }) {
     <div className="pb-grid" style={{ '--pc': data.project.color }}>
       <ProjectDetails data={data} reload={reload} />
       <div className="stack">
-        <TechCard project={data.project} />
         <Approvals data={data} reload={reload} />
         <Documents data={data} reload={reload} />
+        <TechCard project={data.project} data={data} reloadBoard={reload} />
         <ReleaseNotes data={data} reload={reload} />
         <ProjectTeam data={data} reload={reload} />
       </div>
@@ -56,9 +57,9 @@ function ProjectSheet({ projectId }) {
 
 const TONE = { Yes: 'ok', No: 'danger', Pending: 'warn', Scheduled: 'warn', 'In Process': 'warn' };
 
-// One card: Go live, Delivery, Customer, Tech stack.
+// One card: brief, Go live, Delivery, Customer. (Hosting, repository and environments are in the Technologies card.)
 function ProjectDetails({ data, reload }) {
-  const { project: p, board, delivery, stack, can } = data;
+  const { project: p, board, delivery, can } = data;
   const [modal, setModal] = useState(null);
   const [, run] = useAsync();
   const save = async (patch, msg = 'Saved') => { if (await run(() => api.put(`/projects/${p.id}/board-info`, patch), msg)) reload(); };
@@ -137,27 +138,12 @@ function ProjectDetails({ data, reload }) {
         <PbRow label="Customer interaction">{status('customer_interaction', data.options.yes_no_pending, 'Customer interaction')}</PbRow>
       </PbGroup>
 
-      <PbGroup title="Tech stack" link={<Link className="xs" to={`/projects/${p.identifier}/technologies`}>Technologies</Link>}>
-        <PbRow label="Development"><TechChips list={stack.development} empty="None listed" /></PbRow>
-        <PbRow label="Database"><TechChips list={stack.database} empty="None listed" /></PbRow>
-        <PbRow label="Hosting" action={edit('hosting', 'Links')}><LinkPair v={board.hosting} /></PbRow>
-        <PbRow label="Code repository" action={edit('repository', 'Links')}><LinkPair v={board.repository} /></PbRow>
-        <PbRow label="Environment">
-          <EnvPicker value={board.environments} options={data.options.environments} disabled={!can.brief}
-            onChange={(v) => saveBoard({ environments: v }, 'Environments saved')} />
-        </PbRow>
-      </PbGroup>
-
       {modal === 'brief' && <BriefModal p={p} onClose={() => setModal(null)} onSave={(d) => save({ description: d }, 'Brief saved')} />}
       {modal === 'golive' && <GoLiveModal board={board} onClose={() => setModal(null)} onSave={(b) => saveBoard(b, 'Live version saved')} />}
       {modal === 'release' && r && <ReleaseModal r={r} p={p} onClose={() => setModal(null)} />}
       {modal === 'customer' && <CustomerModal p={p} board={board} onClose={() => setModal(null)} onSave={save} />}
       {modal === 'personas' && <PersonasModal roles={data.customer_roles} onClose={() => setModal(null)} onSave={(roles) => save({ customer_roles: roles }, 'Personas saved')} />}
       {modal?.persona !== undefined && <PersonaView persona={data.customer_roles[modal.persona]} onClose={() => setModal(null)} onEdit={can.brief ? () => setModal('personas') : null} />}
-      {(modal === 'hosting' || modal === 'repository') && (
-        <LinksModal title={modal === 'hosting' ? 'Hosting' : 'Code repository'} value={board[modal]} onClose={() => setModal(null)}
-          onSave={(v) => saveBoard({ [modal]: v }, `${modal === 'hosting' ? 'Hosting' : 'Code repository'} links saved`)} />
-      )}
     </section>
   );
 }
@@ -191,9 +177,6 @@ const PbRow = ({ label, action, children }) => (
     {action && <div className="pb-act">{action}</div>}
   </div>
 );
-const TechChips = ({ list, empty }) => (list.length
-  ? <div className="row wrap" style={{ gap: 6 }}>{list.map(t => <span key={t.name} className="pb-tech"><b>{t.name}</b>{t.version_used && <span> {t.version_used}</span>}</span>)}</div>
-  : <span className="muted small">{empty}</span>);
 const short = (u) => u.replace(/^https?:\/\//, '').replace(/\/$/, '');
 const LinkPair = ({ v }) => (
   <div className="pb-links">
@@ -572,7 +555,12 @@ function ApprovalModal({ projectId, approval, sectionId, sectionName, onClose, o
 }
 
 // The project's technologies with how current each version is (moved here from the sidebar).
-function TechCard({ project }) {
+function TechCard({ project, data: boardData, reloadBoard }) {
+  const { board, can: bcan } = boardData;
+  const [linkModal, setLinkModal] = useState(null); // 'hosting' | 'repository'
+  const [, runSave] = useAsync();
+  const saveBoard = async (b, msg) => { if (await runSave(() => api.put(`/projects/${project.id}/board-info`, { board: b }), msg)) reloadBoard(); };
+  const linksBtn = (kind) => bcan.brief && <button type="button" className="btn sm ghost pb-edit" onClick={() => setLinkModal(kind)}><Icon name="edit" size={14} />Links</button>;
   const force = useRef(false);
   const { data, error, loading, reload } = useLoad(() => {
     const refresh = force.current; force.current = false;
@@ -613,6 +601,18 @@ function TechCard({ project }) {
             ))}
           </ul>
         </>
+      )}
+      <div className="pb-tech-meta">
+        <PbRow label="Hosting" action={linksBtn('hosting')}><LinkPair v={board.hosting} /></PbRow>
+        <PbRow label="Code repository" action={linksBtn('repository')}><LinkPair v={board.repository} /></PbRow>
+        <PbRow label="Environment">
+          <EnvPicker value={board.environments} options={boardData.options.environments} disabled={!bcan.brief}
+            onChange={(v) => saveBoard({ environments: v }, 'Environments saved')} />
+        </PbRow>
+      </div>
+      {linkModal && (
+        <LinksModal title={linkModal === 'hosting' ? 'Hosting' : 'Code repository'} value={board[linkModal]} onClose={() => setLinkModal(null)}
+          onSave={(v) => saveBoard({ [linkModal]: v }, `${linkModal === 'hosting' ? 'Hosting' : 'Code repository'} links saved`)} />
       )}
       <div className="panel-body xs" style={{ borderTop: '1px solid var(--line)', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
         <Link to={`/projects/${project.identifier}/technologies`}>Open the full list</Link>

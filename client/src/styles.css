@@ -1249,3 +1249,6 @@ a.wl-nosprint:hover { color: var(--ink); text-decoration: underline; }
 .kb-filters .proj-multi-btn { height: 32px; }
 .kb-sprint > a.btn { white-space: nowrap; flex: none; }
 .kb-sprint-info { flex: 1 1 auto; }
+/* Technologies card: hosting, repository and environments at the bottom */
+.pb-tech-meta { padding: 4px 16px 8px; border-top: 1px solid var(--line); }
+.pb-tech-meta .pb-row { grid-template-columns: 130px minmax(0, 1fr) auto; }
