@@ -1307,7 +1307,7 @@ a.ov-stage-row:hover { background: var(--sunken); }
 .kb-col-head .kb-expand + .kb-add { margin-left: 4px; }
 .kb-col-head .kb-expand svg { width: 15px; height: 15px; }
 .kbx-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
-.kbx-tools input[type=search] { flex: 1 1 280px; max-width: 420px; }
+.kbx-tools input[type=search] { flex: 1 1 240px; max-width: 360px; }
 .kbx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; max-height: 70vh; overflow: auto; padding: 2px; }
 .kbx-card { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--line); border-top: 3px solid var(--cc, var(--line)); border-radius: 10px; background: var(--surface); color: var(--ink); min-width: 0; text-decoration: none; }
 .kbx-card:hover { border-color: var(--ink-3); border-top-color: var(--cc); box-shadow: 0 4px 14px rgba(0,0,0,.06); }

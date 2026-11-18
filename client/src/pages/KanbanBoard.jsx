@@ -79,8 +79,16 @@ function ExpandedCard({ w }) {
 function StageModal({ col, items, onClose }) {
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('age');
+  const [member, setMember] = useState('');   // assignee id, 'none' or ''
+  const [proj, setProj] = useState('');       // project id or ''
   const needle = q.trim().toLowerCase();
-  const list = items.filter(w => !needle || [w.subject, w.key, w.module, w.requested_by, w.assignee_name, w.project_name, w.description].some(v => String(v || '').toLowerCase().includes(needle)));
+  // choices: only the people and projects that appear in this stage
+  const members = [...new Map(items.filter(w => w.assignee_id).map(w => [w.assignee_id, w.assignee_name])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  const projects = [...new Map(items.map(w => [w.project_id, w.project_name])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  const list = items.filter(w => (!needle || [w.subject, w.key, w.module, w.requested_by, w.assignee_name, w.project_name, w.description].some(v => String(v || '').toLowerCase().includes(needle)))
+    && (!member || (member === 'none' ? !w.assignee_id : String(w.assignee_id) === member))
+    && (!proj || String(w.project_id) === proj));
+  const count = (pred) => items.filter(pred).length;
   const sorted = [...list].sort((a, b) => {
     if (sort === 'age') return (ageing(b) ?? -1) - (ageing(a) ?? -1);
     if (sort === 'priority') return (b.priority_position || 0) - (a.priority_position || 0) || (ageing(b) ?? 0) - (ageing(a) ?? 0);
@@ -92,13 +100,23 @@ function StageModal({ col, items, onClose }) {
     <Modal wide="xl" title={`${col.name} · ${items.length} task${items.length === 1 ? '' : 's'}`} onClose={onClose}>
       <div className="kbx-tools">
         <input type="search" placeholder="Find in this stage: subject, module, person…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find in this stage" />
+        <select value={member} onChange={(e) => setMember(e.target.value)} aria-label="Team member" style={{ width: 'auto' }}>
+          <option value="">All team members</option>
+          {items.some(w => !w.assignee_id) && <option value="none">Unassigned ({count(w => !w.assignee_id)})</option>}
+          {members.map(([id, name]) => <option key={id} value={id}>{name} ({count(w => w.assignee_id === id)})</option>)}
+        </select>
+        <select value={proj} onChange={(e) => setProj(e.target.value)} aria-label="Project" style={{ width: 'auto' }}>
+          <option value="">All projects</option>
+          {projects.map(([id, name]) => <option key={id} value={id}>{name} ({count(w => w.project_id === id)})</option>)}
+        </select>
+        {(member || proj || q) && <button type="button" className="btn sm ghost" onClick={() => { setMember(''); setProj(''); setQ(''); }}>Reset</button>}
         <label className="row" style={{ gap: 6 }}><span className="small muted">Sort</span>
           <select value={sort} onChange={(e) => setSort(e.target.value)} style={{ width: 'auto' }}>
             <option value="age">Oldest first (ageing)</option><option value="priority">Priority</option>
             <option value="assigned">Recently assigned</option><option value="due">Due date</option>
           </select>
         </label>
-        <span className="small muted">{list.length === items.length ? '' : `${list.length} of ${items.length}`}</span>
+        <span className="small muted" style={{ marginLeft: 'auto' }}>{list.length === items.length ? '' : `${list.length} of ${items.length}`}</span>
       </div>
       <div className="kbx-grid" style={{ '--cc': col.color }}>
         {sorted.map(w => <ExpandedCard key={w.id} w={w} />)}
