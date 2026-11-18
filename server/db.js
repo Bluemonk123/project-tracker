@@ -305,6 +305,13 @@ function migrate() {
       });
     }
   }
+  // ---------- Sprints: a task belongs to at most one sprint ----------
+  if (!all('PRAGMA table_info(work_packages)').some(c => c.name === 'sprint_id')) db.exec('ALTER TABLE work_packages ADD COLUMN sprint_id INTEGER REFERENCES sprints(id) ON DELETE SET NULL');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_wp_sprint ON work_packages(sprint_id)');
+  // each sprint belongs to a project, and optionally to one of its versions
+  const spCols = all('PRAGMA table_info(sprints)').map(c => c.name);
+  if (!spCols.includes('project_id')) db.exec('ALTER TABLE sprints ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE');
+  if (!spCols.includes('version_id')) db.exec('ALTER TABLE sprints ADD COLUMN version_id INTEGER REFERENCES versions(id) ON DELETE SET NULL');
   // ---------- Ticket Board (helpdesk) ----------
   const nCols = all('PRAGMA table_info(notifications)').map(c => c.name);
   if (!nCols.includes('ticket_id')) db.exec('ALTER TABLE notifications ADD COLUMN ticket_id INTEGER REFERENCES tickets(id) ON DELETE CASCADE');

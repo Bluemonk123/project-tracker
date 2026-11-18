@@ -7,6 +7,7 @@ import {
   Loading, ErrorBox, StatusPill, TypeLabel, Due, Person, Key, Progress, Avatar, Markdown, MarkdownEditor,
   UserSelect, useAsync, confirmDialog, MoreMenu, Modal, Field,
 } from '../components/ui.jsx';
+import { sprintOption } from './SprintPlanning.jsx';
 import NewWpModal, { useProjectInfo, WpSearchSelect, LinkEditor, FILE_ACCEPT } from './NewWpModal.jsx';
 import { LogTimeModal } from './Time.jsx';
 import { fmtDate, fmtDateTime, fmtHours, fmtSize, timeAgo } from '../lib/format.js';
@@ -48,7 +49,7 @@ function RequestedBy({ value, disabled, onSave }) {
 
 const FIELD_LABELS = {
   type_id: 'Type', subject: 'Subject', location: 'Location', module: 'Module', description: 'Problem', solution: 'Solution', status_id: 'Status', priority_id: 'Priority', criticality_id: 'Criticality', requested_by: 'Requested by',
-  assignee_id: 'Assignee', responsible_id: 'Accountable', parent_id: 'Parent', version_id: 'Version', category_id: 'Category',
+  assignee_id: 'Assignee', responsible_id: 'Accountable', parent_id: 'Parent', version_id: 'Version', sprint_id: 'Sprint', category_id: 'Category',
   start_date: 'Start date', due_date: 'Due date', estimated_hours: 'Estimated hours', done_ratio: '% done', project_id: 'Project',
   relation_added: 'Relation', attachment: 'File', link_added: 'Link',
   designer_id: 'Designer', developer_id: 'Developer', tester_id: 'Tester',
@@ -125,9 +126,10 @@ const REL_LABEL = {
   in: { relates: 'Related to', blocks: 'Blocked by', precedes: 'Follows', duplicates: 'Duplicated by' },
 };
 
-function useLabeler(info) {
+function useLabeler(info, sprints) {
   const { meta, userById, projects } = useApp();
   return (field, v) => {
+    if (field === 'sprint_id' && v == null) return 'Unpicked';
     if (v === null || v === undefined || v === '') return '(empty)';
     switch (field) {
       case 'type_id': return meta.types.find(t => t.id === v)?.name ?? v;
@@ -137,6 +139,7 @@ function useLabeler(info) {
       case 'criticality_id': return v == null ? 'Not set' : (meta.criticalities || []).find(t => t.id === v)?.name ?? v;
       case 'assignee_id': case 'responsible_id': case 'designer_id': case 'developer_id': case 'tester_id': return userById(v)?.name ?? `user ${v}`;
       case 'version_id': return info?.versions.find(x => x.id === v)?.name ?? `version ${v}`;
+      case 'sprint_id': return sprints?.find(x => x.id === v)?.name ?? 'a deleted sprint';
       case 'category_id': return info?.categories.find(x => x.id === v)?.name ?? `category ${v}`;
       case 'parent_id': return `#${v}`;
       case 'project_id': return projects.find(p => p.id === v)?.name ?? `project ${v}`;
@@ -227,10 +230,12 @@ function MoveModal({ wp, onClose, onDone }) {
 export default function WpDetail() {
   const { id } = useParams();
   const nav = useNavigate();
-  const { meta, user, toast } = useApp();
+  const { meta, user, toast, isAdmin } = useApp();
   const { data: wp, error, loading, reload, setData } = useLoad(() => api.get(`/work-packages/${id}`), [id]);
   const info = useProjectInfo(wp?.project_id);
-  const label = useLabeler(info);
+  const { data: sprintData } = useLoad(() => (wp?.project_id ? api.get(`/sprints?project_id=${wp.project_id}`) : null), [wp?.project_id]);
+  const sprints = sprintData?.sprints || [];
+  const label = useLabeler(info, sprints);
   const [subject, setSubject] = useState('');
   const [comment, setComment] = useState('');
   const [modal, setModal] = useState(null);
@@ -311,6 +316,20 @@ export default function WpDetail() {
               onChange={(e) => { const st = meta.statuses.filter(x => x.board_column === e.target.value).sort((a, b) => a.position - b.position)[0]; if (st) update({ status_id: st.id }); }}>
               {STAGES.map(st => <option key={st.key} value={st.key} disabled={!meta.statuses.some(x => x.board_column === st.key)}>{st.name}</option>)}
             </select>
+            {(() => {
+              // a running or ended sprint is locked: only an administrator can move the task out of it, or into one
+              const locked = !isAdmin && wp.sprint_state && wp.sprint_state !== 'planned';
+              const tip = locked ? `${wp.sprint_name} ${wp.sprint_state === 'current' ? 'has started' : 'has ended'}; only an administrator can change the sprint` : 'Sprint (Sprint Planning)';
+              return (
+                <select className={`wp-head-select wp-sprint-select${wp.sprint_id ? ` ${wp.sprint_state}` : ''}`} value={wp.sprint_id || ''} disabled={!can.edit || locked || !sprintData}
+                  aria-label="Sprint" title={tip} onChange={(e) => update({ sprint_id: e.target.value ? Number(e.target.value) : null })}>
+                  <option value="">Sprint: Unpicked</option>
+                  {wp.sprint_id && !sprints.some(x => x.id === wp.sprint_id) && <option value={wp.sprint_id}>{wp.sprint_name}</option>}
+                  {sprints.map(x => <option key={x.id} value={x.id} disabled={!isAdmin && x.state !== 'planned' && x.id !== wp.sprint_id}
+                    title={!isAdmin && x.state !== 'planned' ? 'Only an administrator can use a current or completed sprint' : undefined}>{sprintOption(x)}</option>)}
+                </select>
+              );
+            })()}
             <span className="spacer" />
             <button className="btn sm" onClick={toggleWatch} title="Watchers get notified about changes"><Icon name="eye" />{wp.watching ? 'Unwatch' : 'Watch'}</button>
             <MoreMenu>

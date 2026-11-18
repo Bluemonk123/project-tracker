@@ -5,6 +5,7 @@ import { requireText, dateOrNull, intOrNull, numOrNull, notify, mentionedUserIds
 import { resolveProject } from './projects.js';
 import { boardTickets, solveLinkedTickets } from './tickets.js';
 import { dueFor } from '../calendar.js';
+import { checkSprintMove, sprintState } from '../sprints.js';
 
 const r = Router();
 
@@ -17,7 +18,7 @@ const BASE_SELECT = `
     cr.name AS criticality_name, cr.color AS criticality_color, cr.position AS criticality_position,
     a.name AS assignee_name, rs.name AS responsible_name, au.name AS author_name,
     dz.name AS designer_name, dv.name AS developer_name, ts.name AS tester_name,
-    v.name AS version_name, c.name AS category_name,
+    v.name AS version_name, c.name AS category_name, sp.name AS sprint_name,
     par.subject AS parent_subject, p.identifier || '-' || par.number AS parent_key,
     (SELECT COUNT(*) FROM work_packages ch WHERE ch.parent_id = wp.id) AS children_count,
     (SELECT COALESCE(SUM(te.hours), 0) FROM time_entries te WHERE te.wp_id = wp.id) AS spent_hours
@@ -35,6 +36,7 @@ const BASE_SELECT = `
   LEFT JOIN users ts ON ts.id = wp.tester_id
   LEFT JOIN versions v ON v.id = wp.version_id
   LEFT JOIN categories c ON c.id = wp.category_id
+  LEFT JOIN sprints sp ON sp.id = wp.sprint_id
   LEFT JOIN work_packages par ON par.id = wp.parent_id`;
 
 const SORTS = {
@@ -103,6 +105,12 @@ export function buildFilter(req, q) {
   inFilter('wp.developer_id', q.developer_id);
   inFilter('wp.tester_id', q.tester_id);
   inFilter('wp.version_id', q.version_id);
+  inFilter('wp.sprint_id', q.sprint_id); // a sprint's id, or 'none' for unpicked (upcoming) tasks
+  // tasks in a current / planned (future) / ended (completed) sprint, or in any sprint
+  if (q.sprint_state === 'any') where.push('wp.sprint_id IS NOT NULL');
+  else if (q.sprint_state === 'planned') { where.push('wp.sprint_id IN (SELECT id FROM sprints WHERE ended_at IS NULL AND start_date > ?)'); params.push(todayISO()); }
+  else if (q.sprint_state === 'current') { where.push('wp.sprint_id IN (SELECT id FROM sprints WHERE ended_at IS NULL AND start_date <= ? AND end_date >= ?)'); params.push(todayISO(), todayISO()); }
+  else if (q.sprint_state === 'ended') { where.push('wp.sprint_id IN (SELECT id FROM sprints WHERE ended_at IS NOT NULL OR end_date < ?)'); params.push(todayISO()); }
   inFilter('wp.category_id', q.category_id);
   if (q.parent_id === 'none') where.push('wp.parent_id IS NULL');
   else inFilter('wp.parent_id', q.parent_id);
@@ -179,8 +187,8 @@ export const BOARD_COLUMNS = [
 r.get('/board', (req, res) => {
   const q = req.query;
   const DATE = /^\d{4}-\d{2}-\d{2}$/;
-  if (!DATE.test(q.from || '') || !DATE.test(q.to || '')) fail(400, 'Choose a date range.');
-  if (q.from > q.to) fail(400, 'The start of the range must be before its end.');
+  if (!/^\d+$/.test(q.sprint_id || '') && (!DATE.test(q.from || '') || !DATE.test(q.to || ''))) fail(400, 'Choose a date range.');
+  if (q.from && q.to && q.from > q.to) fail(400, 'The start of the range must be before its end.');
   let projectIds;
   if (q.project_id) {
     const p = resolveProject(q.project_id);
@@ -195,8 +203,10 @@ r.get('/board', (req, res) => {
   if (!projectIds.length) return res.json({ columns, rows: [], tickets, can_convert });
   const where = [`wp.project_id IN (${projectIds.map(() => '?').join(',')})`];
   const params = [...projectIds];
+  const sprintId = /^\d+$/.test(q.sprint_id || '') ? Number(q.sprint_id) : null;
+  if (sprintId) { where.push('wp.sprint_id = ?'); params.push(sprintId); } // a sprint: all its tasks, whatever their dates
   // dated work overlapping the range; undated work that is still open, or was closed/changed in the range
-  where.push(`(
+  else where.push(`(
     ((wp.start_date IS NOT NULL OR wp.due_date IS NOT NULL)
        AND COALESCE(wp.start_date, wp.due_date) <= ? AND COALESCE(wp.due_date, wp.start_date) >= ?)
     OR (wp.start_date IS NULL AND wp.due_date IS NULL
@@ -204,11 +214,13 @@ r.get('/board', (req, res) => {
     OR (s.is_closed = 0 AND COALESCE(wp.due_date, wp.start_date) < ?)
   )`);
   // (the last line: open work that is overdue stays on the board until it is done)
-  params.push(q.to, q.from, q.undated === '0' ? 0 : 1, q.from, q.to, q.from);
+  if (!sprintId) params.push(q.to, q.from, q.undated === '0' ? 0 : 1, q.from, q.to, q.from);
   if (q.assignee_id === 'me') { where.push('wp.assignee_id = ?'); params.push(req.user.id); }
   else if (q.assignee_id === 'none') where.push('wp.assignee_id IS NULL');
   else if (/^\d+$/.test(q.assignee_id || '')) { where.push('wp.assignee_id = ?'); params.push(Number(q.assignee_id)); }
   if (/^\d+$/.test(q.type_id || '')) { where.push('wp.type_id = ?'); params.push(Number(q.type_id)); }
+  if (q.version_id === 'none') where.push('wp.version_id IS NULL');
+  else if (/^\d+$/.test(q.version_id || '')) { where.push('wp.version_id = ?'); params.push(Number(q.version_id)); }
   if (q.location === 'none') where.push('wp.location IS NULL');
   else if (['local', 'staging', 'production', 'external'].includes(q.location)) { where.push('wp.location = ?'); params.push(q.location); }
   const rows = all(`${BASE_SELECT} WHERE ${where.join(' AND ')}
@@ -220,7 +232,7 @@ r.get('/board', (req, res) => {
     for (const w of rows) w.ticket_no = tk.get(w.id) || null;
   }
   // hours logged on each task within the board's date range
-  if (rows.length) {
+  if (rows.length && q.from && q.to) {
     const inRange = new Map(all(`SELECT wp_id, SUM(hours) AS h FROM time_entries WHERE wp_id IN (${rows.map(() => '?').join(',')})
                                  AND spent_on BETWEEN ? AND ? GROUP BY wp_id`, ...rows.map(w => w.id), q.from, q.to).map(x => [x.wp_id, x.h]));
     for (const w of rows) w.range_hours = inRange.get(w.id) || 0;
@@ -301,7 +313,7 @@ r.get('/work-packages/export.csv', (req, res) => {
   const cols = [['key', 'ID'], ['project_name', 'Project'], ['type_name', 'Type'], ['subject', 'Subject'], ['module', 'Module'],
     ['description', 'Problem'], ['solution', 'Solution'], ['board_column', 'Stage'], ['status_name', 'Status'], ['priority_name', 'Priority'],
     ['location', 'Location'], ['assignee_name', 'Assignee'], ['requested_by', 'Requester'], ['source', 'Source'],
-    ['designer_name', 'Designer'], ['developer_name', 'Developer'], ['tester_name', 'Tester'], ['version_name', 'Version'], ['parent_key', 'Parent'],
+    ['designer_name', 'Designer'], ['developer_name', 'Developer'], ['tester_name', 'Tester'], ['sprint_name', 'Sprint'], ['version_name', 'Version'], ['parent_key', 'Parent'],
     ['start_date', 'Start date'], ['due_date', 'Due date'], ['closed_on', 'Closed on'], ['estimated_hours', 'Estimated hours'], ['spent_hours', 'Spent hours'],
     ['author_name', 'Created by'], ['created_at', 'Created'], ['updated_at', 'Updated']];
   const LABEL = {
@@ -309,11 +321,12 @@ r.get('/work-packages/export.csv', (req, res) => {
     location: { local: 'On Local', staging: 'On Staging', production: 'On Production', external: 'On External' },
     source: { project: 'Project', ticket: 'Ticket', email: 'Email' },
   };
-  const val = (r1, k) => (LABEL[k] ? LABEL[k][r1[k]] ?? r1[k] : r1[k]);
+  const val = (r1, k) => (k === 'sprint_name' ? r1.sprint_name || 'Unpicked' : LABEL[k] ? LABEL[k][r1[k]] ?? r1[k] : r1[k]);
   const esc = (v) => { const s = v == null ? '' : String(v); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   const csv = [cols.map(c => c[1]).join(','), ...rows.map(r1 => cols.map(c => esc(val(r1, c[0]))).join(','))].join('\r\n');
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="work-packages-${todayISO()}.csv"`);
+  const name = req.query.file === 'upcoming' ? 'upcoming-tasks' : /^\d+$/.test(req.query.sprint_id || '') ? `sprint-${req.query.sprint_id}-tasks` : 'work-packages';
+  res.setHeader('Content-Disposition', `attachment; filename="${name}-${todayISO()}.csv"`);
   res.send('﻿' + csv);
 });
 
@@ -405,6 +418,7 @@ function readFields(b) {
     tester_id: intOrNull(b.tester_id),
     parent_id: intOrNull(b.parent_id),
     version_id: intOrNull(b.version_id),
+    sprint_id: intOrNull(b.sprint_id),
     category_id: intOrNull(b.category_id),
     start_date: dateOrNull(b.start_date, 'Start date'),
     due_date: dateOrNull(b.due_date, 'Finish date'),
@@ -457,6 +471,10 @@ export function createWp(req, projectId, body, { journalNote } = {}) {
   }
   if (t?.is_milestone && f.due_date && !f.start_date) f.start_date = f.due_date;
   if (t?.is_milestone && f.start_date && !f.due_date) f.due_date = f.start_date;
+  if (f.sprint_id) {
+    const sp = checkSprintMove(req, null, f.sprint_id, projectId);
+    if (sp?.version_id && !f.version_id) f.version_id = sp.version_id;
+  }
   validateRefs(projectId, f);
   // A task that starts in Design / Develop / Testing goes to that stage's person unless someone else was chosen.
   const stage = stageOf(f.status_id);
@@ -472,12 +490,12 @@ export function createWp(req, projectId, body, { journalNote } = {}) {
     const pos = get('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM work_packages WHERE project_id = ?', projectId).p;
     const { id } = run(`INSERT INTO work_packages(project_id, number, type_id, subject, description, status_id, priority_id, assignee_id,
         responsible_id, author_id, parent_id, version_id, category_id, start_date, due_date, estimated_hours, done_ratio, position,
-        designer_id, developer_id, tester_id, criticality_id, requested_by, solution, module, location)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        designer_id, developer_id, tester_id, criticality_id, requested_by, solution, module, location, sprint_id)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       projectId, number, f.type_id, f.subject, f.description || null, f.status_id, f.priority_id, f.assignee_id || null,
       f.responsible_id || null, req.user.id, f.parent_id || null, f.version_id || null, f.category_id || null,
       f.start_date || null, f.due_date || null, f.estimated_hours ?? null, f.done_ratio ?? 0, f.position ?? pos,
-      f.designer_id || null, f.developer_id || null, f.tester_id || null, f.criticality_id || null, f.requested_by || null, f.solution || null, f.module || null, f.location || null);
+      f.designer_id || null, f.developer_id || null, f.tester_id || null, f.criticality_id || null, f.requested_by || null, f.solution || null, f.module || null, f.location || null, f.sprint_id || null);
     enterStage(id, stage, req.user.id);
     if (get('SELECT is_closed FROM statuses WHERE id = ?', f.status_id)?.is_closed) run("UPDATE work_packages SET closed_on = date('now') WHERE id = ?", id);
     run('INSERT INTO journals(wp_id, user_id, notes, changes) VALUES(?,?,?,?)', id, req.user.id, journalNote || null, JSON.stringify({ created: [null, true] }));
@@ -540,8 +558,9 @@ r.get('/work-packages/:id', (req, res) => {
     cur = a.parent_id;
   }
   const ticket = get('SELECT ticket_no, status FROM tickets WHERE wp_id = ? ORDER BY id LIMIT 1', wp.id) || null;
+  const sprint = wp.sprint_id ? get('SELECT * FROM sprints WHERE id = ?', wp.sprint_id) : null;
   res.json({
-    ...wp, children, relations, journals, watchers, attachments, links, time, meetings, ancestors, stages, stage_hours, max_files: 5, ticket,
+    ...wp, children, relations, journals, watchers, attachments, links, time, meetings, ancestors, stages, stage_hours, max_files: 5, ticket, sprint_state: sprintState(sprint),
     can: {
       edit: canEditWp(req, wp), assign: can(req, 'wp.assign', wp.project_id) || can(req, 'wp.edit', wp.project_id),
       delete: can(req, 'wp.delete', wp.project_id), comment: can(req, 'wp.comment', wp.project_id),
@@ -553,7 +572,7 @@ r.get('/work-packages/:id', (req, res) => {
 });
 
 const TRACKED = ['type_id', 'subject', 'location', 'module', 'description', 'solution', 'status_id', 'priority_id', 'criticality_id', 'requested_by', 'assignee_id', 'responsible_id', 'parent_id',
-  'version_id', 'category_id', 'start_date', 'due_date', 'estimated_hours', 'done_ratio', 'designer_id', 'developer_id', 'tester_id'];
+  'version_id', 'sprint_id', 'category_id', 'start_date', 'due_date', 'estimated_hours', 'done_ratio', 'designer_id', 'developer_id', 'tester_id'];
 
 export function updateWp(req, wp, body) {
   if (!canEditWp(req, wp)) fail(403, 'You do not have permission to edit this work package.');
@@ -569,6 +588,12 @@ export function updateWp(req, wp, body) {
     if (!body.parent_id) f.parent_id = null;
   }
   if (assignsOthers(req, f, wp) && !can(req, 'wp.assign', wp.project_id) && !can(req, 'wp.edit', wp.project_id)) fail(403, 'You can only assign work to yourself.');
+  // moving the task to another project takes it out of its sprint (a sprint holds one project's tasks)
+  if (projectId !== wp.project_id && wp.sprint_id && f.sprint_id === undefined) f.sprint_id = null;
+  if (f.sprint_id !== undefined && (f.sprint_id ?? null) !== (wp.sprint_id ?? null)) {
+    const sp = checkSprintMove(req, wp.sprint_id, f.sprint_id, projectId);
+    if (sp?.version_id && f.version_id === undefined) f.version_id = sp.version_id; // a task in a sprint goes into the sprint's version
+  }
   validateRefs(projectId, f, wp.id);
   // choosing a priority sets the due date from its working days (counted from the start date, or the day it was created);
   // changing the due date by hand never changes the priority
@@ -664,7 +689,7 @@ r.patch('/work-packages-bulk', (req, res) => {
   const ids = (req.body.ids || []).map(Number).filter(Boolean);
   if (!ids.length) fail(400, 'Select at least one work package.');
   const allowed = ['status_id', 'priority_id', 'criticality_id', 'assignee_id', 'responsible_id', 'version_id', 'type_id', 'due_date', 'start_date', 'done_ratio',
-    'designer_id', 'developer_id', 'tester_id'];
+    'designer_id', 'developer_id', 'tester_id', 'sprint_id'];
   const changes = Object.fromEntries(Object.entries(req.body.changes || {}).filter(([k]) => allowed.includes(k)));
   if (!Object.keys(changes).length) fail(400, 'Choose what to change.');
   let updated = 0;

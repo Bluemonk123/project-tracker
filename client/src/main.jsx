@@ -26,6 +26,7 @@ import Wiki from './pages/project/Wiki.jsx';
 import Technologies from './pages/project/Technologies.jsx';
 import TechOverview from './pages/TechOverview.jsx';
 import ProjectBoard from './pages/ProjectBoard.jsx';
+import SprintPlanning from './pages/SprintPlanning.jsx';
 import Members from './pages/project/Members.jsx';
 import ProjectSettings from './pages/project/ProjectSettings.jsx';
 import Activity from './pages/project/Activity.jsx';
@@ -83,6 +84,7 @@ function Root() {
         <Route path="work-packages" element={<WorkPackages />} />
         <Route path="board" element={<KanbanBoard />} />
         <Route path="project-board" element={<ProjectBoard />} />
+        <Route path="sprint-planning" element={<SprintPlanning />} />
         <Route path="technologies" element={<TechOverview />} />
         <Route path="ticket-board" element={<TicketBoard />} />
         <Route path="ticket-board/:no" element={<TicketPage />} />

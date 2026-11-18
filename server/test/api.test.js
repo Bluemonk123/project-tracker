@@ -671,3 +671,80 @@ test('occupancy per project member, totals on teams and a person\'s projects wit
   assert.ok(Array.isArray(pa.am));
 });
 
+
+test('sprints: plan from upcoming tasks, lock once started, admin can still move tasks', async () => {
+  const today = new Date(); const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const plus = (n) => { const d = new Date(today); d.setDate(d.getDate() + n); return iso(d); };
+  // a task dev owns (dev can edit own tasks)
+  const t1 = (await dev.post('/work-packages', { project_id: ids.project, subject: 'Sprint task one' })).data;
+  const t2 = (await dev.post('/work-packages', { project_id: ids.project, subject: 'Sprint task two' })).data;
+  assert.ok(t1.id && t2.id);
+  // both are upcoming (no sprint)
+  let up = (await dev.get('/work-packages?sprint_id=none&status=open&limit=2000')).data.rows.map(r => r.id);
+  assert.ok(up.includes(t1.id) && up.includes(t2.id));
+  // bad dates
+  assert.equal((await dev.post('/sprints', { project_id: ids.project, start_date: plus(5), end_date: plus(2) })).status, 400);
+  assert.equal((await dev.post('/sprints', { start_date: plus(1), end_date: plus(2) })).status, 400); // no project
+  const ver = (await admin.post(`/projects/${ids.project}/versions`, { name: 'Release S1' })).data;
+  assert.ok(ver.id, JSON.stringify(ver));
+  // a planned sprint created by dev with a picked task
+  let r = await dev.post('/sprints', { project_id: ids.project, version_id: ver.id, name: 'Next', start_date: plus(3), end_date: plus(10), task_ids: [t1.id] });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const planned = r.data;
+  assert.equal(planned.state, 'planned'); assert.equal(planned.total, 1); assert.equal(planned.version_name, 'Release S1');
+  // a task in the sprint goes into the sprint's version
+  assert.equal((await dev.get(`/work-packages/${t1.id}`)).data.version_id, ver.id);
+  // a task of another project cannot go into it
+  const other = (await admin.post('/projects', { name: 'Sprint Other', identifier: 'SPO' })).data;
+  const ot = (await admin.post('/work-packages', { project_id: other.id, subject: 'Other project task' })).data;
+  assert.equal((await admin.patch(`/work-packages/${ot.id}`, { sprint_id: planned.id })).status, 400);
+  // tasks by sprint state
+  assert.ok((await dev.get('/work-packages?sprint_state=planned&status=all')).data.rows.some(x => x.id === t1.id));
+  assert.ok(!(await dev.get('/work-packages?sprint_state=current&status=all')).data.rows.some(x => x.id === t1.id));
+  assert.equal((await dev.get(`/sprints?project_id=${other.id}`)).data.sprints.length, 0);
+  up = (await dev.get('/work-packages?sprint_id=none&status=open&limit=2000')).data.rows.map(x => x.id);
+  assert.ok(!up.includes(t1.id));
+  // dev may move tasks into / out of a planned sprint
+  assert.equal((await dev.patch(`/work-packages/${t2.id}`, { sprint_id: planned.id })).status, 200);
+  assert.equal((await dev.patch(`/work-packages/${t2.id}`, { sprint_id: null })).status, 200);
+  // a sprint started now; dev picks t2 while creating it (allowed), then it is locked for dev
+  r = await dev.post('/sprints', { project_id: ids.project, start_now: true, end_date: plus(7), task_ids: [t2.id] });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const cur = r.data;
+  assert.equal(cur.state, 'current'); assert.match(cur.name, /^Sprint \d+$/);
+  assert.equal((await dev.patch(`/work-packages/${t2.id}`, { sprint_id: null })).status, 403);
+  assert.equal((await dev.patch(`/work-packages/${t1.id}`, { sprint_id: cur.id })).status, 403);
+  // board shows the sprint's tasks without a date range
+  const board = (await dev.get(`/board?sprint_id=${cur.id}`)).data;
+  assert.deepEqual(board.rows.map(x => x.id), [t2.id]);
+  const list = (await dev.get(`/sprints?project_id=${ids.project}`)).data;
+  assert.equal(list.current_id, cur.id);
+  assert.deepEqual(list.sprints.map(x => x.id), [cur.id, planned.id]); // by scheduled date
+  // the task page knows the sprint's state; the change is in its activity
+  const d = (await dev.get(`/work-packages/${t2.id}`)).data;
+  assert.equal(d.sprint_state, 'current'); assert.equal(d.sprint_name, cur.name);
+  assert.ok(d.journals.some(j => (j.changes || '').includes('sprint_id')));
+  // admin can move tasks in and out of a running sprint
+  assert.equal((await admin.patch(`/work-packages/${t1.id}`, { sprint_id: cur.id })).status, 200);
+  // dev cannot change or delete a started sprint
+  assert.equal((await dev.patch(`/sprints/${cur.id}`, { name: 'x' })).status, 403);
+  assert.equal((await dev.del(`/sprints/${cur.id}`)).status, 403);
+  // export of the sprint's tasks has the Sprint column
+  const csv = await dev.get(`/work-packages/export.csv?sprint_id=${cur.id}&status=all`);
+  assert.match(csv.data, /Sprint/); assert.match(csv.data, /Sprint task two/);
+  // End now: unfinished tasks go to the planned sprint
+  r = await dev.post(`/sprints/${cur.id}/end`, { move_to: planned.id });
+  assert.equal(r.status, 200, JSON.stringify(r.data)); assert.equal(r.data.state, 'ended');
+  assert.equal((await dev.get(`/work-packages/${t2.id}`)).data.sprint_id, planned.id);
+  // End now on a sprint that has not started: it runs today only
+  const later = (await dev.post('/sprints', { project_id: ids.project, start_date: plus(20), end_date: plus(25) })).data;
+  const one = (await dev.patch(`/sprints/${later.id}`, { end_now: true })).data;
+  assert.equal(one.start_date, one.end_date); assert.equal(one.state, 'current');
+  assert.equal((await admin.del(`/sprints/${later.id}`)).status, 200);
+  // Start now on the planned sprint, then delete by admin: tasks become upcoming again
+  assert.equal((await dev.post(`/sprints/${planned.id}/start`)).data.state, 'current');
+  assert.equal((await admin.del(`/sprints/${planned.id}`)).status, 200);
+  assert.equal((await dev.get(`/work-packages/${t1.id}`)).data.sprint_id, null);
+  // someone without a project cannot plan (the outsider may be signed out by now)
+  assert.ok([401, 403].includes((await outsider.post('/sprints', { project_id: ids.project, start_now: true, end_now: true })).status));
+});

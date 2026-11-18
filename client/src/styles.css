@@ -1087,3 +1087,94 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .kb-field.kb-narrow { max-width: 150px; min-width: 104px; }
 .kb-filters { flex-wrap: wrap; row-gap: 10px; }
 .kb-export { flex: none; margin-bottom: 2px; }
+
+/* ---------- Sprint Planning ---------- */
+.sp-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); gap: 16px; align-items: start; }
+.sp-upcoming { min-width: 0; transition: box-shadow .15s; }
+.sp-upcoming.drop, .sp-sprint.drop { box-shadow: 0 0 0 2px var(--accent); }
+.sp-head { display: flex; align-items: baseline; gap: 10px; padding: 12px 14px 0; }
+.sp-head h2 { font-size: 15px; margin: 0; display: flex; align-items: center; gap: 8px; }
+.sp-head .kb-count { background: var(--sunken); }
+.sp-filters { padding: 10px 14px 0; margin-bottom: 10px; }
+.sp-filters select { min-width: 0; }
+.sp-upcoming .bulkbar { margin: 0 14px 10px; }
+.sp-table tbody tr[draggable] { cursor: grab; }
+.sp-table tbody tr[draggable]:active { cursor: grabbing; }
+.sp-table td.subject { max-width: 300px; }
+.sp-table td.subject a { display: block; }
+.sp-table th, .sp-table td { padding-left: 8px; padding-right: 8px; }
+@media (max-width: 1599px) { .sp-table .sp-opt { display: none; } }
+.sp-unpicked { display: inline-block; font-size: 11.5px; font-weight: 650; padding: 1px 8px; border-radius: 999px; white-space: nowrap;
+  color: var(--ink-2); background: var(--sunken); border: 1px dashed var(--line); }
+.sp-unpicked.soft { font-weight: 550; color: var(--ink-3); }
+.sp-sprints { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; padding: 2px; }
+.sp-none { padding: 18px; text-align: center; color: var(--ink-2); }
+.sp-none p { margin: 8px 0 0; font-size: var(--fs-sm); }
+.sp-sprint { padding: 10px 12px; border-left: 4px solid var(--line); transition: box-shadow .15s; }
+.sp-sprint.current { border-left-color: var(--ok); }
+.sp-sprint.planned { border-left-color: var(--accent); }
+.sp-sprint.ended { border-left-color: var(--ink-3); opacity: .9; }
+.sp-sprint-head { display: flex; align-items: center; gap: 6px; }
+.sp-sprint-toggle { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 0; cursor: pointer; color: var(--ink); min-width: 0; }
+.sp-sprint-name { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-state { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; white-space: nowrap; background: var(--sunken); color: var(--ink-2); }
+.sp-state.current { background: var(--ok-soft); color: var(--ok); }
+.sp-state.planned { background: var(--accent-soft); color: var(--accent-text, var(--ink)); }
+.sp-sprint-head .btn.xs { height: 26px; padding: 0 8px; font-size: 12px; gap: 4px; }
+.sp-sprint-meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin: 4px 0 0 22px; }
+.sp-goal { margin: 6px 0 0 22px; color: var(--ink-2); }
+.sp-progress { height: 4px; border-radius: 4px; background: var(--sunken); margin: 8px 0 0 22px; overflow: hidden; }
+.sp-progress span { display: block; height: 100%; background: var(--ok); }
+.sp-tasks { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.sp-tasks li { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; font-size: var(--fs-sm); min-width: 0; }
+.sp-tasks li:hover { background: var(--sunken); }
+.sp-tasks li[draggable="true"] { cursor: grab; }
+.sp-tasks li a { color: var(--ink); min-width: 0; }
+.sp-tasks li .btn.icon { color: var(--ink-3); flex: none; }
+.sp-tasks li.done a { color: var(--ink-3); text-decoration: line-through; }
+.sp-stage { font-size: 11px; color: var(--ink-3); white-space: nowrap; }
+.sp-drop-hint { justify-content: center; color: var(--ink-3); border: 1px dashed var(--line); padding: 12px !important; }
+.sp-ended-toggle { align-self: flex-start; }
+@media (max-width: 1100px) {
+  .sp-layout { grid-template-columns: 1fr; }
+  .sp-sprints { position: static; max-height: none; order: -1; }
+}
+
+/* Task Board: sprint bar */
+.kb-sprint { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); }
+.kb-sprint > .icon, .kb-sprint > svg { color: var(--accent); flex: none; }
+.kb-sprint-pick select { width: auto; max-width: 360px; height: 32px; font-weight: 650; }
+.kb-sprint-info { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: var(--fs-sm); color: var(--ink-2); min-width: 0; }
+.kb-sprint-info > span.ellipsis { max-width: 320px; }
+.wp-sprint-select.current { border-color: color-mix(in srgb, var(--ok) 60%, transparent); }
+.wp-sprint-select.planned { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+@media (max-width: 640px) { .kb-sprint-pick select { max-width: 100%; } .kb-sprint-pick { flex: 1 1 100%; } }
+.sp-filters { padding: 0; margin-bottom: 12px; }
+.sp-tabs { display: flex; gap: 2px; padding: 8px 10px 0; border-bottom: 1px solid var(--line-2); overflow-x: auto; margin-bottom: 10px; }
+.sp-tabs button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 8px 10px; font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; margin-bottom: -1px; }
+.sp-tabs button:hover { color: var(--ink); }
+.sp-tabs button.active { color: var(--ink); border-bottom-color: var(--accent); }
+.sp-tabs .kb-count { background: var(--sunken); }
+.sp-stage-pill { display: inline-block; font-size: 11.5px; font-weight: 650; padding: 1px 8px; border-radius: 999px; white-space: nowrap; color: var(--ink);
+  background: color-mix(in srgb, var(--sc, var(--line)) 20%, var(--surface)); border: 1px solid color-mix(in srgb, var(--sc, var(--line)) 55%, transparent); }
+.sp-sprint-tag { display: inline-block; max-width: 130px; font-size: 12px; font-weight: 600; color: var(--ink-2); vertical-align: middle; }
+.sp-group { display: flex; flex-direction: column; gap: 10px; }
+.sp-group-title { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3); margin: 2px 0 0; display: flex; align-items: center; gap: 6px; }
+.sp-group-title .kb-count { background: var(--sunken); }
+.sp-sched-row { margin: 8px 0 0 22px; }
+.sp-schedule { display: inline-flex; align-items: flex-end; gap: 6px; flex-wrap: wrap; }
+.sp-schedule label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--ink-3); font-weight: 600; }
+.sp-schedule input[type=date] { height: 30px; width: 140px; font-size: 12.5px; padding: 0 6px; }
+.sp-schedule .btn.sm { height: 30px; gap: 4px; }
+/* searchable sprint picker */
+.sprint-picker { position: relative; }
+.sprint-picker-btn { display: inline-flex; align-items: center; gap: 8px; height: 34px; max-width: 340px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--ink); font-weight: 650; cursor: pointer; }
+.sprint-picker-btn:hover { border-color: var(--ink-3); }
+.sprint-picker-pop { position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; width: 360px; max-width: calc(100vw - 32px); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,.16); padding: 8px; }
+.sprint-picker-pop input[type=search] { width: 100%; height: 32px; margin-bottom: 6px; }
+.sprint-picker-list { max-height: 320px; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+.sprint-opt { display: flex; flex-direction: column; align-items: stretch; gap: 2px; text-align: left; border: 0; background: none; padding: 7px 8px; border-radius: 7px; cursor: pointer; color: var(--ink); min-width: 0; }
+.sprint-opt:hover { background: var(--sunken); }
+.sprint-opt.active { background: var(--accent-soft); }
+.sprint-opt-main { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+@media (max-width: 640px) { .sprint-picker, .sprint-picker-btn { width: 100%; max-width: none; } .sprint-picker-btn .ellipsis { flex: 1; text-align: left; } }

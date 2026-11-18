@@ -8,6 +8,7 @@ import NewWpModal from './NewWpModal.jsx';
 import RaiseTicketModal from './tickets/RaiseTicketModal.jsx';
 import { SlaBadge } from './tickets/common.jsx';
 import { LOCATIONS } from './WpDetail.jsx';
+import { sprintWhen, SprintPicker, SprintSchedule, EndModal, useVersions } from './SprintPlanning.jsx';
 import { addDays, diffDays, fmtDate, startOfWeek, today, parseDate } from '../lib/format.js';
 
 const h = (n) => `${Math.round((n || 0) * 100) / 100} h`;
@@ -118,8 +119,19 @@ export default function KanbanBoard({ project }) {
     for (const [k, v] of Object.entries(changes)) { if (v === '' || v == null) next.delete(k); else next.set(k, v); }
     setSp(next, { replace: true });
   };
-  const query = { from, to, assignee_id: employee || undefined, project_id: projectId || undefined, undated: undated ? undefined : 0, type_id: typeId || undefined, location: location || undefined };
-  const { data, error, loading, reload, setData } = useLoad(() => api.get('/board' + qs(query)), [JSON.stringify(query)]);
+  // Sprint: the current sprint by default; "all" shows the tasks by dates instead
+  const versionId = sp.get('version') || '';
+  const versions = useVersions(projectId);
+  const sl = useLoad(() => api.get('/sprints' + qs({ project_id: projectId || undefined, version_id: versionId || undefined })), [projectId, versionId]);
+  const [ending, setEnding] = useState(false);
+  const sprintParam = sp.get('sprint') || '';
+  const sprints = sl.data?.sprints || [];
+  const sprintId = sprintParam === 'all' ? null : /^\d+$/.test(sprintParam) ? Number(sprintParam) : (sl.data?.current_id || null);
+  const sprint = sprints.find(x => x.id === sprintId) || null;
+  const waiting = !sprintParam && !sl.data && !sl.error; // the default sprint is not known yet
+  const filters = { assignee_id: employee || undefined, project_id: projectId || undefined, version_id: versionId || undefined, type_id: typeId || undefined, location: location || undefined };
+  const query = sprintId ? { ...filters, sprint_id: sprintId } : { ...filters, from, to, undated: undated ? undefined : 0 };
+  const { data, error, loading, reload, setData } = useLoad(() => (waiting ? null : api.get('/board' + qs(query))), [JSON.stringify(query), waiting]);
   useEffect(() => { // refresh when a ticket or task is raised from the top bar
     const again = () => reload();
     window.addEventListener('pt-wp-created', again);
@@ -176,7 +188,29 @@ export default function KanbanBoard({ project }) {
     <div className={`content wide kb${dense ? ' dense' : ''}`}>
       <div className="kb-head">
         {!project && <h1>Task Board</h1>}
+        <div className="kb-sprint" role="group" aria-label="Sprint">
+          <Icon name="flag" size={16} />
+          <SprintPicker sprints={sprints} value={sprintId} currentId={sl.data?.current_id} withProject={!projectId}
+            onChange={(id) => set({ sprint: id === (sl.data?.current_id || null) ? '' : id ? String(id) : (sl.data?.current_id ? 'all' : '') })} />
+          {sprint ? (
+            <span className="kb-sprint-info">
+              {sprint.id === sl.data?.current_id && <b>Current sprint</b>}
+              {!projectId && sprint.project_name && <span>{sprint.project_name}</span>}
+              {sprint.version_name && <span>Version {sprint.version_name}</span>}
+              <span>{sprintWhen(sprint)}</span>
+              <span>{sprint.done}/{sprint.total} done</span>
+              {sprint.goal && <span className="ellipsis" title={sprint.goal}>Goal: {sprint.goal}</span>}
+            </span>
+          ) : (
+            <span className="kb-sprint-info muted">{sl.data && !sl.data.current_id ? 'No sprint is running. ' : ''}Showing tasks by their dates.</span>
+          )}
+          {sprint?.state === 'planned' && sprint.can_manage && <SprintSchedule s={sprint} onChanged={() => { sl.reload(); reload(); }} />}
+          {sprint?.state === 'current' && sprint.can_end && <button type="button" className="btn sm" onClick={() => setEnding(true)} title="End the sprint today"><Icon name="stop" size={13} />End now</button>}
+          <span className="spacer" />
+          <Link to="/sprint-planning" className="btn sm ghost"><Icon name="flag" size={14} />Sprint Planning</Link>
+        </div>
         <div className="kb-filters" role="group" aria-label="Board filters">
+          {!sprintId && <>
           <div className="kb-range">
             <button className="btn icon sm" onClick={() => shift(-1)} aria-label="Previous period"><Icon name="chevronLeft" /></button>
             <span className="kb-range-label">{rangeLabel(from, to)}</span>
@@ -189,6 +223,7 @@ export default function KanbanBoard({ project }) {
           <label className="kb-field"><span>To</span>
             <input type="date" value={to} min={from} onChange={(e) => e.target.value && set({ to: e.target.value })} />
           </label>
+          </>}
           <label className="kb-field"><span>Employee</span>
             <select value={employee} onChange={(e) => set({ employee: e.target.value })}>
               <option value="">All employees</option>
@@ -199,9 +234,17 @@ export default function KanbanBoard({ project }) {
           </label>
           {!project && (
             <label className="kb-field"><span>Project</span>
-              <select value={projectId} onChange={(e) => set({ project: e.target.value })}>
+              <select value={projectId} onChange={(e) => set({ project: e.target.value, version: '', sprint: '' })}>
                 <option value="">All projects</option>
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </label>
+          )}
+          {projectId && (
+            <label className="kb-field kb-narrow"><span>Version</span>
+              <select value={versionId} onChange={(e) => set({ version: e.target.value, sprint: '' })}>
+                <option value="">Any version</option><option value="none">No version</option>
+                {versions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
               </select>
             </label>
           )}
@@ -218,8 +261,8 @@ export default function KanbanBoard({ project }) {
               <option value="none">Not set</option>
             </select>
           </label>
-          <label className="check small kb-undated"><input type="checkbox" checked={undated} onChange={(e) => set({ undated: e.target.checked ? '' : '0' })} /><span>Show open items<br />without dates</span></label>
-          {(employee || (!project && projectId) || !isThisWeek || !undated || typeId || location) && (
+          {!sprintId && <label className="check small kb-undated"><input type="checkbox" checked={undated} onChange={(e) => set({ undated: e.target.checked ? '' : '0' })} /><span>Show open items<br />without dates</span></label>}
+          {(employee || (!project && projectId) || (!sprintId && (!isThisWeek || !undated)) || typeId || location || sprintParam || versionId) && (
             <button className="btn sm ghost" onClick={() => setSp({}, { replace: true })}>Reset</button>
           )}
           <span className="spacer" />
@@ -230,7 +273,7 @@ export default function KanbanBoard({ project }) {
       </div>
 
       <ErrorBox error={error} />
-      {loading && !data ? <Loading /> : (
+      {!data ? (error ? null : <Loading />) : (
         <div className="kb-board" ref={boardRef} style={{ '--kb-h': `calc(100vh - ${Math.round(boardTop)}px - 34px)` }}>
           {tickets && (
             <section className="kb-col" aria-label="Tickets">
@@ -288,13 +331,15 @@ export default function KanbanBoard({ project }) {
                 </div>
                 <div className="kb-cards">
                   {items.map(w => <Card key={w.id} w={w} dragging={dragId === w.id} onDragStart={setDragId} onDragEnd={() => { setDragId(null); setOver(null); }} />)}
-                  {!items.length && <div className="kb-empty">{needle ? 'No matching cards' : 'Nothing here for this period'}</div>}
+                  {!items.length && <div className="kb-empty">{needle ? 'No matching cards' : sprintId ? 'Nothing here in this sprint' : 'Nothing here for this period'}</div>}
                 </div>
               </section>
             );
           })}
         </div>
       )}
+      {ending && sprint && <EndModal s={sprint} open={rows.filter(r => !r.is_closed).length} others={sprints.filter(x => x.id !== sprint.id && x.state !== 'ended' && x.project_id === sprint.project_id)}
+        onClose={() => setEnding(false)} onDone={() => { setEnding(false); set({ sprint: '' }); sl.reload(); reload(); }} />}
       {raising && <RaiseTicketModal onClose={() => setRaising(false)} />}
       {converting && (
         <NewWpModal title={`Turn ticket #${converting.ticket.ticket_no} into a task`} single
@@ -304,6 +349,7 @@ export default function KanbanBoard({ project }) {
             subject: converting.ticket.subject_display,
             description: `${converting.ticket.description}\n\n_From ticket #${converting.ticket.ticket_no}, raised by ${converting.ticket.raised_by}._`,
             status_id: converting.col.statuses[0].id,
+            ...(sprint?.can_add ? { sprint_id: sprint.id } : {}),
             ...(projectId ? { project_id: Number(projectId) } : {}),
           }}
           onClose={() => setConverting(null)} onCreated={() => { setConverting(null); reload(); }} />
@@ -313,12 +359,13 @@ export default function KanbanBoard({ project }) {
           defaults={{
             status_id: adding.statuses[0].id,
             assignee_id: employee === 'me' ? user.id : /^\d+$/.test(employee) ? Number(employee) : null,
-            start_date: from, due_date: to,
+            ...(sprintId ? {} : { start_date: from, due_date: to }),
+            ...(sprint?.can_add ? { sprint_id: sprint.id } : {}),
           }}
           onClose={() => setAdding(null)} onCreated={() => reload()} />
       )}
       <p className="xs muted" style={{ marginTop: 10 }}>
-        Shows work whose dates fall in the selected period. Drag a card to another column to change its status. <Link to={project ? `/projects/${project.identifier}/work-packages` : '/work-packages'}>Open the full list</Link>
+        {sprintId ? `Shows the tasks in ${sprint?.name || 'the sprint'}. New tasks added here ${sprint?.can_add ? 'go into this sprint' : 'go to "Not in a sprint" in Sprint Planning'}.` : 'Shows work whose dates fall in the selected period.'} Drag a card to another column to change its status. <Link to={project ? `/projects/${project.identifier}/work-packages` : '/work-packages'}>Open the full list</Link>
       </p>
     </div>
   );

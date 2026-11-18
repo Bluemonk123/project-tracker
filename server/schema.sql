@@ -558,3 +558,17 @@ CREATE TABLE IF NOT EXISTS holidays (
   day  TEXT NOT NULL UNIQUE,   -- YYYY-MM-DD
   name TEXT NOT NULL
 );
+
+-- Sprints (Sprint Planning): a dated group of tasks. A task with no sprint is "unpicked" (upcoming).
+CREATE TABLE IF NOT EXISTS sprints (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL,
+  goal       TEXT,
+  start_date TEXT NOT NULL,   -- YYYY-MM-DD
+  end_date   TEXT NOT NULL,   -- YYYY-MM-DD
+  ended_at   TEXT,            -- set by "End now"
+  project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+  version_id INTEGER REFERENCES versions(id) ON DELETE SET NULL,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

@@ -19,6 +19,7 @@ import { backupCopyRoutes, scheduleCopies } from './routes/backupcopy.js';
 import { publicTicketRoutes, ticketRoutes } from './routes/tickets.js';
 import emailRoutes from './routes/email.js';
 import calendarRoutes from './routes/calendar.js';
+import sprintRoutes from './routes/sprints.js';
 import { scheduleInbound } from './inbound.js';
 
 // CSRF protection (double-submit token): every browser gets a random pt_csrf cookie, and every
@@ -70,6 +71,7 @@ export function createApp() {
   api.use(ticketRoutes);
   api.use(emailRoutes);
   api.use(calendarRoutes);
+  api.use(sprintRoutes);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found.')));
   app.use('/api', api);
 
