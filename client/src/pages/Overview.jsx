@@ -201,44 +201,6 @@ export default function Overview() {
 
       <section className="panel" style={{ marginBottom: 20 }}>
         <div className="panel-head">
-          <h3>Projects</h3>
-          <div className="actions ov-legend">{columns.filter(c => OPEN.includes(c.key)).map(c => <span key={c.key}><i style={{ background: c.color }} />{c.name}</span>)}<KeyPeopleLegend /></div>
-        </div>
-        {!data.projects.length ? <Empty small>No projects.</Empty> : (
-          <div className="table-wrap">
-            <table className="table ov-table">
-              <thead><tr>
-                <th>Project</th><th>Status</th><th className="hide-sm">Key people</th><th style={{ minWidth: 190 }}>Open tasks by stage</th>
-                <th className="num">Overdue</th><th className="num">In sprint</th><th className="num">Not in sprint</th><th className="num hide-sm">Closed 30d</th>
-                <th className="hide-sm">Running sprint</th>
-              </tr></thead>
-              <tbody>
-                {data.projects.map(p => (
-                  <tr key={p.id}>
-                    <td>
-                      <Link to={`/projects/${p.identifier}`} style={{ color: 'var(--ink)', fontWeight: 560 }} className="row">
-                        <span className="key" style={{ '--pc': p.color }}>{p.identifier}</span><span className="ellipsis">{p.name}</span>
-                      </Link>
-                      <div className="xs muted ellipsis" style={{ maxWidth: 280 }} title={p.status_explanation || ''}>{p.status_explanation || (p.manager_name ? `Manager: ${p.manager_name}` : '')}</div>
-                    </td>
-                    <td><ProjectStatus status={p.status} /></td>
-                    <td className="hide-sm"><KeyPeopleStrip positions={p.positions} /></td>
-                    <td><Link to={`/board?sprint=all&project=${p.id}`} className="ov-cell-link"><StageBar stages={p.stages} columns={columns} showTotal /></Link></td>
-                    <td className={`num${p.overdue ? ' danger-text' : ''}`}><b>{p.overdue}</b></td>
-                    <td className="num">{p.in_sprint}</td>
-                    <td className="num"><Link to={`/sprint-planning?project_id=${p.id}`}>{p.unpicked}</Link></td>
-                    <td className="num hide-sm">{p.closed_30}</td>
-                    <td className="hide-sm small">{p.current_sprints.length ? p.current_sprints.map(s => <Link key={s.id} to={`/board?sprint=${s.id}`} className="ov-sprint-tag" title={s.name}><span className="sp-code">SPR-{s.id}</span></Link>) : <span className="muted">—</span>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      <section className="panel">
-        <div className="panel-head">
           <h3>Team members</h3>
           <div className="actions">
             <select value={teamId} onChange={(e) => setTeamId(e.target.value)} style={{ width: 'auto', height: 30, fontSize: 13 }} aria-label="Team">
@@ -275,6 +237,44 @@ export default function Overview() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <h3>Projects</h3>
+          <div className="actions ov-legend">{columns.filter(c => OPEN.includes(c.key)).map(c => <span key={c.key}><i style={{ background: c.color }} />{c.name}</span>)}<KeyPeopleLegend /></div>
+        </div>
+        {!data.projects.length ? <Empty small>No projects.</Empty> : (
+          <div className="table-wrap">
+            <table className="table ov-table">
+              <thead><tr>
+                <th>Project</th><th>Status</th><th className="hide-sm">Key people</th><th style={{ minWidth: 190 }}>Open tasks by stage</th>
+                <th className="num">Overdue</th><th className="num">In sprint</th><th className="num">Not in sprint</th><th className="num hide-sm">Closed 30d</th>
+                <th className="hide-sm">Running sprint</th>
+              </tr></thead>
+              <tbody>
+                {data.projects.map(p => (
+                  <tr key={p.id}>
+                    <td>
+                      <Link to={`/projects/${p.identifier}`} style={{ color: 'var(--ink)', fontWeight: 560 }} className="row">
+                        <span className="key" style={{ '--pc': p.color }}>{p.identifier}</span><span className="ellipsis">{p.name}</span>
+                      </Link>
+                      <div className="xs muted ellipsis" style={{ maxWidth: 280 }} title={p.status_explanation || ''}>{p.status_explanation || (p.manager_name ? `Manager: ${p.manager_name}` : '')}</div>
+                    </td>
+                    <td><ProjectStatus status={p.status} /></td>
+                    <td className="hide-sm"><KeyPeopleStrip positions={p.positions} /></td>
+                    <td><Link to={`/board?sprint=all&project=${p.id}`} className="ov-cell-link"><StageBar stages={p.stages} columns={columns} showTotal /></Link></td>
+                    <td className={`num${p.overdue ? ' danger-text' : ''}`}><b>{p.overdue}</b></td>
+                    <td className="num">{p.in_sprint}</td>
+                    <td className="num"><Link to={`/sprint-planning?project_id=${p.id}`}>{p.unpicked}</Link></td>
+                    <td className="num hide-sm">{p.closed_30}</td>
+                    <td className="hide-sm small">{p.current_sprints.length ? p.current_sprints.map(s => <Link key={s.id} to={`/board?sprint=${s.id}`} className="ov-sprint-tag" title={s.name}><span className="sp-code">SPR-{s.id}</span></Link>) : <span className="muted">—</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </div>
   );
