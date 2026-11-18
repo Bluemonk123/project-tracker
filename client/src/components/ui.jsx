@@ -19,7 +19,7 @@ export function Modal({ title, onClose, children, footer, wide, onSubmit }) {
   const Wrap = onSubmit ? 'form' : 'div';
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
-      <Wrap className={`modal${wide ? ' wide' : ''}`} role="dialog" aria-modal="true" aria-label={title} ref={ref}
+      <Wrap className={`modal${wide === 'xl' ? ' xl' : wide ? ' wide' : ''}`} role="dialog" aria-modal="true" aria-label={title} ref={ref}
         onSubmit={onSubmit ? (e) => { e.preventDefault(); onSubmit(e); } : undefined}>
         <div className="modal-head">
           <h2>{title}</h2>

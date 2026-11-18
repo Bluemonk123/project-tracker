@@ -235,6 +235,10 @@ r.get('/board', (req, res) => {
   if (rows.length) {
     const tk = new Map(all(`SELECT wp_id, ticket_no FROM tickets WHERE wp_id IN (${rows.map(w => w.id).join(',')})`).map(x => [x.wp_id, x.ticket_no]));
     for (const w of rows) w.ticket_no = tk.get(w.id) || null;
+    // when the current assignee was set: the last assignee change in the activity, else when the task was created
+    const ids = rows.map(w => w.id).join(',');
+    const assigned = new Map(all(`SELECT wp_id, MAX(created_at) AS at FROM journals WHERE wp_id IN (${ids}) AND changes LIKE '%"assignee_id"%' GROUP BY wp_id`).map(x => [x.wp_id, x.at]));
+    for (const w of rows) w.assigned_at = w.assignee_id ? (assigned.get(w.id) || w.created_at) : null;
   }
   // hours logged on each task within the board's date range
   if (rows.length && q.from && q.to) {

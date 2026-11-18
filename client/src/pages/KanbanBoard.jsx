@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, qs } from '../api.js';
 import { useApp, useLoad } from '../context.jsx';
 import Icon from '../components/Icon.jsx';
-import { Loading, ErrorBox, Avatar, useAsync } from '../components/ui.jsx';
+import { Loading, ErrorBox, Avatar, useAsync, Modal } from '../components/ui.jsx';
 import NewWpModal from './NewWpModal.jsx';
 import RaiseTicketModal from './tickets/RaiseTicketModal.jsx';
 import { SlaBadge } from './tickets/common.jsx';
@@ -40,6 +40,74 @@ function Who({ id, name }) {
 }
 
 // One task: project and estimate on top, subject, then one line of person · P/C · type.
+// ---------- expanded view of one stage ----------
+const plain = (t) => String(t || '').replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[#*_`>]+/g, '').replace(/\s+/g, ' ').trim();
+const dayOf = (s) => String(s || '').slice(0, 10);
+// days the task has been open (to the closed day once closed)
+function ageing(w) {
+  const from = dayOf(w.created_at);
+  if (!from) return null;
+  const to = w.is_closed && w.closed_on ? w.closed_on : today();
+  return Math.max(0, diffDays(to, from));
+}
+const ageText = (n) => (n == null ? '—' : n === 0 ? 'Today' : `${n} day${n === 1 ? '' : 's'}`);
+
+function ExpandedCard({ w }) {
+  const age = ageing(w);
+  const overdue = !w.is_closed && w.due_date && w.due_date < today();
+  return (
+    <Link to={`/wp/${w.id}`} className={`kbx-card${overdue ? ' overdue' : ''}`} style={{ '--pc': w.project_color }}>
+      <div className="kbx-top">
+        <span className="kbx-proj ellipsis">{w.project_name} · {w.key}</span>
+        <span className="kb-type-pill" style={{ '--c': w.type_color }}>{w.type_name}</span>
+      </div>
+      <div className="kbx-module ellipsis">{w.module || <span className="muted">No module</span>}</div>
+      <div className="kbx-subject" title={w.subject}>{w.subject}</div>
+      <div className="kbx-desc">{plain(w.description) || <span className="muted">No description.</span>}</div>
+      <dl className="kbx-meta">
+        <div><dt>Requestor</dt><dd className="ellipsis">{w.requested_by || <span className="muted">—</span>}</dd></div>
+        <div><dt>Assignee</dt><dd className="ellipsis">{w.assignee_name ? <><Avatar id={w.assignee_id} name={w.assignee_name} size={18} />{w.assignee_name}</> : <span className="muted">Unassigned</span>}</dd></div>
+        <div><dt>Date assigned</dt><dd>{w.assigned_at ? fmtDate(dayOf(w.assigned_at), { year: true }) : <span className="muted">—</span>}</dd></div>
+        <div><dt>Ageing</dt><dd className={age > 14 && !w.is_closed ? 'kbx-old' : ''}>{ageText(age)}</dd></div>
+        <div><dt>Priority</dt><dd><span className="kbx-prio" style={{ '--c': w.priority_color }}>{w.priority_name || '—'}</span></dd></div>
+        <div><dt>Due</dt><dd className={overdue ? 'danger-text' : ''}>{w.due_date ? fmtDate(w.due_date, { year: true }) : <span className="muted">—</span>}</dd></div>
+      </dl>
+    </Link>
+  );
+}
+
+function StageModal({ col, items, onClose }) {
+  const [q, setQ] = useState('');
+  const [sort, setSort] = useState('age');
+  const needle = q.trim().toLowerCase();
+  const list = items.filter(w => !needle || [w.subject, w.key, w.module, w.requested_by, w.assignee_name, w.project_name, w.description].some(v => String(v || '').toLowerCase().includes(needle)));
+  const sorted = [...list].sort((a, b) => {
+    if (sort === 'age') return (ageing(b) ?? -1) - (ageing(a) ?? -1);
+    if (sort === 'priority') return (b.priority_position || 0) - (a.priority_position || 0) || (ageing(b) ?? 0) - (ageing(a) ?? 0);
+    if (sort === 'assigned') return String(b.assigned_at || '').localeCompare(String(a.assigned_at || ''));
+    if (sort === 'due') return String(a.due_date || '9999').localeCompare(String(b.due_date || '9999'));
+    return 0;
+  });
+  return (
+    <Modal wide="xl" title={`${col.name} · ${items.length} task${items.length === 1 ? '' : 's'}`} onClose={onClose}>
+      <div className="kbx-tools">
+        <input type="search" placeholder="Find in this stage: subject, module, person…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find in this stage" />
+        <label className="row" style={{ gap: 6 }}><span className="small muted">Sort</span>
+          <select value={sort} onChange={(e) => setSort(e.target.value)} style={{ width: 'auto' }}>
+            <option value="age">Oldest first (ageing)</option><option value="priority">Priority</option>
+            <option value="assigned">Recently assigned</option><option value="due">Due date</option>
+          </select>
+        </label>
+        <span className="small muted">{list.length === items.length ? '' : `${list.length} of ${items.length}`}</span>
+      </div>
+      <div className="kbx-grid" style={{ '--cc': col.color }}>
+        {sorted.map(w => <ExpandedCard key={w.id} w={w} />)}
+        {!sorted.length && <div className="kb-empty">No tasks{needle ? ' match' : ''}.</div>}
+      </div>
+    </Modal>
+  );
+}
+
 function Card({ w, onDragStart, onDragEnd, dragging }) {
   const nav = useNavigate();
   const overdue = !w.is_closed && w.due_date && w.due_date < today();
@@ -130,6 +198,7 @@ export default function KanbanBoard({ project }) {
   const versions = useVersions(oneProject);
   const sl = useLoad(() => api.get('/sprints' + qs({ project_id: projectId || undefined, version_id: versionId || undefined })), [projectId, versionId]);
   const [ending, setEnding] = useState(false);
+  const [expanded, setExpanded] = useState(null); // a stage shown in the larger view
   const sprintParam = sp.get('sprint') || '';
   const sprints = sl.data?.sprints || [];
   const sprintId = sprintParam === 'all' ? null : /^\d+$/.test(sprintParam) ? Number(sprintParam) : (sl.data?.current_id || null);
@@ -340,6 +409,7 @@ export default function KanbanBoard({ project }) {
                     )}
                   </div>
                   )}
+                  <button type="button" className="kb-add kb-expand" onClick={() => setExpanded(col.key)} title={`Expand ${col.name}`} aria-label={`Expand ${col.name} in a larger view`}><Icon name="maximize" /></button>
                   {canCreateIn && col.statuses.length > 0 && !['closed', 'rejected'].includes(col.key) && (
                     <button type="button" className="kb-add" onClick={() => setAdding(col)} title={`Add to ${col.name}`} aria-label={`Add a work package to ${col.name}`}><Icon name="plus" /></button>
                   )}
@@ -356,6 +426,10 @@ export default function KanbanBoard({ project }) {
       {ending && sprint && <EndModal s={sprint} open={rows.filter(r => !r.is_closed).length} others={sprints.filter(x => x.id !== sprint.id && x.state !== 'ended' && x.project_id === sprint.project_id)}
         onClose={() => setEnding(false)} onDone={() => { setEnding(false); set({ sprint: '' }); sl.reload(); reload(); }} />}
       {raising && <RaiseTicketModal onClose={() => setRaising(false)} />}
+      {expanded && data && (() => {
+        const c = data.columns.find(x => x.key === expanded);
+        return c ? <StageModal col={c} items={byColumn(c)} onClose={() => setExpanded(null)} /> : null;
+      })()}
       {converting && (
         <NewWpModal title={`Turn ticket #${converting.ticket.ticket_no} into a task`} single
           createUrl={`/tickets/${converting.ticket.ticket_no}/convert`}
