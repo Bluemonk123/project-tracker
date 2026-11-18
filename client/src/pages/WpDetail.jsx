@@ -139,7 +139,7 @@ function useLabeler(info, sprints) {
       case 'criticality_id': return v == null ? 'Not set' : (meta.criticalities || []).find(t => t.id === v)?.name ?? v;
       case 'assignee_id': case 'responsible_id': case 'designer_id': case 'developer_id': case 'tester_id': return userById(v)?.name ?? `user ${v}`;
       case 'version_id': return info?.versions.find(x => x.id === v)?.name ?? `version ${v}`;
-      case 'sprint_id': return sprints?.find(x => x.id === v)?.name ?? 'a deleted sprint';
+      case 'sprint_id': { const x = sprints?.find(y => y.id === v); return x ? `SPR-${x.id} ${x.name}` : `SPR-${v} (deleted)`; }
       case 'category_id': return info?.categories.find(x => x.id === v)?.name ?? `category ${v}`;
       case 'parent_id': return `#${v}`;
       case 'project_id': return projects.find(p => p.id === v)?.name ?? `project ${v}`;
@@ -324,7 +324,7 @@ export default function WpDetail() {
                 <select className={`wp-head-select wp-sprint-select${wp.sprint_id ? ` ${wp.sprint_state}` : ''}`} value={wp.sprint_id || ''} disabled={!can.edit || locked || !sprintData}
                   aria-label="Sprint" title={tip} onChange={(e) => update({ sprint_id: e.target.value ? Number(e.target.value) : null })}>
                   <option value="">Sprint: Unpicked</option>
-                  {wp.sprint_id && !sprints.some(x => x.id === wp.sprint_id) && <option value={wp.sprint_id}>{wp.sprint_name}</option>}
+                  {wp.sprint_id && !sprints.some(x => x.id === wp.sprint_id) && <option value={wp.sprint_id}>SPR-{wp.sprint_id} · {wp.sprint_name}</option>}
                   {sprints.map(x => <option key={x.id} value={x.id} disabled={!isAdmin && x.state !== 'planned' && x.id !== wp.sprint_id}
                     title={!isAdmin && x.state !== 'planned' ? 'Only an administrator can use a current or completed sprint' : undefined}>{sprintOption(x)}</option>)}
                 </select>

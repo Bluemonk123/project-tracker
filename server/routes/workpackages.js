@@ -323,7 +323,7 @@ r.get('/work-packages/export.csv', (req, res) => {
     location: { local: 'On Local', staging: 'On Staging', production: 'On Production', external: 'On External' },
     source: { project: 'Project', ticket: 'Ticket', email: 'Email' },
   };
-  const val = (r1, k) => (k === 'sprint_name' ? r1.sprint_name || 'Unpicked' : LABEL[k] ? LABEL[k][r1[k]] ?? r1[k] : r1[k]);
+  const val = (r1, k) => (k === 'sprint_name' ? (r1.sprint_id ? `SPR-${r1.sprint_id} ${r1.sprint_name}` : 'Unpicked') : LABEL[k] ? LABEL[k][r1[k]] ?? r1[k] : r1[k]);
   const esc = (v) => { const s = v == null ? '' : String(v); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   const csv = [cols.map(c => c[1]).join(','), ...rows.map(r1 => cols.map(c => esc(val(r1, c[0]))).join(','))].join('\r\n');
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');

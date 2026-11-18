@@ -21,7 +21,8 @@ export function sprintWhen(s) {
   if (s.state === 'current') { const n = diffDays(s.end_date, t); return `${dates} · ${n === 0 ? 'last day' : `${n + 1} days left`}`; }
   return `${dates} · completed`;
 }
-export const sprintOption = (s, withProject) => `${s.name}${withProject && s.project_identifier ? ` · ${s.project_identifier}` : ''}${s.version_name ? ` · ${s.version_name}` : ''} (${SPRINT_STATE[s.state]}, ${fmtDate(s.start_date)} – ${fmtDate(s.end_date)})`;
+export const sprintCode = (id) => (id ? `SPR-${id}` : '');
+export const sprintOption = (s, withProject) => `${sprintCode(s.id)} · ${s.name}${withProject && s.project_identifier ? ` · ${s.project_identifier}` : ''}${s.version_name ? ` · ${s.version_name}` : ''} (${SPRINT_STATE[s.state]}, ${fmtDate(s.start_date)} – ${fmtDate(s.end_date)})`;
 
 // Versions of a project, for the version pickers.
 export function useVersions(projectId) {
@@ -44,25 +45,25 @@ export function SprintPicker({ sprints, value, onChange, currentId, noneLabel = 
   }, [open]);
   const cur = sprints.find(s => s.id === value);
   const needle = q.trim().toLowerCase();
-  const list = sprints.filter(s => !needle || [s.name, s.version_name, s.project_name, s.project_identifier, s.goal, SPRINT_STATE[s.state]].some(v => String(v || '').toLowerCase().includes(needle)));
+  const list = sprints.filter(s => !needle || [sprintCode(s.id), String(s.id), s.name, s.version_name, s.project_name, s.project_identifier, s.goal, SPRINT_STATE[s.state]].some(v => String(v || '').toLowerCase().includes(needle)));
   const pick = (id) => { onChange(id); setOpen(false); setQ(''); };
   return (
     <div className="sprint-picker" ref={ref}>
       <button type="button" className="sprint-picker-btn" onClick={() => setOpen(o => !o)} aria-haspopup="listbox" aria-expanded={open}>
-        {cur ? <><span className="ellipsis">{cur.name}{withProject && cur.project_identifier ? ` · ${cur.project_identifier}` : ''}</span><span className={`sp-state ${cur.state}`}>{cur.id === currentId ? 'Current' : SPRINT_STATE[cur.state]}</span></>
+        {cur ? <><span className="sp-code">{sprintCode(cur.id)}</span><span className="ellipsis">{cur.name}{withProject && cur.project_identifier ? ` · ${cur.project_identifier}` : ''}</span><span className={`sp-state ${cur.state}`}>{cur.id === currentId ? 'Current' : SPRINT_STATE[cur.state]}</span></>
           : <span className="ellipsis muted">{noneLabel}</span>}
         <Icon name="chevronDown" size={15} />
       </button>
       {open && (
         <div className="sprint-picker-pop" role="listbox">
-          <input ref={input} type="search" placeholder="Search sprints" value={q} onChange={(e) => setQ(e.target.value)}
+          <input ref={input} type="search" placeholder="Search by name or code (SPR-…)" value={q} onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); if (e.key === 'Enter') { e.preventDefault(); if (list[0]) pick(list[0].id); } }} />
           <div className="sprint-picker-list">
             {!needle && <button type="button" role="option" aria-selected={!value} className={`sprint-opt${!value ? ' active' : ''}`} onClick={() => pick(null)}><span className="muted">{noneLabel}</span></button>}
             {list.map(s => (
               <button type="button" key={s.id} role="option" aria-selected={s.id === value} className={`sprint-opt${s.id === value ? ' active' : ''}`} onClick={() => pick(s.id)}>
                 <span className="sprint-opt-main">
-                  <b className="ellipsis">{s.name}</b>
+                  <span className="row" style={{ gap: 6, minWidth: 0 }}><span className="sp-code">{sprintCode(s.id)}</span><b className="ellipsis">{s.name}</b></span>
                   <span className={`sp-state ${s.state}`}>{s.id === currentId ? 'Current' : SPRINT_STATE[s.state]}</span>
                 </span>
                 <span className="xs muted ellipsis">{fmtDate(s.start_date)} – {fmtDate(s.end_date)}{withProject && s.project_name ? ` · ${s.project_name}` : ''}{s.version_name ? ` · ${s.version_name}` : ''} · {s.done}/{s.total} done</span>
@@ -312,7 +313,7 @@ export default function SprintPlanning() {
                     <td>{r.sprint_id
                       ? <span className="sp-stage-pill" style={{ '--sc': r.status_color }} title={r.status_name}>{STAGE_NAME[r.board_column] || r.status_name}</span>
                       : <span className="sp-unpicked" title={`On the Task Board: ${STAGE_NAME[r.board_column] || r.status_name}`}>Unpicked task</span>}</td>
-                    <td>{r.sprint_id ? <span className="sp-sprint-tag ellipsis" title={r.sprint_name}>{r.sprint_name}</span> : <span className="sp-unpicked soft">Unpicked</span>}</td>
+                    <td>{r.sprint_id ? <span className="sp-sprint-tag ellipsis" title={`${sprintCode(r.sprint_id)} · ${r.sprint_name}`}><span className="sp-code">{sprintCode(r.sprint_id)}</span> {r.sprint_name}</span> : <span className="sp-unpicked soft">Unpicked</span>}</td>
                     <td><Person id={r.assignee_id} name={r.assignee_name} /></td>
                     <td className="hide-sm"><Priority name={r.priority_name} color={r.priority_color} position={r.priority_position} /></td>
                     <td className="hide-sm sp-opt small soft ellipsis" style={{ maxWidth: 120 }}>{r.version_name || '—'}</td>
@@ -387,6 +388,7 @@ function SprintGroup({ s, tasks, over, isAdmin, withProject, dropProps, onDragTa
       <div className="sp-sprint-head">
         <button type="button" className="sp-sprint-toggle" onClick={() => setOpen(o => !o)} aria-expanded={open}>
           <Icon name={open ? 'chevronDown' : 'chevronRight'} size={16} />
+          <span className="sp-code">{sprintCode(s.id)}</span>
           <span className="sp-sprint-name">{s.name}</span>
           <span className={`sp-state ${s.state}`}>{SPRINT_STATE[s.state]}</span>
         </button>
@@ -438,7 +440,7 @@ function SprintModal({ sprint, taskIds, defaultProjects, defaultVersion, onClose
   };
   const days = v.start_date && v.end_date && v.end_date >= v.start_date ? diffDays(v.end_date, v.start_date) + 1 : null;
   return (
-    <Modal title={sprint ? `Edit ${sprint.name}` : 'New sprint'} onClose={onClose} onSubmit={save}
+    <Modal title={sprint ? `Edit ${sprintCode(sprint.id)} · ${sprint.name}` : 'New sprint'} onClose={onClose} onSubmit={save}
       footer={<><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy}>{sprint ? 'Save' : 'Create sprint'}</button></>}>
       {!sprint && taskIds.length > 0 && <div className="info-box small" style={{ marginBottom: 12 }}>The {taskIds.length} selected task{taskIds.length > 1 ? 's go' : ' goes'} into this sprint{v.version_id ? ' and its version' : ''}.</div>}
       <div className="form-grid">

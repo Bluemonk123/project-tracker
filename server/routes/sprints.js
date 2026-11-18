@@ -41,7 +41,7 @@ function withStats(req, s) {
   const state = sprintState(s);
   const projects = all('SELECT p.id, p.name, p.identifier, p.color FROM sprint_projects sp JOIN projects p ON p.id = sp.project_id WHERE sp.sprint_id = ? ORDER BY p.name COLLATE NOCASE', s.id);
   const v = s.version_id ? get('SELECT name FROM versions WHERE id = ?', s.version_id) : null;
-  return { ...s, ...st, state, projects, project_ids: projects.map(p => p.id),
+  return { ...s, ...st, state, code: `SPR-${s.id}`, projects, project_ids: projects.map(p => p.id),
     project_name: projects.map(p => p.name).join(', ') || null, project_identifier: projects.map(p => p.identifier).join(', ') || null, version_name: v?.name || null,
     created_by_name: get('SELECT name FROM users WHERE id = ?', s.created_by)?.name || null,
     can_manage: canManage(req, s), can_end: !!req.user.is_admin || s.created_by === req.user.id, can_add: !!req.user.is_admin || state === 'planned' };
