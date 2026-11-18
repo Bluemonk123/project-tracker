@@ -11,6 +11,8 @@ const r = Router();
 const MAX_ROWS = 1000;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const LOCATIONS = { local: ['local', 'on local'], staging: ['staging', 'on staging'], production: ['production', 'prod', 'live', 'on production'], external: ['external', 'on external'] };
+// Task Board stages (each maps to the first status of that board column)
+const STAGES = [['new', 'New'], ['design', 'In Design'], ['develop', 'In Develop'], ['testing', 'In Testing'], ['closed', 'Closed'], ['rejected', 'Rejected']];
 const norm = (v) => String(v ?? '').trim();
 const low = (v) => norm(v).toLowerCase();
 
@@ -36,6 +38,7 @@ function lookups(req) {
     types: all('SELECT id, name FROM types ORDER BY position'),
     priorities: all('SELECT id, name, position FROM priorities ORDER BY position'),
     users: all("SELECT id, name, email FROM users WHERE status = 'active'"),
+    statuses: all('SELECT id, name, board_column FROM statuses ORDER BY position, id'),
   };
 }
 
@@ -74,6 +77,12 @@ function checkRow(req, raw, i, L, defaultProject) {
       || (code && L.priorities.find(x => x.name.toLowerCase().startsWith(`p${code[1]}`)))
       || L.priorities.find(x => x.name.toLowerCase().replace(/^p\d\s*-\s*/, '') === v.replace(/^p\d\s*-\s*/, ''));
     if (p) { out.priority_id = p.id; out.priority = p.name; } else errors.push(`priority "${norm(raw.priority)}" not found`);
+  }
+  if (norm(raw.stage)) {
+    const v = low(raw.stage).replace(/^in\s+/, '');
+    const st = STAGES.find(([k, label]) => k === v || label.toLowerCase() === low(raw.stage) || label.toLowerCase().replace(/^in /, '') === v);
+    const status = st && L.statuses.find(x => x.board_column === st[0]);
+    if (status) { out.status_id = status.id; out.stage = st[1]; } else errors.push(`stage "${norm(raw.stage)}" not known (${STAGES.map(x => x[1]).join(', ')})`);
   }
   if (norm(raw.location)) {
     const v = low(raw.location);
@@ -119,7 +128,7 @@ r.post('/work-packages/import', (req, res) => {
   const created = tx(() => valid.map(x => {
     const wp = createWp(req, x.project_id, {
       subject: x.subject, description: x.description, solution: x.solution, module: x.module, requested_by: x.requested_by,
-      type_id: x.type_id, priority_id: x.priority_id, location: x.location, assignee_id: x.assignee_id,
+      type_id: x.type_id, priority_id: x.priority_id, status_id: x.status_id, location: x.location, assignee_id: x.assignee_id,
       estimated_hours: x.estimated_hours, start_date: x.start_date, due_date: x.due_date, source: 'project',
     }, { journalNote: fileNote ? `Uploaded from ${fileNote} (row ${x.row})` : `Uploaded (row ${x.row})` });
     return { row: x.row, id: wp.id, key: wp.key };
@@ -139,6 +148,7 @@ r.get('/work-packages/import/template.xlsx', (req, res) => {
     { title: 'Module', width: 18, note: 'Free text, e.g. Login' },
     { title: 'Problem', width: 48, note: 'What is wrong or what is needed' },
     { title: 'Solution', width: 36 },
+    { title: 'Stage', width: 14, list: STAGES.map(x => x[1]), note: 'Task Board column. Empty: New' },
     { title: 'Location', width: 16, list: ['On Local', 'On Staging', 'On Production', 'On External'] },
     { title: 'Requested by', width: 20, list: people, strict: false, note: 'Choose a person, or type another name' },
     { title: 'Assignee', width: 20, list: people },
@@ -148,7 +158,7 @@ r.get('/work-packages/import/template.xlsx', (req, res) => {
   ];
   const pr = L.priorities.find(p => /^p2\b/i.test(p.name)) || L.priorities[0];
   const example = ['Login page shows error 500', '', L.types.find(t => t.name === 'Bug')?.name || L.types[0]?.name || '', pr?.name || '', 'Login',
-    'Users see an error after entering the password', '', 'On Staging', req.user.name, '', 4, '', ''];
+    'Users see an error after entering the password', '', 'New', 'On Staging', req.user.name, '', 4, '', ''];
   const buf = templateXlsx({ columns, example });
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename="task-upload-template.xlsx"');

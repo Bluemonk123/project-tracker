@@ -16,6 +16,7 @@ const COLUMNS = [
   ['module', 'Module', ['module', 'section', 'sectionmodule', 'area', 'modulearea']],
   ['description', 'Problem', ['problem', 'description', 'details', 'issue', 'requestedchange']],
   ['solution', 'Solution', ['solution', 'fix', 'resolution']],
+  ['stage', 'Stage', ['stage', 'boardstage', 'boardcolumn']],
   ['location', 'Location', ['location', 'environment']],
   ['requested_by', 'Requested by', ['requestedby', 'requester', 'username', 'raisedby', 'owner', 'ownername']],
   ['assignee', 'Assignee', ['assignee', 'assignedto', 'developer']],
@@ -66,7 +67,7 @@ function toTasks(grid) {
 
 function templateCsv() {
   const head = COLUMNS.map(([, label]) => label);
-  const ex = ['Login page shows error 500', '', 'Bug', 'P2', 'Login', 'Users see an error after entering the password', '', 'On Staging', 'Mehak', '', '4', '', ''];
+  const ex = ['Login page shows error 500', '', 'Bug', 'P2', 'Login', 'Users see an error after entering the password', '', 'New', 'On Staging', 'Mehak', '', '4', '', ''];
   const q = (v) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
   return [head, ex].map(r => r.map(q).join(',')).join('\r\n');
 }
@@ -138,9 +139,9 @@ export default function UploadTasksModal({ defaultProject, onClose, onDone }) {
           <Icon name="upload" />{check?.valid ? `Add ${check.valid} task${check.valid === 1 ? '' : 's'}` : 'Add tasks'}
         </button>
       </>}>
-      <p className="small" style={{ marginTop: 0 }}>Upload a <b>CSV</b> or <b>Excel (.xlsx)</b> file with one task per row. The tasks start in <b>New</b> and are not in any sprint, so you can pick them into sprints afterwards.
+      <p className="small" style={{ marginTop: 0 }}>Upload a <b>CSV</b> or <b>Excel (.xlsx)</b> file with one task per row. The tasks start in the <b>Stage</b> given (or <b>New</b>) and are not in any sprint, so you can pick them into sprints afterwards.
         {' '}<a href="/api/work-packages/import/template.xlsx" download><Icon name="download" size={13} /> Download the Excel template</a>
-        {' '}(with dropdowns for Project, Type, Priority, Location, Requested by and Assignee) or the <a href={templateUrl} download="task-upload-template.csv">CSV template</a>.</p>
+        {' '}(with dropdowns for Project, Type, Priority, Stage, Location, Requested by and Assignee) or the <a href={templateUrl} download="task-upload-template.csv">CSV template</a>.</p>
       <div className="form-grid">
         <Field label="Project" hint="For rows without a Project column (or with it empty).">
           <select value={projectId} onChange={(e) => { setProjectId(e.target.value); if (file) verify(file, e.target.value); }}>
@@ -159,7 +160,7 @@ export default function UploadTasksModal({ defaultProject, onClose, onDone }) {
       <details className="up-help small">
         <summary>Which columns can the file have?</summary>
         <p>Only <b>Subject</b> is needed (if it is empty, the start of the <b>Problem</b> is used). Optional: {COLUMNS.slice(1).map(([, l]) => l).join(', ')}.
-          Type and Priority use the names in the app (e.g. Bug, P2), Location is Local, Staging, Production or External, Assignee is a person's name or email, and dates are YYYY-MM-DD or DD/MM/YYYY.
+          Type and Priority use the names in the app (e.g. Bug, P2), Stage is New, In Design, In Develop, In Testing, Closed or Rejected (empty: New), Location is Local, Staging, Production or External, Assignee is a person's name or email, and dates are YYYY-MM-DD or DD/MM/YYYY.
           Without a due date, it is set from the priority and the working calendar.</p>
       </details>
       {(reading || (busy && !check)) && <p className="small muted">Reading and checking the file…</p>}
@@ -175,7 +176,7 @@ export default function UploadTasksModal({ defaultProject, onClose, onDone }) {
           {bad.length > 0 && <div className="warn-box small" style={{ marginBottom: 8 }}><b>{bad.length}</b> row{bad.length === 1 ? ' has' : 's have'} problems and will be skipped. Fix them in the file and upload again, or add the rest now.</div>}
           <div className="table-wrap up-preview">
             <table className="table">
-              <thead><tr><th>Row</th><th>Subject</th><th>Project</th><th>Type</th><th>Priority</th><th>Assignee</th><th>Due</th><th>Check</th></tr></thead>
+              <thead><tr><th>Row</th><th>Subject</th><th>Project</th><th>Type</th><th>Priority</th><th>Stage</th><th>Assignee</th><th>Due</th><th>Check</th></tr></thead>
               <tbody>
                 {check.rows.map(x => (
                   <tr key={x.row} className={x.ok ? '' : 'up-bad'}>
@@ -184,6 +185,7 @@ export default function UploadTasksModal({ defaultProject, onClose, onDone }) {
                     <td className="small">{x.project || '—'}</td>
                     <td className="small">{x.type || 'Task'}</td>
                     <td className="small">{x.priority || <span className="muted">default</span>}</td>
+                    <td className="small">{x.stage || <span className="muted">New</span>}</td>
                     <td className="small">{x.assignee || '—'}</td>
                     <td className="small">{x.due_date || <span className="muted">auto</span>}</td>
                     <td className="small">{x.ok ? <span className="up-ok"><Icon name="check" size={13} />Ready</span> : <span className="up-err">{x.errors.join('; ')}</span>}</td>

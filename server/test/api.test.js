@@ -766,10 +766,10 @@ test('sprints: plan from upcoming tasks, lock once started, admin can still move
 test('bulk upload of tasks: check, then import valid rows (not in any sprint)', async () => {
   const proj = (await admin.get(`/projects/${ids.project}`)).data;
   const rows = [
-    { subject: 'Upload one', type: 'Bug', priority: 'P1', module: 'Login', description: 'Fails', solution: 'Fix it', location: 'On Staging', requested_by: 'Mehak', estimated_hours: '4h', due_date: '25/12/2026' },
+    { subject: 'Upload one', type: 'Bug', priority: 'P1', module: 'Login', description: 'Fails', solution: 'Fix it', location: 'On Staging', stage: 'In Develop', requested_by: 'Mehak', estimated_hours: '4h', due_date: '25/12/2026' },
     { subject: '', description: 'A long problem text that becomes the subject because the subject column is empty here', project: proj.identifier },
     { subject: 'Bad row', type: 'Nope', start_date: '31/02/x' },
-    { subject: 'Wrong project', project: 'NOPE' },
+    { subject: 'Wrong project', project: 'NOPE', stage: 'Done-ish' },
   ];
   // no default project: the first row has no project -> problem
   let r = await admin.post('/work-packages/import', { rows, dry_run: true });
@@ -780,6 +780,7 @@ test('bulk upload of tasks: check, then import valid rows (not in any sprint)', 
   assert.equal(r.data.rows[1].subject.length <= 60, true);
   assert.match(r.data.rows[2].errors.join(' '), /type "Nope"/);
   assert.match(r.data.rows[3].errors.join(' '), /project "NOPE"/);
+  assert.match(r.data.rows[3].errors.join(' '), /stage "Done-ish"/);
   // import creates the 2 valid rows, skips 2
   r = await admin.post('/work-packages/import', { rows, project_id: ids.project, file_name: 'tasks.xlsx' });
   assert.equal(r.status, 201, JSON.stringify(r.data));
@@ -787,6 +788,7 @@ test('bulk upload of tasks: check, then import valid rows (not in any sprint)', 
   const wp = (await admin.get(`/work-packages/${r.data.items[0].id}`)).data;
   assert.equal(wp.subject, 'Upload one'); assert.equal(wp.type_name, 'Bug'); assert.equal(wp.location, 'staging');
   assert.equal(wp.module, 'Login'); assert.equal(wp.solution, 'Fix it'); assert.equal(wp.estimated_hours, 4);
+  assert.equal(wp.board_column, 'develop');
   assert.equal(wp.due_date, '2026-12-25'); assert.equal(wp.sprint_id, null); assert.match(wp.priority_name, /^P1/);
   assert.ok(wp.journals.some(j => /tasks\.xlsx \(row/.test(j.notes || '')));
   // they are listed as not in a sprint
@@ -805,10 +807,11 @@ test('task upload template: an Excel file with dropdown lists that the upload re
   assert.equal(buf.subarray(0, 2).toString(), 'PK');
   const { readSheet } = await import('read-excel-file/node');
   const rows = await readSheet(buf);
-  assert.equal(rows[0][0], 'Subject'); assert.equal(rows[0][9], 'Assignee');
-  assert.equal(rows[1][0], 'Login page shows error 500'); assert.equal(rows[1][10], 4);
+  assert.equal(rows[0][0], 'Subject'); assert.equal(rows[0][7], 'Stage'); assert.equal(rows[0][10], 'Assignee');
+  assert.equal(rows[1][0], 'Login page shows error 500'); assert.equal(rows[1][11], 4);
   // the lists sheet and the dropdowns are in the file
-  const lists = await readSheet(buf, { sheet: 'Lists' });
+  const readAll = (await import('read-excel-file/node')).default;
+  const lists = (await readAll(buf)).find(x => x.sheet === 'Lists').data;
   assert.ok(lists[0].includes('Type') && lists[0].includes('Location'));
-  assert.ok(lists.some(r => r.includes('On Staging')));
+  assert.ok(lists.some(r => r.includes('On Staging')) && lists.some(r => r.includes('In Testing')) && lists.some(r => r.includes('Rejected')));
 });
