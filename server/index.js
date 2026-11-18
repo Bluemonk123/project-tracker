@@ -10,6 +10,7 @@ import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
 import projectRoutes from './routes/projects.js';
 import wpRoutes from './routes/workpackages.js';
+import taskImportRoutes from './routes/taskimport.js';
 import timeRoutes from './routes/time.js';
 import meetingRoutes from './routes/meetings.js';
 import miscRoutes from './routes/misc.js';
@@ -62,6 +63,7 @@ export function createApp() {
   api.use(adminRoutes);
   api.use(backupCopyRoutes);
   api.use(projectRoutes);
+  api.use(taskImportRoutes); // before wpRoutes: POST /work-packages/import
   api.use(wpRoutes);
   api.use(timeRoutes);
   api.use(meetingRoutes);

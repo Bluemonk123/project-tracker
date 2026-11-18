@@ -1204,3 +1204,15 @@ a.sp-code.link { color: var(--accent-text, var(--ink)); text-decoration: none; }
 a.sp-code.link:hover { border-color: var(--accent); background: var(--accent-soft); }
 a.wl-nosprint { white-space: nowrap; color: var(--ink-3); text-decoration: none; }
 a.wl-nosprint:hover { color: var(--ink); text-decoration: underline; }
+/* Upload tasks */
+.up-help { margin: 10px 0 4px; color: var(--ink-2); }
+.up-help summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+.up-help p { margin: 6px 0 0; }
+.up-preview { max-height: 46vh; overflow: auto; border: 1px solid var(--line-2); border-radius: 8px; }
+.up-preview th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.up-preview tr.up-bad td { background: color-mix(in srgb, var(--danger) 7%, transparent); }
+.up-ok { display: inline-flex; align-items: center; gap: 4px; color: var(--ok); font-weight: 600; white-space: nowrap; }
+.up-err { color: var(--danger); }
+.up-keys { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.up-preview td:last-child { min-width: 240px; }
+.up-preview td { vertical-align: top; }

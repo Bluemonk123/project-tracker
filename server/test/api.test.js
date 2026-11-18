@@ -762,3 +762,37 @@ test('sprints: plan from upcoming tasks, lock once started, admin can still move
   // someone without a project cannot plan (the outsider may be signed out by now)
   assert.ok([401, 403].includes((await outsider.post('/sprints', { project_id: ids.project, start_now: true, end_now: true })).status));
 });
+
+test('bulk upload of tasks: check, then import valid rows (not in any sprint)', async () => {
+  const proj = (await admin.get(`/projects/${ids.project}`)).data;
+  const rows = [
+    { subject: 'Upload one', type: 'Bug', priority: 'P1', module: 'Login', description: 'Fails', solution: 'Fix it', location: 'On Staging', requested_by: 'Mehak', estimated_hours: '4h', due_date: '25/12/2026' },
+    { subject: '', description: 'A long problem text that becomes the subject because the subject column is empty here', project: proj.identifier },
+    { subject: 'Bad row', type: 'Nope', start_date: '31/02/x' },
+    { subject: 'Wrong project', project: 'NOPE' },
+  ];
+  // no default project: the first row has no project -> problem
+  let r = await admin.post('/work-packages/import', { rows, dry_run: true });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.rows[0].ok, false);
+  r = await admin.post('/work-packages/import', { rows, project_id: ids.project, dry_run: true });
+  assert.equal(r.data.valid, 2, JSON.stringify(r.data.rows.map(x => x.errors)));
+  assert.equal(r.data.rows[1].subject.length <= 60, true);
+  assert.match(r.data.rows[2].errors.join(' '), /type "Nope"/);
+  assert.match(r.data.rows[3].errors.join(' '), /project "NOPE"/);
+  // import creates the 2 valid rows, skips 2
+  r = await admin.post('/work-packages/import', { rows, project_id: ids.project, file_name: 'tasks.xlsx' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.created, 2); assert.equal(r.data.skipped, 2);
+  const wp = (await admin.get(`/work-packages/${r.data.items[0].id}`)).data;
+  assert.equal(wp.subject, 'Upload one'); assert.equal(wp.type_name, 'Bug'); assert.equal(wp.location, 'staging');
+  assert.equal(wp.module, 'Login'); assert.equal(wp.solution, 'Fix it'); assert.equal(wp.estimated_hours, 4);
+  assert.equal(wp.due_date, '2026-12-25'); assert.equal(wp.sprint_id, null); assert.match(wp.priority_name, /^P1/);
+  assert.ok(wp.journals.some(j => /tasks\.xlsx \(row/.test(j.notes || '')));
+  // they are listed as not in a sprint
+  const up = (await admin.get('/work-packages?sprint_id=none&status=open&limit=2000')).data.rows.map(x => x.id);
+  assert.ok(r.data.items.every(x => up.includes(x.id)));
+  // too many rows, and someone without projects
+  assert.equal((await admin.post('/work-packages/import', { rows: Array(1001).fill({ subject: 'x' }), project_id: ids.project })).status, 400);
+  assert.ok([401, 403].includes((await outsider.post('/work-packages/import', { rows: [{ subject: 'x' }], dry_run: true })).status));
+});

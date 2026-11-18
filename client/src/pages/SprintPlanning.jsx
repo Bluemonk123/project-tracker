@@ -9,6 +9,7 @@ import Icon from '../components/Icon.jsx';
 import { Loading, ErrorBox, Modal, Field, TypeLabel, Priority, Due, Person, Key, useAsync, MoreMenu } from '../components/ui.jsx';
 import { LOCATIONS } from './WpDetail.jsx';
 import { fmtDate, today, diffDays, fmtHours } from '../lib/format.js';
+import UploadTasksModal from './UploadTasks.jsx';
 
 export const SPRINT_STATE = { current: 'Current', planned: 'Future', ended: 'Completed' };
 const STAGE_NAME = { new: 'New', design: 'In Design', develop: 'In Develop', testing: 'In Testing', closed: 'Closed', rejected: 'Rejected' };
@@ -234,6 +235,7 @@ export default function SprintPlanning() {
           <p className="small muted" style={{ margin: '4px 0 0' }}>All tasks by sprint. Pick tasks into a sprint: select them and add, or drag them onto a sprint.</p>
         </div>
         <span className="spacer" />
+        <button type="button" className="btn sm" onClick={() => setModal({ upload: true })} title="Add many tasks at once from a CSV or Excel file"><Icon name="upload" />Upload tasks</button>
         <a className="btn sm" href={exportUrl} title={filtered ? 'Download the tasks in this list that match the filters' : 'Download the tasks in this list'}><Icon name="download" />Export CSV</a>
         {sl.data?.can_create && <button type="button" className="btn primary" onClick={() => setModal({ taskIds: selected })}><Icon name="plus" />New sprint{selected.length ? ` with ${selected.length} task${selected.length > 1 ? 's' : ''}` : ''}</button>}
       </div>
@@ -383,7 +385,9 @@ export default function SprintPlanning() {
         </aside>
       </div>
 
-      {modal && !modal.end && (
+      {modal?.upload && <UploadTasksModal defaultProject={oneProject} onClose={() => setModal(null)}
+        onDone={() => { reloadAll(); if (sprintFilter || tab.key !== 'none') setParams({ sprint: '', tab: '' }); }} />}
+      {modal && !modal.end && !modal.upload && (
         <SprintModal sprint={modal.sprint} taskIds={modal.taskIds || []}
           defaultProjects={modal.sprint ? modal.sprint.project_ids : selProjects.length ? selProjects : projectIds}
           defaultVersion={oneProject && f.version_id && f.version_id !== 'none' ? Number(f.version_id) : ''}
