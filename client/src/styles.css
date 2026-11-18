@@ -1226,3 +1226,18 @@ a.wl-nosprint:hover { color: var(--ink); text-decoration: underline; }
 .pb-tech-name { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .pb-tech-name b { font-weight: 600; font-size: var(--fs-sm); }
 .pb-tech-ver { color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Sprint panels: an accordion that fits the screen; the open sprint's tasks scroll inside it */
+.sp-sprints { position: sticky; top: 68px; max-height: calc(100vh - 80px); overflow-y: auto; overflow-x: hidden; flex-wrap: nowrap; gap: 8px; overscroll-behavior: contain; }
+.sp-group { display: contents; }
+.sp-group-title { flex: none; }
+.sp-sprint { flex: none; padding: 8px 12px; }
+.sp-sprint.open { flex: 0 1 auto; min-height: 180px; display: flex; flex-direction: column; overflow: hidden; }
+.sp-sprint.open .sp-tasks { flex: 1 1 auto; min-height: 60px; overflow-y: auto; margin-right: -6px; padding-right: 6px; }
+.sp-sprint:not(.open) .sp-sprint-meta { margin-bottom: 0; }
+.sp-sprint:not(.open):hover { border-color: var(--ink-3); }
+.sp-sprint-head .spacer { flex: 1; }
+.sp-ended-toggle { flex: none; }
+@media (max-width: 1100px) {
+  .sp-sprints { position: static; max-height: none; overflow: visible; }
+  .sp-sprint.open .sp-tasks { max-height: 50vh; }
+}

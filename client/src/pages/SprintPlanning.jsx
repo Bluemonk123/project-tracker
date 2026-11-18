@@ -158,6 +158,8 @@ export default function SprintPlanning() {
   const [modal, setModal] = useState(null); // { sprint?, taskIds? } | { end: sprint }
   const [over, setOver] = useState(null);
   const [showEnded, setShowEnded] = useState(false);
+  // accordion: one sprint open at a time (null = all closed); undefined until chosen = the first sprint
+  const [openId, setOpenId] = useState(undefined);
   const [limit, setLimit] = useState(500);
   const [busy, run] = useAsync();
 
@@ -182,6 +184,25 @@ export default function SprintPlanning() {
   useEffect(() => { if (focus?.state === 'ended') setShowEnded(true); }, [focus?.id, focus?.state]);
   useEffect(() => { if (focus) setTimeout(() => document.getElementById(`sprint-${focus.id}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 150); }, [focus?.id]);
   const shownIds = [...live, ...(showEnded ? ended : [])].map(s => s.id);
+  // the open panel: the filtered sprint, else the one chosen, else the first sprint listed (the others start collapsed)
+  const openSprint = openId !== undefined ? openId : (focus?.id ?? live[0]?.id ?? null);
+  useEffect(() => { if (focus) setOpenId(focus.id); }, [focus?.id]);
+  const toggle = (id) => setOpenId(openSprint === id ? null : id);
+  // keep the sprints column within the visible part of the window (it sticks below the top bar)
+  const asideRef = useRef(null);
+  useEffect(() => {
+    const fit = () => {
+      const el = asideRef.current;
+      if (!el) return;
+      if (window.innerWidth <= 1100) { el.style.maxHeight = ''; return; }
+      const top = Math.max(68, el.getBoundingClientRect().top);
+      el.style.maxHeight = `${Math.max(320, window.innerHeight - top - 12)}px`;
+    };
+    fit();
+    window.addEventListener('scroll', fit, { passive: true });
+    window.addEventListener('resize', fit);
+    return () => { window.removeEventListener('scroll', fit); window.removeEventListener('resize', fit); };
+  }, []);
   const st = useLoad(() => (shownIds.length ? api.get('/work-packages' + qs({ sprint_id: shownIds.join(','), status: 'all', sort: 'status:asc,id:asc', limit: 2000 })) : { rows: [] }), [shownIds.join(',')]);
   const bySprint = useMemo(() => {
     const m = new Map();
@@ -353,7 +374,7 @@ export default function SprintPlanning() {
         </section>
 
         {/* ---------- sprints, in order of their dates ---------- */}
-        <aside className="sp-sprints" aria-label="Sprints">
+        <aside className="sp-sprints" aria-label="Sprints" ref={asideRef}>
           {sl.loading && !sl.data && <Loading />}
           {sl.data && !sprints.length && (
             <div className="panel sp-none">
@@ -365,7 +386,7 @@ export default function SprintPlanning() {
             <div key={state} className="sp-group">
               <h3 className="sp-group-title">{SPRINT_STATE[state]} sprint{list.length > 1 ? 's' : ''} <span className="kb-count">{list.length}</span></h3>
               {list.map(s => (
-                <SprintGroup key={s.id} s={s} focused={s.id === sprintFilter} tasks={bySprint.get(s.id) || []} over={over === `s${s.id}`} isAdmin={sl.data.is_admin} withProject={projectIds.length !== 1}
+                <SprintGroup key={s.id} s={s} open={openSprint === s.id} onToggle={() => toggle(s.id)} focused={s.id === sprintFilter} tasks={bySprint.get(s.id) || []} over={over === `s${s.id}`} isAdmin={sl.data.is_admin} withProject={projectIds.length !== 1}
                   dropProps={dropProps(`s${s.id}`, (ids) => (s.can_add ? move(ids.filter(id => !(bySprint.get(s.id) || []).some(t => t.id === id)), s) : run(async () => { throw new Error(`${s.name} has started, so only an administrator can add tasks to it.`); })))}
                   onDragTask={dragStart} onRemove={(t) => move([t.id], null)} onEnd={() => setModal({ end: s })}
                   onEdit={() => setModal({ sprint: s })} onDelete={() => remove(s)} onChanged={reloadAll} />
@@ -378,7 +399,7 @@ export default function SprintPlanning() {
             </button>
           )}
           {showEnded && ended.map(s => (
-            <SprintGroup key={s.id} s={s} focused={s.id === sprintFilter} tasks={bySprint.get(s.id) || []} over={over === `s${s.id}`} isAdmin={sl.data.is_admin} withProject={projectIds.length !== 1}
+            <SprintGroup key={s.id} s={s} open={openSprint === s.id} onToggle={() => toggle(s.id)} focused={s.id === sprintFilter} tasks={bySprint.get(s.id) || []} over={over === `s${s.id}`} isAdmin={sl.data.is_admin} withProject={projectIds.length !== 1}
               dropProps={s.can_add ? dropProps(`s${s.id}`, (ids) => move(ids, s)) : {}}
               onDragTask={dragStart} onRemove={(t) => move([t.id], null)} onEdit={() => setModal({ sprint: s })} onDelete={() => remove(s)} onChanged={reloadAll} />
           ))}
@@ -399,15 +420,14 @@ export default function SprintPlanning() {
   );
 }
 
-function SprintGroup({ s, focused, tasks, over, isAdmin, withProject, dropProps, onDragTask, onRemove, onEnd, onEdit, onDelete, onChanged }) {
-  const [open, setOpen] = useState(s.state !== 'ended');
+function SprintGroup({ s, open, onToggle, focused, tasks, over, isAdmin, withProject, dropProps, onDragTask, onRemove, onEnd, onEdit, onDelete, onChanged }) {
   const canMoveOut = isAdmin || s.state === 'planned';
   const est = tasks.reduce((t, r) => t + (r.estimated_hours || 0), 0);
   const exportUrl = '/api/work-packages/export.csv' + qs({ sprint_id: s.id, status: 'all' });
   return (
-    <section id={`sprint-${s.id}`} className={`panel sp-sprint ${s.state}${over ? ' drop' : ''}${focused ? ' focused' : ''}`} aria-label={s.name} {...dropProps}>
+    <section id={`sprint-${s.id}`} className={`panel sp-sprint ${s.state}${open ? ' open' : ''}${over ? ' drop' : ''}${focused ? ' focused' : ''}`} aria-label={s.name} {...dropProps}>
       <div className="sp-sprint-head">
-        <button type="button" className="sp-sprint-toggle" onClick={() => setOpen(o => !o)} aria-expanded={open}>
+        <button type="button" className="sp-sprint-toggle" onClick={onToggle} aria-expanded={open}>
           <Icon name={open ? 'chevronDown' : 'chevronRight'} size={16} />
           <span className="sp-code">{sprintCode(s.id)}</span>
           <span className="sp-sprint-name">{s.name}</span>
@@ -425,8 +445,8 @@ function SprintGroup({ s, focused, tasks, over, isAdmin, withProject, dropProps,
         <span>{withProject && s.project_name ? <><b className="soft">{s.project_name}</b> · </> : null}{s.version_name ? <>Version <b className="soft">{s.version_name}</b> · </> : null}{sprintWhen(s)}</span>
         <span>{s.done}/{s.total} done · {fmtHours(est)} est.</span>
       </div>
-      {s.state === 'planned' && s.can_manage && <div className="sp-sched-row"><SprintSchedule s={s} onChanged={onChanged} /></div>}
-      {s.goal && <div className="sp-goal small">{s.goal}</div>}
+      {open && s.state === 'planned' && s.can_manage && <div className="sp-sched-row"><SprintSchedule s={s} onChanged={onChanged} /></div>}
+      {open && s.goal && <div className="sp-goal small">{s.goal}</div>}
       {s.total > 0 && <div className="sp-progress" aria-hidden="true"><span style={{ width: `${Math.round((s.done / s.total) * 100)}%` }} /></div>}
       {open && (
         <ul className="sp-tasks">
