@@ -1216,3 +1216,13 @@ a.wl-nosprint:hover { color: var(--ink); text-decoration: underline; }
 .up-keys { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .up-preview td:last-child { min-width: 240px; }
 .up-preview td { vertical-align: top; }
+/* Project Board: Technologies card */
+.pb-tech-sums { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 16px 0; }
+.pb-techlist { list-style: none; margin: 0; padding: 6px 8px 8px; max-height: 420px; overflow: auto; }
+.pb-tech-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border: 0; background: none;
+  border-radius: 6px; text-align: left; color: var(--ink); font: inherit; cursor: pointer; }
+.pb-tech-row:hover:not(:disabled) { background: var(--sunken); }
+.pb-tech-row:disabled { cursor: default; opacity: 1; }
+.pb-tech-name { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.pb-tech-name b { font-weight: 600; font-size: var(--fs-sm); }
+.pb-tech-ver { color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }

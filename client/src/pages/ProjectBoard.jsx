@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { api, csrfHeaders } from '../api.js';
+import { api, csrfHeaders, qs } from '../api.js';
 import { useApp, useLoad } from '../context.jsx';
 import Icon from '../components/Icon.jsx';
 import { STATUS, POSITION_ORDER } from '../components/KeyPeople.jsx';
 import { Loading, ErrorBox, Empty, Field, Modal, Markdown, MarkdownEditor, Person, ProjectStatus, Popover, MoreMenu, UserSelect, confirmDialog, useAsync } from '../components/ui.jsx';
 import { fmtSize, timeAgo, fmtDateTime, fmtDate } from '../lib/format.js';
 import { OccupancySelect } from './project/Members.jsx';
+import { StatusTag, TechModal } from './project/Technologies.jsx';
 
 // One tab per project: brief, customer, customer user roles and team on the left; the seven project documents on the right.
 export default function ProjectBoard() {
@@ -43,6 +44,7 @@ function ProjectSheet({ projectId }) {
     <div className="pb-grid" style={{ '--pc': data.project.color }}>
       <ProjectDetails data={data} reload={reload} />
       <div className="stack">
+        <TechCard project={data.project} />
         <Approvals data={data} reload={reload} />
         <Documents data={data} reload={reload} />
         <ReleaseNotes data={data} reload={reload} />
@@ -566,6 +568,58 @@ function ApprovalModal({ projectId, approval, sectionId, sectionName, onClose, o
         <p className="xs muted" style={{ margin: 0 }}>Both approvers are notified when they are chosen.</p>
       </div>
     </Modal>
+  );
+}
+
+// The project's technologies with how current each version is (moved here from the sidebar).
+function TechCard({ project }) {
+  const force = useRef(false);
+  const { data, error, loading, reload } = useLoad(() => {
+    const refresh = force.current; force.current = false;
+    return api.get(`/projects/${project.id}/technologies` + qs({ refresh: refresh ? 1 : undefined }));
+  }, [project.id]);
+  const [modal, setModal] = useState(null);
+  const rows = data?.rows || [];
+  const canEdit = !!(data?.can_manage ?? data?.can_edit);
+  const count = (...st) => rows.filter(t => st.includes(t.assessment?.status)).length;
+  const sums = [
+    ['ok', count('latest'), 'up to date'], ['accent', count('minor', 'patch'), 'update available'],
+    ['signal', count('major'), 'major version behind'], ['danger', count('eol'), 'out of support'],
+  ].filter(x => x[1]);
+  return (
+    <section className="panel pb-techcard">
+      <div className="panel-head"><h3>Technologies</h3>
+        <div className="actions">
+          {rows.length > 0 && <button type="button" className="btn sm ghost" disabled={loading} onClick={() => { force.current = true; reload(); }} title="Look up the latest versions again">
+            <Icon name="activity" size={15} />{loading && data ? 'Checking…' : 'Check'}</button>}
+          {canEdit && <button type="button" className="btn sm" onClick={() => setModal({})}><Icon name="plus" size={15} />Add</button>}
+        </div>
+      </div>
+      <ErrorBox error={error} />
+      {loading && !data ? <Loading /> : !rows.length ? (
+        <div className="panel-body muted small">No technologies listed yet.{canEdit && ' Choose Add to list what this project is built with.'}</div>
+      ) : (
+        <>
+          {sums.length > 0 && <div className="pb-tech-sums">{sums.map(([tone, n, l]) => <span key={l} className={`tag ${tone}`}>{n} {l}</span>)}</div>}
+          <ul className="pb-techlist">
+            {rows.map(t => (
+              <li key={t.id}>
+                <button type="button" className="pb-tech-row" onClick={() => canEdit && setModal({ tech: t })} disabled={!canEdit} title={canEdit ? `Edit ${t.name}` : t.notes || t.name}>
+                  <span className="pb-tech-name"><b className="ellipsis">{t.name}</b><span className="xs muted">{t.category}</span></span>
+                  <span className="pb-tech-ver small">{t.version_used || <span className="muted">—</span>}</span>
+                  <StatusTag a={t.assessment} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <div className="panel-body xs" style={{ borderTop: '1px solid var(--line)', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+        <Link to={`/projects/${project.identifier}/technologies`}>Open the full list</Link>
+        <Link to="/technologies">Technologies across all projects</Link>
+      </div>
+      {modal && <TechModal project={project} tech={modal.tech} onClose={() => setModal(null)} onSaved={reload} />}
+    </section>
   );
 }
 
