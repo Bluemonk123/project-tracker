@@ -8,7 +8,7 @@ import NewWpModal from './NewWpModal.jsx';
 import RaiseTicketModal from './tickets/RaiseTicketModal.jsx';
 import { SlaBadge } from './tickets/common.jsx';
 import { LOCATIONS } from './WpDetail.jsx';
-import { sprintWhen, SprintPicker, SprintSchedule, EndModal, useVersions } from './SprintPlanning.jsx';
+import { sprintWhen, SprintPicker, SprintSchedule, EndModal, useVersions, ProjectMultiSelect, idList } from './SprintPlanning.jsx';
 import { addDays, diffDays, fmtDate, startOfWeek, today, parseDate } from '../lib/format.js';
 
 const h = (n) => `${Math.round((n || 0) * 100) / 100} h`;
@@ -99,7 +99,9 @@ export default function KanbanBoard({ project }) {
   const from = sp.get('from') || def.from;
   const to = sp.get('to') || def.to;
   const employee = sp.get('employee') || '';
-  const projectId = project ? String(project.id) : (sp.get('project') || '');
+  const projectId = project ? String(project.id) : (sp.get('project') || ''); // one or more project ids, comma separated
+  const projectIds = idList(projectId);
+  const oneProject = projectIds.length === 1 ? projectIds[0] : null; // versions belong to one project
   const undated = sp.get('undated') !== '0';
   const typeId = sp.get('type') || '';
   const location = sp.get('location') || '';
@@ -120,8 +122,8 @@ export default function KanbanBoard({ project }) {
     setSp(next, { replace: true });
   };
   // Sprint: the current sprint by default; "all" shows the tasks by dates instead
-  const versionId = sp.get('version') || '';
-  const versions = useVersions(projectId);
+  const versionId = oneProject ? sp.get('version') || '' : '';
+  const versions = useVersions(oneProject);
   const sl = useLoad(() => api.get('/sprints' + qs({ project_id: projectId || undefined, version_id: versionId || undefined })), [projectId, versionId]);
   const [ending, setEnding] = useState(false);
   const sprintParam = sp.get('sprint') || '';
@@ -190,12 +192,12 @@ export default function KanbanBoard({ project }) {
         {!project && <h1>Task Board</h1>}
         <div className="kb-sprint" role="group" aria-label="Sprint">
           <Icon name="flag" size={16} />
-          <SprintPicker sprints={sprints} value={sprintId} currentId={sl.data?.current_id} withProject={!projectId}
+          <SprintPicker sprints={sprints} value={sprintId} currentId={sl.data?.current_id} withProject={projectIds.length !== 1}
             onChange={(id) => set({ sprint: id === (sl.data?.current_id || null) ? '' : id ? String(id) : (sl.data?.current_id ? 'all' : '') })} />
           {sprint ? (
             <span className="kb-sprint-info">
               {sprint.id === sl.data?.current_id && <b>Current sprint</b>}
-              {!projectId && sprint.project_name && <span>{sprint.project_name}</span>}
+              {projectIds.length !== 1 && sprint.project_name && <span>{sprint.project_name}</span>}
               {sprint.version_name && <span>Version {sprint.version_name}</span>}
               <span>{sprintWhen(sprint)}</span>
               <span>{sprint.done}/{sprint.total} done</span>
@@ -233,14 +235,11 @@ export default function KanbanBoard({ project }) {
             </select>
           </label>
           {!project && (
-            <label className="kb-field"><span>Project</span>
-              <select value={projectId} onChange={(e) => set({ project: e.target.value, version: '', sprint: '' })}>
-                <option value="">All projects</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </label>
+            <div className="kb-field"><span>Projects</span>
+              <ProjectMultiSelect value={projectIds} onChange={(ids) => set({ project: ids.join(','), ...(ids.length === 1 && ids[0] === oneProject ? {} : { version: '' }), sprint: '' })} />
+            </div>
           )}
-          {projectId && (
+          {oneProject && (
             <label className="kb-field kb-narrow"><span>Version</span>
               <select value={versionId} onChange={(e) => set({ version: e.target.value, sprint: '' })}>
                 <option value="">Any version</option><option value="none">No version</option>
@@ -350,12 +349,12 @@ export default function KanbanBoard({ project }) {
             description: `${converting.ticket.description}\n\n_From ticket #${converting.ticket.ticket_no}, raised by ${converting.ticket.raised_by}._`,
             status_id: converting.col.statuses[0].id,
             ...(sprint?.can_add ? { sprint_id: sprint.id } : {}),
-            ...(projectId ? { project_id: Number(projectId) } : {}),
+            ...(oneProject ? { project_id: oneProject } : {}),
           }}
           onClose={() => setConverting(null)} onCreated={() => { setConverting(null); reload(); }} />
       )}
       {adding && (
-        <NewWpModal projectId={project?.id || (projectId ? Number(projectId) : undefined)} title={`New task in ${adding.name}`}
+        <NewWpModal projectId={project?.id || oneProject || undefined} title={`New task in ${adding.name}`}
           defaults={{
             status_id: adding.statuses[0].id,
             assignee_id: employee === 'me' ? user.id : /^\d+$/.test(employee) ? Number(employee) : null,

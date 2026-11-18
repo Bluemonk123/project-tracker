@@ -76,6 +76,54 @@ export function SprintPicker({ sprints, value, onChange, currentId, noneLabel = 
   );
 }
 
+// Pick several projects (checkbox list with search). value: array of project ids; empty = all projects.
+export function ProjectMultiSelect({ value, onChange, allLabel = 'All projects', label = 'Projects' }) {
+  const { projects } = useApp();
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+  const chosen = projects.filter(p => value.includes(p.id));
+  const text = !chosen.length ? allLabel : chosen.length === 1 ? chosen[0].name : `${chosen.length} projects`;
+  const needle = q.trim().toLowerCase();
+  const list = projects.filter(p => !needle || p.name.toLowerCase().includes(needle) || String(p.identifier).toLowerCase().includes(needle));
+  const toggle = (id) => onChange(value.includes(id) ? value.filter(x => x !== id) : [...value, id]);
+  return (
+    <div className="proj-multi" ref={ref}>
+      <button type="button" className={`proj-multi-btn${chosen.length ? ' on' : ''}`} onClick={() => setOpen(o => !o)} aria-haspopup="listbox" aria-expanded={open} aria-label={label}
+        title={chosen.map(p => p.name).join(', ') || allLabel}>
+        <span className="ellipsis">{text}</span><Icon name="chevronDown" size={15} />
+      </button>
+      {open && (
+        <div className="proj-multi-pop" role="listbox" aria-multiselectable="true">
+          {projects.length > 6 && <input type="search" placeholder="Search projects" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />}
+          <div className="proj-multi-list">
+            {list.map(p => (
+              <label key={p.id} className="proj-multi-opt">
+                <input type="checkbox" checked={value.includes(p.id)} onChange={() => toggle(p.id)} />
+                <span className="proj-dot" style={{ background: p.color }} /><span className="ellipsis grow">{p.name}</span><span className="xs muted">{p.identifier}</span>
+              </label>
+            ))}
+            {!list.length && <div className="xs muted" style={{ padding: 8 }}>No project matches.</div>}
+          </div>
+          <div className="proj-multi-foot">
+            <button type="button" className="btn xs ghost" onClick={() => onChange([])} disabled={!value.length}>Clear</button>
+            <button type="button" className="btn xs ghost" onClick={() => onChange(list.map(p => p.id))}>Select all</button>
+            <span className="spacer" />
+            <button type="button" className="btn xs primary" onClick={() => setOpen(false)}>Done</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+export const idList = (v) => String(v || '').split(',').map(Number).filter(Boolean);
+
 // Start day / End day with Start now and End now, for a sprint that has not started (Sprint Planning and the Task Board).
 export function SprintSchedule({ s, onChanged }) {
   const [busy, run] = useAsync();
@@ -114,13 +162,15 @@ export default function SprintPlanning() {
   const tab = TABS.find(t => t.key === sp.get('tab')) || TABS[0];
   const f = Object.fromEntries(FILTERS.map(k => [k, sp.get(k) || undefined]));
   const status = f.status || tab.status;
-  const base = { ...f, status, sort: sp.get('sort') || 'priority:desc,id:asc' };
+  const base = { ...f, version_id: idList(f.project_id).length === 1 ? f.version_id : undefined, status, sort: sp.get('sort') || 'priority:desc,id:asc' };
   const query = { ...base, ...tab.q, limit };
   const up = useLoad(() => api.get('/work-packages' + qs(query)), [JSON.stringify(query)]);
   // how many tasks each tab has with the same filters
   const counts = useLoad(() => Promise.all(TABS.map(t => api.get('/work-packages' + qs({ ...base, status: f.status || t.status, ...t.q, limit: 1 })).then(r => r.total))), [JSON.stringify(base)]);
-  const sl = useLoad(() => api.get('/sprints' + qs({ project_id: f.project_id, version_id: f.version_id })), [f.project_id, f.version_id]);
-  const versions = useVersions(f.project_id);
+  const sl = useLoad(() => api.get('/sprints' + qs({ project_id: f.project_id, version_id: idList(f.project_id).length === 1 ? f.version_id : undefined })), [f.project_id, f.version_id]);
+  const projectIds = idList(f.project_id);
+  const oneProject = projectIds.length === 1 ? projectIds[0] : null; // versions belong to one project
+  const versions = useVersions(oneProject);
   const sprints = sl.data?.sprints || [];
   const live = sprints.filter(s => s.state !== 'ended');
   const ended = sprints.filter(s => s.state === 'ended').reverse();
@@ -139,13 +189,13 @@ export default function SprintPlanning() {
     for (const [k, v] of Object.entries(changes)) { if (!v) n.delete(k); else n.set(k, v); }
     setSp(n, { replace: true }); setSelected([]);
   };
-  const setParam = (k, v) => setParams(k === 'project_id' ? { project_id: v, version_id: '' } : { [k]: v });
+  const setParam = (k, v) => setParams(k === 'project_id' ? { project_id: v, ...(idList(v).length === 1 && idList(v)[0] === oneProject ? {} : { version_id: '' }) } : { [k]: v });
   const filtered = FILTERS.some(k => sp.get(k));
   const exportUrl = '/api/work-packages/export.csv' + qs({ ...base, ...tab.q, sort: undefined, file: tab.key === 'none' ? 'upcoming' : undefined });
 
   // the selected tasks' project, when they are all in one (sprints of that project are offered)
   const selProjects = [...new Set(rows.filter(r => selected.includes(r.id)).map(r => r.project_id))];
-  const addable = sprints.filter(s => s.can_add && (selProjects.length !== 1 || s.project_id === selProjects[0]));
+  const addable = sprints.filter(s => s.can_add && selProjects.every(pid => s.project_ids.includes(pid)));
 
   const move = async (ids, sprint) => {
     if (!ids.length) return;
@@ -183,12 +233,10 @@ export default function SprintPlanning() {
       </div>
 
       <div className="filterbar sp-filters" role="group" aria-label="Filters">
-        <select value={f.project_id || ''} onChange={(e) => setParam('project_id', e.target.value)} aria-label="Project">
-          <option value="">All projects</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-        <select value={f.version_id || ''} onChange={(e) => setParam('version_id', e.target.value)} aria-label="Version" disabled={!f.project_id} title={f.project_id ? 'Version' : 'Choose a project to pick one of its versions'}>
-          <option value="">{f.project_id ? 'Any version' : 'Version (choose a project)'}</option>
-          {f.project_id && <option value="none">No version</option>}
+        <ProjectMultiSelect value={projectIds} onChange={(ids) => setParam('project_id', ids.join(','))} />
+        <select value={oneProject ? f.version_id || '' : ''} onChange={(e) => setParam('version_id', e.target.value)} aria-label="Version" disabled={!oneProject} title={oneProject ? 'Version' : 'Choose one project to pick one of its versions'}>
+          <option value="">{oneProject ? 'Any version' : 'Version (choose one project)'}</option>
+          {oneProject && <option value="none">No version</option>}
           {versions.map(v => <option key={v.id} value={v.id}>{v.name}{v.status === 'closed' ? ' (closed)' : ''}</option>)}
         </select>
         <input type="search" placeholder="Subject or ID" defaultValue={f.q || ''} aria-label="Find" key={f.q || ''}
@@ -232,7 +280,7 @@ export default function SprintPlanning() {
               <select aria-label="Add to sprint" value="" disabled={busy || !addable.length}
                 onChange={(e) => { const s = sprints.find(x => x.id === Number(e.target.value)); if (s) move(selected, s); }}>
                 <option value="">{addable.length ? 'Add to sprint…' : 'No sprint open for planning'}</option>
-                {addable.map(s => <option key={s.id} value={s.id}>{sprintOption(s, !f.project_id)}</option>)}
+                {addable.map(s => <option key={s.id} value={s.id}>{sprintOption(s, projectIds.length !== 1)}</option>)}
               </select>
               {rows.some(r => selected.includes(r.id) && r.sprint_id) && <button type="button" className="btn sm" onClick={() => move(selected, null)}>Take out of sprint</button>}
               {sl.data?.can_create && <button type="button" className="btn sm" onClick={() => setModal({ taskIds: selected })}><Icon name="plus" />New sprint with these</button>}
@@ -290,14 +338,14 @@ export default function SprintPlanning() {
           {sl.data && !sprints.length && (
             <div className="panel sp-none">
               <Icon name="flag" size={22} />
-              <p><b>No sprints {f.project_id ? 'in this project' : 'yet'}.</b><br />Select tasks and choose <b>New sprint</b>, or create an empty one and drag tasks onto it.</p>
+              <p><b>No sprints {projectIds.length ? `for ${projectIds.length > 1 ? 'these projects' : 'this project'}` : 'yet'}.</b><br />Select tasks and choose <b>New sprint</b>, or create an empty one and drag tasks onto it.</p>
             </div>
           )}
           {sprintGroups.map(([state, list]) => list.length > 0 && (
             <div key={state} className="sp-group">
               <h3 className="sp-group-title">{SPRINT_STATE[state]} sprint{list.length > 1 ? 's' : ''} <span className="kb-count">{list.length}</span></h3>
               {list.map(s => (
-                <SprintGroup key={s.id} s={s} tasks={bySprint.get(s.id) || []} over={over === `s${s.id}`} isAdmin={sl.data.is_admin} withProject={!f.project_id}
+                <SprintGroup key={s.id} s={s} tasks={bySprint.get(s.id) || []} over={over === `s${s.id}`} isAdmin={sl.data.is_admin} withProject={projectIds.length !== 1}
                   dropProps={dropProps(`s${s.id}`, (ids) => (s.can_add ? move(ids.filter(id => !(bySprint.get(s.id) || []).some(t => t.id === id)), s) : run(async () => { throw new Error(`${s.name} has started, so only an administrator can add tasks to it.`); })))}
                   onDragTask={dragStart} onRemove={(t) => move([t.id], null)} onEnd={() => setModal({ end: s })}
                   onEdit={() => setModal({ sprint: s })} onDelete={() => remove(s)} onChanged={reloadAll} />
@@ -310,7 +358,7 @@ export default function SprintPlanning() {
             </button>
           )}
           {showEnded && ended.map(s => (
-            <SprintGroup key={s.id} s={s} tasks={bySprint.get(s.id) || []} over={over === `s${s.id}`} isAdmin={sl.data.is_admin} withProject={!f.project_id}
+            <SprintGroup key={s.id} s={s} tasks={bySprint.get(s.id) || []} over={over === `s${s.id}`} isAdmin={sl.data.is_admin} withProject={projectIds.length !== 1}
               dropProps={s.can_add ? dropProps(`s${s.id}`, (ids) => move(ids, s)) : {}}
               onDragTask={dragStart} onRemove={(t) => move([t.id], null)} onEdit={() => setModal({ sprint: s })} onDelete={() => remove(s)} onChanged={reloadAll} />
           ))}
@@ -319,11 +367,11 @@ export default function SprintPlanning() {
 
       {modal && !modal.end && (
         <SprintModal sprint={modal.sprint} taskIds={modal.taskIds || []}
-          defaultProject={modal.sprint?.project_id || (selProjects.length === 1 ? selProjects[0] : f.project_id ? Number(f.project_id) : '')}
-          defaultVersion={f.version_id && f.version_id !== 'none' ? Number(f.version_id) : ''}
+          defaultProjects={modal.sprint ? modal.sprint.project_ids : selProjects.length ? selProjects : projectIds}
+          defaultVersion={oneProject && f.version_id && f.version_id !== 'none' ? Number(f.version_id) : ''}
           onClose={() => setModal(null)} onSaved={() => { setModal(null); reloadAll(); }} />
       )}
-      {modal?.end && <EndModal s={modal.end} open={(bySprint.get(modal.end.id) || []).filter(t => !t.is_closed).length} others={live.filter(x => x.id !== modal.end.id && x.project_id === modal.end.project_id)}
+      {modal?.end && <EndModal s={modal.end} open={(bySprint.get(modal.end.id) || []).filter(t => !t.is_closed).length} others={live.filter(x => x.id !== modal.end.id && modal.end.project_ids.every(pid => x.project_ids.includes(pid)))}
         onClose={() => setModal(null)} onDone={() => { setModal(null); reloadAll(); }} />}
     </div>
   );
@@ -374,16 +422,17 @@ function SprintGroup({ s, tasks, over, isAdmin, withProject, dropProps, onDragTa
   );
 }
 
-function SprintModal({ sprint, taskIds, defaultProject, defaultVersion, onClose, onSaved }) {
-  const { projects } = useApp();
+function SprintModal({ sprint, taskIds, defaultProjects, defaultVersion, onClose, onSaved }) {
   const t = today();
   const [v, setV] = useState({ name: sprint?.name || '', goal: sprint?.goal || '', start_date: sprint?.start_date || t, end_date: sprint?.end_date || '',
-    project_id: sprint?.project_id || defaultProject || '', version_id: sprint ? sprint.version_id || '' : defaultVersion || '' });
-  const versions = useVersions(v.project_id);
+    project_ids: defaultProjects || [], version_id: sprint ? sprint.version_id || '' : defaultVersion || '' });
+  const single = v.project_ids.length === 1 ? v.project_ids[0] : null;
+  const versions = useVersions(single);
   const [busy, run] = useAsync();
-  const set = (k) => (e) => setV(x => ({ ...x, [k]: e.target.value, ...(k === 'project_id' ? { version_id: '' } : {}) }));
+  const set = (k) => (e) => setV(x => ({ ...x, [k]: e.target.value }));
+  const removed = sprint ? sprint.project_ids.filter(id => !v.project_ids.includes(id)) : [];
   const save = async () => {
-    const body = { ...v, name: v.name.trim(), version_id: v.version_id || null };
+    const body = { ...v, name: v.name.trim(), version_id: single ? v.version_id || null : null };
     const r = await run(() => (sprint ? api.patch(`/sprints/${sprint.id}`, body) : api.post('/sprints', { ...body, task_ids: taskIds })), sprint ? 'Sprint saved' : 'Sprint created');
     if (r) onSaved(r);
   };
@@ -393,13 +442,11 @@ function SprintModal({ sprint, taskIds, defaultProject, defaultVersion, onClose,
       footer={<><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy}>{sprint ? 'Save' : 'Create sprint'}</button></>}>
       {!sprint && taskIds.length > 0 && <div className="info-box small" style={{ marginBottom: 12 }}>The {taskIds.length} selected task{taskIds.length > 1 ? 's go' : ' goes'} into this sprint{v.version_id ? ' and its version' : ''}.</div>}
       <div className="form-grid">
-        <Field label="Project">
-          <select value={v.project_id} onChange={set('project_id')} required disabled={!!sprint}>
-            <option value="">Choose the project…</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+        <Field label="Projects" hint={removed.length ? 'Tasks of a project you take off go back to "Not in a sprint".' : 'One or more projects.'}>
+          <ProjectMultiSelect value={v.project_ids} allLabel="Choose projects…" onChange={(ids) => setV(x => ({ ...x, project_ids: ids, version_id: ids.length === 1 && ids[0] === single ? x.version_id : '' }))} />
         </Field>
-        <Field label="Version" hint="Tasks in the sprint go into this version.">
-          <select value={v.version_id} onChange={set('version_id')} disabled={!v.project_id}>
+        <Field label="Version" hint={single ? 'Tasks in the sprint go into this version.' : v.project_ids.length > 1 ? 'A version belongs to one project, so a sprint with several projects has none.' : 'Choose one project to pick its version.'}>
+          <select value={single ? v.version_id : ''} onChange={set('version_id')} disabled={!single}>
             <option value="">No version</option>{versions.filter(x => x.status !== 'closed' || x.id === v.version_id).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
           </select>
         </Field>

@@ -702,6 +702,20 @@ test('sprints: plan from upcoming tasks, lock once started, admin can still move
   assert.ok((await dev.get('/work-packages?sprint_state=planned&status=all')).data.rows.some(x => x.id === t1.id));
   assert.ok(!(await dev.get('/work-packages?sprint_state=current&status=all')).data.rows.some(x => x.id === t1.id));
   assert.equal((await dev.get(`/sprints?project_id=${other.id}`)).data.sprints.length, 0);
+  // a sprint can cover several projects; a version needs a single project
+  assert.equal((await admin.post('/sprints', { project_ids: [ids.project, other.id], version_id: ver.id, start_date: plus(30), end_date: plus(35) })).status, 400);
+  const multi = (await admin.post('/sprints', { project_ids: [ids.project, other.id], name: 'Both', start_date: plus(30), end_date: plus(35) })).data;
+  assert.equal(multi.projects.length, 2, JSON.stringify(multi));
+  assert.equal((await admin.patch(`/work-packages/${ot.id}`, { sprint_id: multi.id })).status, 200);
+  assert.ok((await admin.get(`/sprints?project_id=${other.id}`)).data.sprints.some(x => x.id === multi.id));
+  assert.ok((await admin.get(`/sprints?project_id=${other.id},${ids.project}`)).data.sprints.some(x => x.id === planned.id));
+  // tasks of both projects through the multi-project filter
+  const both = (await admin.get(`/work-packages?project_id=${ids.project},${other.id}&sprint_id=${multi.id}&status=all`)).data.rows.map(x => x.id);
+  assert.deepEqual(both, [ot.id]);
+  // taking a project off the sprint sends its tasks back to "Not in a sprint"
+  assert.equal((await admin.patch(`/sprints/${multi.id}`, { project_ids: [ids.project] })).status, 200);
+  assert.equal((await admin.get(`/work-packages/${ot.id}`)).data.sprint_id, null);
+  assert.equal((await admin.del(`/sprints/${multi.id}`)).status, 200);
   up = (await dev.get('/work-packages?sprint_id=none&status=open&limit=2000')).data.rows.map(x => x.id);
   assert.ok(!up.includes(t1.id));
   // dev may move tasks into / out of a planned sprint

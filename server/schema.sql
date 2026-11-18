@@ -572,3 +572,10 @@ CREATE TABLE IF NOT EXISTS sprints (
   created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- The projects a sprint covers (one or more).
+CREATE TABLE IF NOT EXISTS sprint_projects (
+  sprint_id  INTEGER NOT NULL REFERENCES sprints(id) ON DELETE CASCADE,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  PRIMARY KEY (sprint_id, project_id)
+);

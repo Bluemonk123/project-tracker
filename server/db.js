@@ -312,6 +312,11 @@ function migrate() {
   const spCols = all('PRAGMA table_info(sprints)').map(c => c.name);
   if (!spCols.includes('project_id')) db.exec('ALTER TABLE sprints ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE');
   if (!spCols.includes('version_id')) db.exec('ALTER TABLE sprints ADD COLUMN version_id INTEGER REFERENCES versions(id) ON DELETE SET NULL');
+  // a sprint can cover several projects: they are kept in sprint_projects (sprints.project_id is no longer used)
+  if (!getSetting('sprint_projects_v1')) {
+    db.exec('INSERT OR IGNORE INTO sprint_projects(sprint_id, project_id) SELECT id, project_id FROM sprints WHERE project_id IS NOT NULL');
+    setSetting('sprint_projects_v1', '1');
+  }
   // ---------- Ticket Board (helpdesk) ----------
   const nCols = all('PRAGMA table_info(notifications)').map(c => c.name);
   if (!nCols.includes('ticket_id')) db.exec('ALTER TABLE notifications ADD COLUMN ticket_id INTEGER REFERENCES tickets(id) ON DELETE CASCADE');

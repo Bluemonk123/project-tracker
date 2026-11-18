@@ -48,12 +48,19 @@ const SORTS = {
 
 const listParam = (v) => (v === undefined || v === '' ? [] : String(v).split(',').map(s => s.trim()).filter(Boolean));
 
+// One or more projects (ids or identifiers, comma separated); each must be visible.
+function projectsParam(req, v) {
+  return [...new Set(listParam(v).map(x => { const p = resolveProject(x); need(req, 'wp.view', p.id); return p.id; }))];
+}
+
 // Shared filter builder used by list, CSV export, board, gantt and calendar.
 export function buildFilter(req, q) {
   const where = [];
   const params = [];
   let projectIds;
-  if (q.project_id) {
+  if (listParam(q.project_id).length > 1) {
+    projectIds = projectsParam(req, q.project_id);    // several projects (multi-select filter)
+  } else if (q.project_id) {
     const p = resolveProject(q.project_id);
     need(req, 'wp.view', p.id);
     projectIds = [p.id];
@@ -189,12 +196,7 @@ r.get('/board', (req, res) => {
   const DATE = /^\d{4}-\d{2}-\d{2}$/;
   if (!/^\d+$/.test(q.sprint_id || '') && (!DATE.test(q.from || '') || !DATE.test(q.to || ''))) fail(400, 'Choose a date range.');
   if (q.from && q.to && q.from > q.to) fail(400, 'The start of the range must be before its end.');
-  let projectIds;
-  if (q.project_id) {
-    const p = resolveProject(q.project_id);
-    need(req, 'wp.view', p.id);
-    projectIds = [p.id];
-  } else projectIds = visibleProjectIds(req, 'wp.view');
+  const projectIds = q.project_id ? projectsParam(req, q.project_id) : visibleProjectIds(req, 'wp.view');
   const statuses = all('SELECT id, name, color, board_column, is_closed, position FROM statuses ORDER BY position, id');
   const columns = BOARD_COLUMNS.map(c => ({ ...c, statuses: statuses.filter(st => st.board_column === c.key) }));
   // helpdesk tickets in a first "Tickets" column: company-wide board only, for people who can open the Ticket Board

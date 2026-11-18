@@ -5,13 +5,30 @@ import { get, all, run, tx } from '../db.js';
 import { fail, visibleProjectIds, can } from '../access.js';
 import { resolveProject } from './projects.js';
 import { todayISO } from '../util.js';
-import { sprintState, loadSprint } from '../sprints.js';
+import { sprintState, loadSprint, sprintProjectIds } from '../sprints.js';
 import { loadWp, updateWp } from './workpackages.js';
 
 const r = Router();
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const canPlan = (req) => !!req.user.is_admin || visibleProjectIds(req, 'wp.edit').length > 0 || visibleProjectIds(req, 'wp.edit_own').length > 0;
 const canPlanIn = (req, pid) => !!req.user.is_admin || can(req, 'wp.edit', pid) || can(req, 'wp.edit_own', pid);
+const listParam = (v) => (Array.isArray(v) ? v : v === undefined || v === null || v === '' ? [] : String(v).split(',')).map(x => String(x).trim()).filter(Boolean);
+
+// The projects chosen for a sprint (project_ids, or project_id). The person must be able to plan in each.
+function readProjects(req, b) {
+  const raw = listParam(b.project_ids !== undefined ? b.project_ids : b.project_id);
+  if (!raw.length) fail(400, 'Choose at least one project for the sprint.');
+  const list = [...new Map(raw.map(v => resolveProject(v)).map(p => [p.id, p])).values()];
+  for (const p of list) if (!canPlanIn(req, p.id)) fail(403, `You cannot plan sprints in ${p.name}.`);
+  return list;
+}
+// A version belongs to one project, so only a sprint of a single project can have one.
+function checkVersion(versionId, projectIds) {
+  if (!versionId) return null;
+  if (projectIds.length !== 1) fail(400, 'A version belongs to one project, so a sprint with several projects cannot have a version.');
+  if (!get('SELECT id FROM versions WHERE id = ? AND project_id = ?', versionId, projectIds[0])) fail(400, 'That version belongs to another project.');
+  return versionId;
+}
 const canManage = (req, s) => !!req.user.is_admin || (s.created_by === req.user.id && sprintState(s) === 'planned');
 
 function withStats(req, s) {
@@ -22,19 +39,23 @@ function withStats(req, s) {
                   FROM work_packages wp JOIN statuses st ON st.id = wp.status_id
                   WHERE wp.sprint_id = ? AND wp.project_id IN (${ph})`, s.id, ...ids);
   const state = sprintState(s);
-  const p = s.project_id ? get('SELECT name, identifier, color FROM projects WHERE id = ?', s.project_id) : null;
+  const projects = all('SELECT p.id, p.name, p.identifier, p.color FROM sprint_projects sp JOIN projects p ON p.id = sp.project_id WHERE sp.sprint_id = ? ORDER BY p.name COLLATE NOCASE', s.id);
   const v = s.version_id ? get('SELECT name FROM versions WHERE id = ?', s.version_id) : null;
-  return { ...s, ...st, state, project_name: p?.name || null, project_identifier: p?.identifier || null, project_color: p?.color || null, version_name: v?.name || null,
+  return { ...s, ...st, state, projects, project_ids: projects.map(p => p.id),
+    project_name: projects.map(p => p.name).join(', ') || null, project_identifier: projects.map(p => p.identifier).join(', ') || null, version_name: v?.name || null,
     created_by_name: get('SELECT name FROM users WHERE id = ?', s.created_by)?.name || null,
     can_manage: canManage(req, s), can_end: !!req.user.is_admin || s.created_by === req.user.id, can_add: !!req.user.is_admin || state === 'planned' };
 }
 
-// Sprints of the projects the person can see, in order of their scheduled dates. Optional filters: project_id, version_id.
+// Sprints covering a project the person can see, in order of their scheduled dates.
+// Optional filters: project_id (one or more, comma separated: sprints covering any of them), version_id.
 r.get('/sprints', (req, res) => {
   const ids = visibleProjectIds(req, 'wp.view');
-  const where = [`(project_id IS NULL OR project_id IN (${ids.length ? ids.map(() => '?').join(',') : 'NULL'}))`];
+  const ph = (n) => (n ? Array(n).fill('?').join(',') : 'NULL');
+  const where = [`EXISTS (SELECT 1 FROM sprint_projects x WHERE x.sprint_id = sprints.id AND x.project_id IN (${ph(ids.length)}))`];
   const params = [...ids];
-  if (req.query.project_id) { where.push('project_id = ?'); params.push(resolveProject(req.query.project_id).id); }
+  const want = listParam(req.query.project_id).map(v => resolveProject(v).id);
+  if (want.length) { where.push(`EXISTS (SELECT 1 FROM sprint_projects x WHERE x.sprint_id = sprints.id AND x.project_id IN (${ph(want.length)}))`); params.push(...want); }
   if (req.query.version_id === 'none') where.push('version_id IS NULL');
   else if (/^\d+$/.test(req.query.version_id || '')) { where.push('version_id = ?'); params.push(Number(req.query.version_id)); }
   const list = all(`SELECT * FROM sprints WHERE ${where.join(' AND ')} ORDER BY start_date, end_date, id`, ...params).map(s => withStats(req, s));
@@ -63,14 +84,14 @@ r.post('/sprints', (req, res) => {
   if (!canPlan(req)) fail(403, 'You do not have permission to plan sprints.');
   const b = req.body || {};
   const f = readSprint(b);
-  const p = resolveProject(b.project_id || fail(400, 'Choose the project of the sprint.'));
-  if (!canPlanIn(req, p.id)) fail(403, `You cannot plan sprints in ${p.name}.`);
-  const versionId = b.version_id ? Number(b.version_id) : null;
-  if (versionId && !get('SELECT id FROM versions WHERE id = ? AND project_id = ?', versionId, p.id)) fail(400, 'That version belongs to another project.');
-  if (!f.name) f.name = `Sprint ${(get('SELECT COUNT(*) AS n FROM sprints WHERE project_id = ?', p.id).n || 0) + 1}`;
+  const projects = readProjects(req, b);
+  const pids = projects.map(p => p.id);
+  const versionId = checkVersion(b.version_id ? Number(b.version_id) : null, pids);
+  if (!f.name) f.name = `Sprint ${(get('SELECT COUNT(*) AS n FROM sprints').n || 0) + 1}`;
   const ids = [...new Set((b.task_ids || []).map(Number).filter(Boolean))];
   const out = tx(() => {
-    const { id } = run('INSERT INTO sprints(name, goal, start_date, end_date, created_by, project_id, version_id) VALUES(?,?,?,?,?,?,?)', f.name, f.goal, f.start_date, f.end_date, req.user.id, p.id, versionId);
+    const { id } = run('INSERT INTO sprints(name, goal, start_date, end_date, created_by, version_id) VALUES(?,?,?,?,?,?)', f.name, f.goal, f.start_date, f.end_date, req.user.id, versionId);
+    for (const pid of pids) run('INSERT INTO sprint_projects(sprint_id, project_id) VALUES(?,?)', id, pid);
     req.sprintSetup = id;
     for (const wid of ids) updateWp(req, loadWp(wid), { sprint_id: id });
     return id;
@@ -83,13 +104,24 @@ r.patch('/sprints/:id', (req, res) => {
   if (!canManage(req, s)) fail(403, s.created_by === req.user.id ? 'This sprint has started, so only an administrator can change it.' : 'Only the person who created this sprint, or an administrator, can change it.');
   const f = readSprint(req.body || {}, s);
   if (!f.name) fail(400, 'Name the sprint.');
-  let versionId = s.version_id;
-  if (req.body.version_id !== undefined) {
-    versionId = req.body.version_id ? Number(req.body.version_id) : null;
-    if (versionId && !get('SELECT id FROM versions WHERE id = ? AND project_id = ?', versionId, s.project_id)) fail(400, 'That version belongs to another project.');
-  }
+  const before = sprintProjectIds(s.id);
+  const b = req.body || {};
+  const pids = b.project_ids !== undefined || b.project_id !== undefined ? readProjects(req, b).map(p => p.id) : before;
+  let versionId = b.version_id !== undefined ? (b.version_id ? Number(b.version_id) : null) : s.version_id;
+  if (pids.length > 1 && b.version_id === undefined) versionId = null; // several projects now: the sprint can no longer have a version
+  versionId = checkVersion(versionId, pids);
+  const removed = before.filter(id => !pids.includes(id));
   tx(() => {
     run('UPDATE sprints SET name = ?, goal = ?, start_date = ?, end_date = ?, version_id = ? WHERE id = ?', f.name, f.goal, f.start_date, f.end_date, versionId, s.id);
+    run('DELETE FROM sprint_projects WHERE sprint_id = ?', s.id);
+    for (const pid of pids) run('INSERT INTO sprint_projects(sprint_id, project_id) VALUES(?,?)', s.id, pid);
+    // tasks of a project taken off the sprint go back to "Not in a sprint"
+    if (removed.length) {
+      for (const w of all(`SELECT id FROM work_packages WHERE sprint_id = ? AND project_id IN (${removed.map(() => '?').join(',')})`, s.id, ...removed)) {
+        run("UPDATE work_packages SET sprint_id = NULL, updated_at = datetime('now') WHERE id = ?", w.id);
+        run('INSERT INTO journals(wp_id, user_id, notes, changes) VALUES(?,?,?,?)', w.id, req.user.id, `Its project was taken off sprint "${s.name}".`, JSON.stringify({ sprint_id: [s.id, null] }));
+      }
+    }
     // the sprint's tasks follow it into its new version
     if (versionId && versionId !== s.version_id) run("UPDATE work_packages SET version_id = ?, updated_at = datetime('now') WHERE sprint_id = ?", versionId, s.id);
   });
@@ -116,7 +148,11 @@ r.post('/sprints/:id/end', (req, res) => {
   if (moveTo !== undefined && moveTo !== null && moveTo !== 'upcoming' && moveTo !== 'keep') {
     target = loadSprint(Number(moveTo)) || fail(400, 'That sprint does not exist.');
     if (target.id === s.id || sprintState(target) === 'ended') fail(400, 'Choose a sprint that has not ended.');
-    if (target.project_id !== s.project_id) fail(400, 'Choose a sprint of the same project.');
+    // the target must cover the projects of the unfinished tasks
+    const tp = sprintProjectIds(target.id);
+    const need = all('SELECT DISTINCT wp.project_id AS id, p.name FROM work_packages wp JOIN statuses st ON st.id = wp.status_id JOIN projects p ON p.id = wp.project_id WHERE wp.sprint_id = ? AND st.is_closed = 0', s.id);
+    const missing = need.filter(x => !tp.includes(x.id));
+    if (missing.length) fail(400, `${target.name} does not include ${missing.map(x => x.name).join(', ')}, so those unfinished tasks cannot move into it.`);
   }
   const t = todayISO();
   tx(() => {

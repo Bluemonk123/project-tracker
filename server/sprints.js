@@ -1,6 +1,6 @@
 // Sprint rules shared by the Sprint Planning routes and the task routes.
 // A sprint is planned (starts later), current (running today) or ended (past its end date, or ended with "End now").
-import { get } from './db.js';
+import { get, all } from './db.js';
 import { fail } from './access.js';
 import { todayISO } from './util.js';
 
@@ -11,6 +11,8 @@ export function sprintState(s, today = todayISO()) {
   return 'planned';
 }
 export const loadSprint = (id) => (id ? get('SELECT * FROM sprints WHERE id = ?', id) : null);
+// The projects a sprint covers.
+export const sprintProjectIds = (id) => all('SELECT project_id FROM sprint_projects WHERE sprint_id = ? ORDER BY project_id', id).map(r => r.project_id);
 
 // The running sprint (the latest-starting one if several overlap).
 export function currentSprint() {
@@ -20,15 +22,18 @@ export function currentSprint() {
 
 // Moving a task into or out of a sprint. Anyone who may edit the task can use planned sprints;
 // a current or ended sprint is locked: only an administrator can add tasks to it or take them out.
-// A sprint holds tasks of its own project only.
+// A sprint holds tasks of its own projects only.
 export function checkSprintMove(req, fromId, toId, projectId) {
   fromId = fromId ?? null; toId = toId ?? null;
   if (fromId === toId) return null;
   const to = toId ? loadSprint(toId) : null;
   if (toId && !to) fail(400, 'That sprint does not exist.');
-  if (to && projectId && to.project_id && to.project_id !== projectId) {
-    const pn = get('SELECT name FROM projects WHERE id = ?', to.project_id)?.name;
-    fail(400, `${to.name} is a sprint of ${pn || 'another project'}; only that project's tasks can go into it.`);
+  if (to && projectId) {
+    const pids = sprintProjectIds(to.id);
+    if (pids.length && !pids.includes(projectId)) {
+      const pn = get('SELECT name FROM projects WHERE id = ?', projectId)?.name;
+      fail(400, `${to.name} does not include ${pn || 'this project'}. Add the project to the sprint first.`);
+    }
   }
   if (req.user.is_admin) return to;
   if (toId && req.sprintSetup === toId && !fromId) return to; // picking tasks while creating the sprint
