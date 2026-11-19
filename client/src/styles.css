@@ -1370,3 +1370,14 @@ a.ov-stage-row:hover { background: var(--sunken); }
 .sp-filters { overflow: visible !important; padding-bottom: 0; }
 @media (max-width: 1300px) { .sp-filters { flex-wrap: wrap; } }
 .sp-filters .sprint-picker-pop input[type=search], .sp-filters .proj-multi-pop input[type=search] { width: 100% !important; flex: none !important; min-width: 0; height: 32px; }
+/* Technologies page: grouped by project */
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: none; padding: 0 12px; height: 34px; font: inherit; font-size: var(--fs-sm); color: var(--ink-2); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.active { background: var(--accent-soft); color: var(--ink); font-weight: 650; }
+.tech-groups { display: flex; flex-direction: column; gap: 14px; }
+.tech-group { border-left: 4px solid var(--pc, var(--line)); overflow: hidden; }
+.tech-group-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--line-2); }
+.tech-group-toggle { display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; padding: 0; cursor: pointer; color: var(--ink); font: inherit; font-size: 15px; }
+.tech-group-toggle .kb-count { background: var(--sunken); }
+.tech-group-sums { display: inline-flex; gap: 6px; flex-wrap: wrap; }
