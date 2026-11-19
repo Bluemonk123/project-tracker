@@ -1366,3 +1366,7 @@ a.ov-stage-row:hover { background: var(--sunken); }
 .sp-filters .proj-multi-btn { width: 128px; padding: 0 8px; }
 .sp-filters .sprint-picker { flex: 1.2 1 180px; min-width: 130px; }
 .sp-filters .sprint-picker-btn { padding: 0 8px; }
+/* the sprint and project pickers open below the row, so the row must not clip (no scrolling) */
+.sp-filters { overflow: visible !important; padding-bottom: 0; }
+@media (max-width: 1300px) { .sp-filters { flex-wrap: wrap; } }
+.sp-filters .sprint-picker-pop input[type=search], .sp-filters .proj-multi-pop input[type=search] { width: 100% !important; flex: none !important; min-width: 0; height: 32px; }
