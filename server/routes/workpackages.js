@@ -114,6 +114,9 @@ export function buildFilter(req, q) {
   inFilter('wp.tester_id', q.tester_id);
   inFilter('wp.version_id', q.version_id);
   inFilter('wp.sprint_id', q.sprint_id); // a sprint's id, or 'none' for unpicked (upcoming) tasks
+  // stage = Task Board column(s): new, design, develop, testing, closed, rejected (comma separated)
+  const stages = String(q.stage || '').split(',').map(x => x.trim()).filter(x => BOARD_COLUMNS.some(c => c.key === x));
+  if (stages.length) { where.push(`wp.status_id IN (SELECT id FROM statuses WHERE board_column IN (${stages.map(() => '?').join(',')}))`); params.push(...stages); }
   if (q.module === 'none') where.push("TRIM(COALESCE(wp.module, '')) = ''");
   else if (norm(q.module)) { where.push('LOWER(TRIM(wp.module)) = ?'); params.push(norm(q.module).toLowerCase()); }
   // tasks in a current / planned (future) / ended (completed) sprint, or in any sprint

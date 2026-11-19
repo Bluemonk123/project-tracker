@@ -881,3 +881,13 @@ test('task list: module filter', async () => {
   const rows = (await admin.get('/work-packages?status=all&module=reports%20hub')).data.rows.map(x => x.id);
   assert.deepEqual(rows, [a.id]);
 });
+
+test('task list: stage filter (Task Board column)', async () => {
+  const meta = (await admin.get('/meta')).data;
+  const testing = meta.statuses.find(s => s.board_column === 'testing');
+  const a = (await admin.post('/work-packages', { project_id: ids.project, subject: 'Stage filter A', status_id: testing.id })).data;
+  const rows = (await admin.get('/work-packages?status=all&stage=testing&limit=2000')).data.rows;
+  assert.ok(rows.some(x => x.id === a.id) && rows.every(x => x.board_column === 'testing'));
+  const two = (await admin.get('/work-packages?status=all&stage=testing,closed&limit=2000')).data.rows;
+  assert.ok(two.every(x => ['testing', 'closed'].includes(x.board_column)));
+});

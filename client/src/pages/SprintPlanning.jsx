@@ -148,7 +148,7 @@ const TABS = [
   { key: 'ended', label: 'Completed sprints', q: { sprint_state: 'ended' }, status: 'all' },
   { key: 'all', label: 'All tasks', q: {}, status: 'open' },
 ];
-const FILTERS = ['q', 'project_id', 'version_id', 'type_id', 'assignee_id', 'priority_id', 'location', 'status'];
+const FILTERS = ['q', 'project_id', 'version_id', 'type_id', 'assignee_id', 'priority_id', 'location', 'stage', 'status'];
 const dragIds = (e) => { const p = e.dataTransfer.getData('text/plain'); return p.startsWith('tasks:') ? p.slice(6).split(',').map(Number).filter(Boolean) : []; };
 
 export default function SprintPlanning() {
@@ -167,12 +167,13 @@ export default function SprintPlanning() {
   const sprintFilter = /^\d+$/.test(sp.get('sprint') || '') ? Number(sp.get('sprint')) : null;
   const tab = sprintFilter ? { key: 'sprint', q: { sprint_id: sprintFilter }, status: 'all' } : TABS.find(t => t.key === sp.get('tab')) || TABS[0];
   const f = Object.fromEntries(FILTERS.map(k => [k, sp.get(k) || undefined]));
-  const status = f.status || tab.status;
+  // choosing a stage shows its tasks whatever their status (Closed, Rejected), unless a status is chosen too
+  const status = f.status || (f.stage ? 'all' : tab.status);
   const base = { ...f, version_id: idList(f.project_id).length === 1 ? f.version_id : undefined, status, sort: sp.get('sort') || 'priority:desc,id:asc' };
   const query = { ...base, ...tab.q, limit };
   const up = useLoad(() => api.get('/work-packages' + qs(query)), [JSON.stringify(query)]);
   // how many tasks each tab has with the same filters
-  const counts = useLoad(() => (sprintFilter ? null : Promise.all(TABS.map(t => api.get('/work-packages' + qs({ ...base, status: f.status || t.status, ...t.q, limit: 1 })).then(r => r.total)))), [JSON.stringify(base), sprintFilter]);
+  const counts = useLoad(() => (sprintFilter ? null : Promise.all(TABS.map(t => api.get('/work-packages' + qs({ ...base, status: f.status || (f.stage ? 'all' : t.status), ...t.q, limit: 1 })).then(r => r.total)))), [JSON.stringify(base), sprintFilter]);
   const sl = useLoad(() => api.get('/sprints' + qs({ project_id: f.project_id, version_id: idList(f.project_id).length === 1 ? f.version_id : undefined })), [f.project_id, f.version_id]);
   const projectIds = idList(f.project_id);
   const oneProject = projectIds.length === 1 ? projectIds[0] : null; // versions belong to one project
@@ -266,7 +267,7 @@ export default function SprintPlanning() {
         <SprintPicker sprints={sprints} value={sprintFilter} currentId={sl.data?.current_id} noneLabel="Any sprint" withProject={projectIds.length !== 1}
           onChange={(id) => setParams({ sprint: id ? String(id) : '', tab: '' })} />
         <select value={oneProject ? f.version_id || '' : ''} onChange={(e) => setParam('version_id', e.target.value)} aria-label="Version" disabled={!oneProject} title={oneProject ? 'Version' : 'Choose one project to pick one of its versions'}>
-          <option value="">{oneProject ? 'Any version' : 'Version (choose one project)'}</option>
+          <option value="">{oneProject ? 'Version' : 'Version'}</option>
           {oneProject && <option value="none">No version</option>}
           {versions.map(v => <option key={v.id} value={v.id}>{v.name}{v.status === 'closed' ? ' (closed)' : ''}</option>)}
         </select>
@@ -274,19 +275,23 @@ export default function SprintPlanning() {
           onKeyDown={(e) => { if (e.key === 'Enter') setParam('q', e.target.value.trim()); }}
           onBlur={(e) => { if ((e.target.value.trim() || undefined) !== f.q) setParam('q', e.target.value.trim()); }} />
         <select value={f.type_id || ''} onChange={(e) => setParam('type_id', e.target.value)} aria-label="Type">
-          <option value="">Any type</option>{meta.types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          <option value="">Type</option>{meta.types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
         <select value={f.assignee_id || ''} onChange={(e) => setParam('assignee_id', e.target.value)} aria-label="Assignee">
-          <option value="">Anyone</option><option value="me">Me</option><option value="none">Unassigned</option>
+          <option value="">Person</option><option value="me">Me</option><option value="none">Unassigned</option>
           {activeUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
         </select>
         <select value={f.priority_id || ''} onChange={(e) => setParam('priority_id', e.target.value)} aria-label="Priority">
-          <option value="">Any priority</option>{[...meta.priorities].reverse().map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          <option value="">Priority</option>{[...meta.priorities].reverse().map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
         <select value={f.location || ''} onChange={(e) => setParam('location', e.target.value)} aria-label="Location">
-          <option value="">Any location</option>{Object.entries(LOCATIONS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}<option value="none">Not set</option>
+          <option value="">Location</option>{Object.entries(LOCATIONS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}<option value="none">Not set</option>
         </select>
-        <select value={status} onChange={(e) => setParam('status', e.target.value === tab.status ? '' : e.target.value)} aria-label="Status">
+        <select value={f.stage || ''} onChange={(e) => setParam('stage', e.target.value)} aria-label="Stage">
+          <option value="">Stage</option>
+          {Object.entries(STAGE_NAME).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+        </select>
+        <select value={status} onChange={(e) => setParam('status', e.target.value === (f.stage ? 'all' : tab.status) ? '' : e.target.value)} aria-label="Status">
           <option value="open">Open</option><option value="closed">Closed</option><option value="all">Any status</option>
         </select>
         {filtered && <button type="button" className="btn sm ghost" onClick={() => { setSp(sp.get('tab') ? { tab: sp.get('tab') } : {}, { replace: true }); setSelected([]); }}>Reset</button>}
