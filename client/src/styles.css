@@ -1332,3 +1332,12 @@ a.ov-stage-row:hover { background: var(--sunken); }
 .pb-module-input { width: 100%; max-width: 380px; height: 32px; border-color: transparent; background: transparent; font-weight: 600; }
 .pb-module-input:hover { border-color: var(--line); }
 .pb-module-input:focus { border-color: var(--accent); background: var(--surface); }
+/* Technologies card: edit / delete on each row */
+.pb-tech-row { grid-template-columns: minmax(0, 1fr) auto auto auto; cursor: default; }
+.pb-tech-row:hover { background: var(--sunken); }
+.pb-tech-actions { display: inline-flex; gap: 2px; }
+.pb-tech-actions .btn.icon { width: 26px; height: 26px; color: var(--ink-3); }
+.pb-tech-actions .btn.icon:hover { color: var(--ink); }
+.pb-tech-actions .btn.danger:hover { color: var(--danger); }
+.pb-tech-actions .btn.icon { width: 28px; height: 28px; color: var(--ink-2); padding: 0; }
+.pb-tech-actions .btn.icon svg { width: 16px !important; height: 16px !important; }

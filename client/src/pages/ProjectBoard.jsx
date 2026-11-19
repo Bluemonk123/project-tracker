@@ -636,6 +636,12 @@ function TechCard({ project, data: boardData, reloadBoard }) {
   const [linkModal, setLinkModal] = useState(null); // 'hosting' | 'repository'
   const [, runSave] = useAsync();
   const saveBoard = async (b, msg) => { if (await runSave(() => api.put(`/projects/${project.id}/board-info`, { board: b }), msg)) reloadBoard(); };
+  const [, runDel] = useAsync();
+  const del = async (t) => {
+    if (await confirmDialog({ title: `Delete ${t.name}?`, message: `${t.name} is removed from ${project.name}'s technologies.`, confirmLabel: 'Delete', danger: true })) {
+      if (await runDel(() => api.del(`/technologies/${t.id}`), `${t.name} deleted`)) reload();
+    }
+  };
   const linksBtn = (kind) => bcan.brief && <button type="button" className="btn sm ghost pb-edit" onClick={() => setLinkModal(kind)}><Icon name="edit" size={14} />Links</button>;
   const force = useRef(false);
   const { data, error, loading, reload } = useLoad(() => {
@@ -667,12 +673,18 @@ function TechCard({ project, data: boardData, reloadBoard }) {
           {sums.length > 0 && <div className="pb-tech-sums">{sums.map(([tone, n, l]) => <span key={l} className={`tag ${tone}`}>{n} {l}</span>)}</div>}
           <ul className="pb-techlist">
             {rows.map(t => (
-              <li key={t.id}>
-                <button type="button" className="pb-tech-row" onClick={() => canEdit && setModal({ tech: t })} disabled={!canEdit} title={canEdit ? `Edit ${t.name}` : t.notes || t.name}>
+              <li key={t.id} className="pb-tech-li">
+                <div className="pb-tech-row" title={t.notes || t.name}>
                   <span className="pb-tech-name"><b className="ellipsis">{t.name}</b><span className="xs muted">{t.category}</span></span>
                   <span className="pb-tech-ver small">{t.version_used || <span className="muted">—</span>}</span>
                   <StatusTag a={t.assessment} />
-                </button>
+                  {canEdit && (
+                    <span className="pb-tech-actions">
+                      <button type="button" className="btn icon xs ghost" onClick={() => setModal({ tech: t })} title={`Edit ${t.name}`} aria-label={`Edit ${t.name}`}><Icon name="edit" size={14} /></button>
+                      <button type="button" className="btn icon xs ghost danger" onClick={() => del(t)} title={`Delete ${t.name}`} aria-label={`Delete ${t.name}`}><Icon name="trash" size={14} /></button>
+                    </span>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
