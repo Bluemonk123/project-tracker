@@ -844,3 +844,40 @@ test('manager overview: totals, stages, sprints, projects and people', async () 
   // others without the report permission cannot see it
   assert.ok([401, 403].includes((await outsider.get('/reports/overview')).status));
 });
+
+test('project modules: list, add, rename (tasks follow), remove; names typed on tasks join the list', async () => {
+  const pid = ids.project;
+  const w = (await admin.post('/work-packages', { project_id: pid, subject: 'Module test task', module: 'Billing Desk' })).data;
+  let r = await admin.get(`/projects/${pid}/modules?full=1`);
+  assert.equal(r.status, 200);
+  const billing = r.data.modules.find(m => m.module === 'Billing Desk');
+  assert.ok(billing && billing.n >= 1 && r.data.can_edit);
+  // add, duplicate (any case)
+  assert.equal((await admin.post(`/projects/${pid}/modules`, { name: 'Payroll' })).status, 201);
+  assert.equal((await admin.post(`/projects/${pid}/modules`, { name: 'payroll' })).status, 409);
+  // rename: the task follows, and its activity says so
+  r = await admin.patch(`/projects/${pid}/modules/${billing.id}`, { name: 'Billing' });
+  assert.equal(r.status, 200);
+  const t = (await admin.get(`/work-packages/${w.id}`)).data;
+  assert.equal(t.module, 'Billing');
+  assert.ok(t.journals.some(j => (j.changes || '').includes('"module"')));
+  // rename onto an existing module merges
+  const pay = r.data.find(m => m.module === 'Payroll');
+  r = await admin.patch(`/projects/${pid}/modules/${pay.id}`, { name: 'billing' });
+  assert.equal(r.data.filter(m => m.module.toLowerCase() === 'billing').length, 1);
+  // remove: tasks are left without a module
+  const bill = r.data.find(m => m.module.toLowerCase() === 'billing');
+  r = await admin.del(`/projects/${pid}/modules/${bill.id}`);
+  assert.ok(!r.data.some(m => m.module.toLowerCase() === 'billing'));
+  assert.equal((await admin.get(`/work-packages/${w.id}`)).data.module, null);
+  // others cannot edit; the board info lists the modules
+  assert.ok([401, 403].includes((await outsider.post(`/projects/${pid}/modules`, { name: 'X' })).status));
+  assert.ok(Array.isArray((await admin.get(`/projects/${pid}/board-info`)).data.delivery.modules));
+});
+
+test('task list: module filter', async () => {
+  const a = (await admin.post('/work-packages', { project_id: ids.project, subject: 'Mod filter A', module: 'Reports Hub' })).data;
+  await admin.post('/work-packages', { project_id: ids.project, subject: 'Mod filter B', module: 'Other Hub' });
+  const rows = (await admin.get('/work-packages?status=all&module=reports%20hub')).data.rows.map(x => x.id);
+  assert.deepEqual(rows, [a.id]);
+});

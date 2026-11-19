@@ -101,6 +101,11 @@ function ProjectDetails({ data, reload }) {
           <Link className="pb-count-link" to={`/projects/${p.identifier}/work-packages?status=all`}>{delivery.tasks}<span> task{delivery.tasks === 1 ? '' : 's'}</span></Link>
           <span className="xs soft">{delivery.open} open</span>
         </PbRow>
+        <PbRow label="Modules">
+          <button type="button" className="pb-count-link as-btn" onClick={() => setModal('modules')} title="See and edit the modules">
+            {(delivery.modules || []).length}<span> module{(delivery.modules || []).length === 1 ? '' : 's'}</span></button>
+          {(delivery.modules || []).length > 0 && <span className="xs soft ellipsis" style={{ maxWidth: 360 }} title={delivery.modules.join(', ')}>{delivery.modules.slice(0, 4).join(', ')}{delivery.modules.length > 4 ? ` +${delivery.modules.length - 4} more` : ''}</span>}
+        </PbRow>
         <PbRow label="Hours">
           <HoursSummary hrs={data.hours} link={`/projects/${p.identifier}/time`} />
         </PbRow>
@@ -141,6 +146,7 @@ function ProjectDetails({ data, reload }) {
       {modal === 'brief' && <BriefModal p={p} onClose={() => setModal(null)} onSave={(d) => save({ description: d }, 'Brief saved')} />}
       {modal === 'golive' && <GoLiveModal board={board} onClose={() => setModal(null)} onSave={(b) => saveBoard(b, 'Live version saved')} />}
       {modal === 'release' && r && <ReleaseModal r={r} p={p} onClose={() => setModal(null)} />}
+      {modal === 'modules' && <ModulesModal p={p} onClose={() => setModal(null)} onChanged={reload} />}
       {modal === 'customer' && <CustomerModal p={p} board={board} onClose={() => setModal(null)} onSave={save} />}
       {modal === 'personas' && <PersonasModal roles={data.customer_roles} onClose={() => setModal(null)} onSave={(roles) => save({ customer_roles: roles }, 'Personas saved')} />}
       {modal?.persona !== undefined && <PersonaView persona={data.customer_roles[modal.persona]} onClose={() => setModal(null)} onEdit={can.brief ? () => setModal('personas') : null} />}
@@ -550,6 +556,76 @@ function ApprovalModal({ projectId, approval, sectionId, sectionName, onClose, o
         <Field label="Second approver"><UserSelect value={f.second_approver_id} placeholder="Choose a person" onChange={(v) => setF({ ...f, second_approver_id: v })} /></Field>
         <p className="xs muted" style={{ margin: 0 }}>Both approvers are notified when they are chosen.</p>
       </div>
+    </Modal>
+  );
+}
+
+// Modules of a project: add, rename (its tasks follow) and remove. Clicking a count opens those tasks.
+function ModulesModal({ p, onClose, onChanged }) {
+  const { data, error, loading, setData } = useLoad(() => api.get(`/projects/${p.id}/modules?full=1`), [p.id]);
+  const [name, setName] = useState('');
+  const [edits, setEdits] = useState({});   // id -> name being typed
+  const [q, setQ] = useState('');
+  const [busy, run] = useAsync();
+  const list = data?.modules || [];
+  const canEdit = !!data?.can_edit;
+  const apply = (rows) => { setData({ ...data, modules: rows }); onChanged?.(); };
+  const add = async () => {
+    const n = name.trim(); if (!n) return;
+    const rows = await run(() => api.post(`/projects/${p.id}/modules`, { name: n }), `${n} added`);
+    if (rows) { setName(''); apply(rows); }
+  };
+  const rename = async (m) => {
+    const n = String(edits[m.id] ?? m.module).trim();
+    if (!n || n === m.module) { setEdits(e => { const x = { ...e }; delete x[m.id]; return x; }); return; }
+    const merge = list.some(o => o.id !== m.id && o.module.toLowerCase() === n.toLowerCase());
+    if (merge && !window.confirm(`${n} is already in the list. Merge ${m.module} into it? Its ${m.n} task(s) move to ${n}.`)) return;
+    const rows = await run(() => api.patch(`/projects/${p.id}/modules/${m.id}`, { name: n }), m.n ? `Renamed; ${m.n} task${m.n === 1 ? '' : 's'} updated` : 'Renamed');
+    if (rows) { setEdits(e => { const x = { ...e }; delete x[m.id]; return x; }); apply(rows); }
+  };
+  const remove = async (m) => {
+    if (!window.confirm(m.n ? `Remove ${m.module}? Its ${m.n} task(s) will have no module.` : `Remove ${m.module}?`)) return;
+    const rows = await run(() => api.del(`/projects/${p.id}/modules/${m.id}`), `${m.module} removed`);
+    if (rows) apply(rows);
+  };
+  const needle = q.trim().toLowerCase();
+  const shown = list.filter(m => !needle || m.module.toLowerCase().includes(needle));
+  const totalTasks = list.reduce((a, m) => a + m.n, 0);
+  return (
+    <Modal title={`Modules · ${p.name}`} onClose={onClose} wide
+      footer={<><span className="small muted grow">{list.length} module{list.length === 1 ? '' : 's'} · {totalTasks} task{totalTasks === 1 ? '' : 's'} with a module</span><button type="button" className="btn" onClick={onClose}>Done</button></>}>
+      <ErrorBox error={error} />
+      <p className="small muted" style={{ marginTop: 0 }}>The parts of the application the tasks are about. A module typed on a task is added here too. Renaming a module renames it on its tasks.</p>
+      <div className="row" style={{ gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+        {canEdit && <>
+          <input type="text" value={name} maxLength={80} placeholder="New module, e.g. Invoices" onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} style={{ flex: '1 1 220px', maxWidth: 320 }} aria-label="New module" />
+          <button type="button" className="btn primary" disabled={busy || !name.trim()} onClick={add}><Icon name="plus" size={15} />Add</button>
+        </>}
+        {list.length > 8 && <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a module" aria-label="Find a module" style={{ flex: '1 1 180px', maxWidth: 240, marginLeft: 'auto' }} />}
+      </div>
+      {loading && !data ? <Loading /> : !list.length ? <Empty small>No modules yet.{canEdit ? ' Add the first one above, or type a module on a task.' : ''}</Empty> : (
+        <div className="table-wrap pb-modules">
+          <table className="table">
+            <thead><tr><th>Module</th><th className="num">Open tasks</th><th className="num">All tasks</th>{canEdit && <th style={{ width: 44 }} />}</tr></thead>
+            <tbody>
+              {shown.map(m => (
+                <tr key={m.id}>
+                  <td>{canEdit
+                    ? <input type="text" className="pb-module-input" value={edits[m.id] ?? m.module} maxLength={80} aria-label={`Rename ${m.module}`}
+                        onChange={(e) => setEdits(x => ({ ...x, [m.id]: e.target.value }))} onBlur={() => rename(m)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } if (e.key === 'Escape') setEdits(x => { const y = { ...x }; delete y[m.id]; return y; }); }} />
+                    : <b>{m.module}</b>}</td>
+                  <td className="num">{m.open ? <Link to={`/projects/${p.identifier}/work-packages?module=${encodeURIComponent(m.module)}`} onClick={onClose}>{m.open}</Link> : <span className="muted">0</span>}</td>
+                  <td className="num">{m.n ? <Link to={`/projects/${p.identifier}/work-packages?status=all&module=${encodeURIComponent(m.module)}`} onClick={onClose}>{m.n}</Link> : <span className="muted">0</span>}</td>
+                  {canEdit && <td><button type="button" className="btn icon sm ghost" onClick={() => remove(m)} title={`Remove ${m.module}`} aria-label={`Remove ${m.module}`}><Icon name="trash" size={15} /></button></td>}
+                </tr>
+              ))}
+              {!shown.length && <tr><td colSpan={4} className="muted small">No module matches.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Modal>
   );
 }

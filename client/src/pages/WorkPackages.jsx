@@ -19,7 +19,7 @@ const PRESETS = [
   { id: 'closed', label: 'Closed', params: { status: 'closed', sort: 'updated_at:desc' } },
 ];
 
-const FILTER_KEYS = ['status', 'type_id', 'assignee_id', 'priority_id', 'source', 'version_id', 'project_id', 'q', 'overdue', 'watched', 'sort', 'group'];
+const FILTER_KEYS = ['status', 'type_id', 'assignee_id', 'priority_id', 'source', 'version_id', 'project_id', 'module', 'q', 'overdue', 'watched', 'sort', 'group'];
 
 export default function WorkPackages({ project }) {
   const { meta, projects, activeUsers, can } = useApp();
@@ -137,6 +137,8 @@ export default function WorkPackages({ project }) {
           <option value="type">Group by type</option><option value="priority">Group by priority</option><option value="parent">Group by parent</option>
           {project ? <option value="version">Group by version</option> : <option value="project">Group by project</option>}
         </select>
+        {params.module && <span className="tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Module: <b>{params.module === 'none' ? 'none' : params.module}</b>
+          <button type="button" className="btn icon xs ghost" onClick={() => setParam('module', '')} aria-label="Clear the module filter"><Icon name="x" size={12} /></button></span>}
         {[...sp.keys()].some(k => !['group'].includes(k)) && <button type="button" className="btn sm ghost" onClick={() => setSp(group ? { group } : {}, { replace: true })}>Reset filters</button>}
       </div>
 

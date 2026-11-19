@@ -579,3 +579,12 @@ CREATE TABLE IF NOT EXISTS sprint_projects (
   project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   PRIMARY KEY (sprint_id, project_id)
 );
+
+-- Modules (parts of the application) of a project. Tasks keep the module name; new names typed on tasks are added here.
+CREATE TABLE IF NOT EXISTS project_modules (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL COLLATE NOCASE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (project_id, name)
+);

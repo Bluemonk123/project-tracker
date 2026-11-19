@@ -410,6 +410,11 @@ function migrate() {
       setSetting('migration_helpdesk_v1', String(wps.length));
     });
   }
+  // Modules list: start from the modules the tasks already use
+  if (!getSetting('project_modules_v1')) {
+    db.exec("INSERT OR IGNORE INTO project_modules(project_id, name) SELECT project_id, TRIM(module) FROM work_packages WHERE TRIM(COALESCE(module, '')) <> '' GROUP BY project_id, LOWER(TRIM(module))");
+    setSetting('project_modules_v1', '1');
+  }
 }
 migrate();
 

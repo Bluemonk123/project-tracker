@@ -1326,3 +1326,9 @@ a.ov-stage-row:hover { background: var(--sunken); }
 .kbx-card, .kbx-card * { text-decoration: none !important; }
 .kb-col-head .kb-switch + .kb-expand { margin-left: 4px; }
 .kb-col-head:has(.kb-switch) .kb-switch button { font-size: 13.5px; gap: 4px; padding: 0 4px; min-width: 0; overflow: hidden; }
+/* Project Board: modules list */
+.pb-modules { max-height: 55vh; overflow: auto; border: 1px solid var(--line-2); border-radius: 8px; }
+.pb-modules th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.pb-module-input { width: 100%; max-width: 380px; height: 32px; border-color: transparent; background: transparent; font-weight: 600; }
+.pb-module-input:hover { border-color: var(--line); }
+.pb-module-input:focus { border-color: var(--accent); background: var(--surface); }

@@ -102,7 +102,6 @@ export function buildFilter(req, q) {
   else if (['local', 'staging', 'production', 'external'].includes(q.location)) { where.push('wp.location = ?'); params.push(q.location); }
   inFilter('wp.priority_id', q.priority_id);
   inFilter('wp.criticality_id', q.criticality_id);
-  if (q.module) { where.push('wp.module = ?'); params.push(String(q.module)); }
   // source: project / ticket / email (comma-separated for several)
   const sources = String(q.source || '').split(',').filter(x => ['project', 'ticket', 'email'].includes(x));
   if (sources.length) { where.push(`wp.source IN (${sources.map(() => '?').join(',')})`); params.push(...sources); }
@@ -115,6 +114,8 @@ export function buildFilter(req, q) {
   inFilter('wp.tester_id', q.tester_id);
   inFilter('wp.version_id', q.version_id);
   inFilter('wp.sprint_id', q.sprint_id); // a sprint's id, or 'none' for unpicked (upcoming) tasks
+  if (q.module === 'none') where.push("TRIM(COALESCE(wp.module, '')) = ''");
+  else if (norm(q.module)) { where.push('LOWER(TRIM(wp.module)) = ?'); params.push(norm(q.module).toLowerCase()); }
   // tasks in a current / planned (future) / ended (completed) sprint, or in any sprint
   if (q.sprint_state === 'any') where.push('wp.sprint_id IS NOT NULL');
   else if (q.sprint_state === 'planned') { where.push('wp.sprint_id IN (SELECT id FROM sprints WHERE ended_at IS NULL AND start_date > ?)'); params.push(todayISO()); }
@@ -308,11 +309,62 @@ r.post('/admin/import/tasks', (req, res) => {
   res.status(201).json({ created: created.length, items: created });
 });
 
-// modules already used in a project (suggestions for the Module field)
+// ---------- modules of a project ----------
+// The list (project_modules) plus how many tasks use each module. ?full=1 also says whether the person may edit the list.
+const canEditModules = (req, pid) => !!req.user.is_admin || can(req, 'wp.edit', pid) || can(req, 'project.brief', pid);
+export const rememberModule = (projectId, name) => { const n = String(name || '').trim(); if (n) run('INSERT OR IGNORE INTO project_modules(project_id, name) VALUES(?,?)', projectId, n.slice(0, 80)); };
+function moduleList(pid) {
+  return all(`SELECT m.id, m.name AS module,
+      (SELECT COUNT(*) FROM work_packages w WHERE w.project_id = m.project_id AND LOWER(TRIM(w.module)) = LOWER(m.name)) AS n,
+      (SELECT COUNT(*) FROM work_packages w JOIN statuses s ON s.id = w.status_id WHERE w.project_id = m.project_id AND LOWER(TRIM(w.module)) = LOWER(m.name) AND s.is_closed = 0) AS open
+    FROM project_modules m WHERE m.project_id = ? ORDER BY m.name COLLATE NOCASE`, pid);
+}
 r.get('/projects/:pid/modules', (req, res) => {
   const p = resolveProject(req.params.pid);
   need(req, 'wp.view', p.id);
-  res.json(all("SELECT module, COUNT(*) AS n FROM work_packages WHERE project_id = ? AND module IS NOT NULL AND module <> '' GROUP BY module ORDER BY module COLLATE NOCASE", p.id));
+  const list = moduleList(p.id);
+  if (req.query.full) return res.json({ modules: list, can_edit: canEditModules(req, p.id) });
+  res.json(list);
+});
+const moduleName = (v) => { const n = String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, 80); if (!n) fail(400, 'Enter the module name.'); return n; };
+r.post('/projects/:pid/modules', (req, res) => {
+  const p = resolveProject(req.params.pid);
+  if (!canEditModules(req, p.id)) fail(403, 'You cannot change the modules of this project.');
+  const name = moduleName(req.body?.name);
+  if (get('SELECT id FROM project_modules WHERE project_id = ? AND name = ?', p.id, name)) fail(409, `${name} is already in the list.`);
+  run('INSERT INTO project_modules(project_id, name) VALUES(?,?)', p.id, name);
+  res.status(201).json(moduleList(p.id));
+});
+// Rename: the tasks with the old name get the new one. Renaming to a module that exists merges the two.
+r.patch('/projects/:pid/modules/:id', (req, res) => {
+  const p = resolveProject(req.params.pid);
+  if (!canEditModules(req, p.id)) fail(403, 'You cannot change the modules of this project.');
+  const m = get('SELECT * FROM project_modules WHERE id = ? AND project_id = ?', Number(req.params.id), p.id) || fail(404, 'Module not found.');
+  const name = moduleName(req.body?.name);
+  tx(() => {
+    const other = get('SELECT id FROM project_modules WHERE project_id = ? AND name = ? AND id <> ?', p.id, name, m.id);
+    if (other) run('DELETE FROM project_modules WHERE id = ?', m.id); else run('UPDATE project_modules SET name = ? WHERE id = ?', name, m.id);
+    for (const w of all('SELECT id, module FROM work_packages WHERE project_id = ? AND LOWER(TRIM(module)) = LOWER(?)', p.id, m.name)) {
+      if (w.module === name) continue;
+      run("UPDATE work_packages SET module = ?, updated_at = datetime('now') WHERE id = ?", name, w.id);
+      run('INSERT INTO journals(wp_id, user_id, notes, changes) VALUES(?,?,?,?)', w.id, req.user.id, null, JSON.stringify({ module: [w.module, name] }));
+    }
+  });
+  res.json(moduleList(p.id));
+});
+// Remove from the list; the tasks that used it are left without a module.
+r.delete('/projects/:pid/modules/:id', (req, res) => {
+  const p = resolveProject(req.params.pid);
+  if (!canEditModules(req, p.id)) fail(403, 'You cannot change the modules of this project.');
+  const m = get('SELECT * FROM project_modules WHERE id = ? AND project_id = ?', Number(req.params.id), p.id) || fail(404, 'Module not found.');
+  tx(() => {
+    for (const w of all('SELECT id, module FROM work_packages WHERE project_id = ? AND LOWER(TRIM(module)) = LOWER(?)', p.id, m.name)) {
+      run("UPDATE work_packages SET module = NULL, updated_at = datetime('now') WHERE id = ?", w.id);
+      run('INSERT INTO journals(wp_id, user_id, notes, changes) VALUES(?,?,?,?)', w.id, req.user.id, `Module "${m.name}" was removed from the project.`, JSON.stringify({ module: [w.module, null] }));
+    }
+    run('DELETE FROM project_modules WHERE id = ?', m.id);
+  });
+  res.json(moduleList(p.id));
 });
 
 r.get('/work-packages/export.csv', (req, res) => {
@@ -506,6 +558,7 @@ export function createWp(req, projectId, body, { journalNote } = {}) {
       f.start_date || null, f.due_date || null, f.estimated_hours ?? null, f.done_ratio ?? 0, f.position ?? pos,
       f.designer_id || null, f.developer_id || null, f.tester_id || null, f.criticality_id || null, f.requested_by || null, f.solution || null, f.module || null, f.location || null, f.sprint_id || null);
     enterStage(id, stage, req.user.id);
+    if (f.module) rememberModule(projectId, f.module);
     if (get('SELECT is_closed FROM statuses WHERE id = ?', f.status_id)?.is_closed) run("UPDATE work_packages SET closed_on = date('now') WHERE id = ?", id);
     run('INSERT INTO journals(wp_id, user_id, notes, changes) VALUES(?,?,?,?)', id, req.user.id, journalNote || null, JSON.stringify({ created: [null, true] }));
     addLinks(id, body.links, req.user.id);
@@ -645,6 +698,7 @@ export function updateWp(req, wp, body) {
         keys.push('number');
       }
       run(`UPDATE work_packages SET ${keys.map(k => `${k} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`, ...keys.map(k => set[k]), wp.id);
+      if (set.module) rememberModule(projectId, set.module);
     }
     // closed on: set when the task reaches a closed status, cleared when it is reopened
     if (changes.status_id) {

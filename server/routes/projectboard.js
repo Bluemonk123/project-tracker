@@ -128,7 +128,8 @@ r.get('/projects/:pid/board-info', (req, res) => {
     board: readBoard(p),
     release_notes: releaseNotes(p.id),
     hours: projectHours(p.id),
-    delivery: { tasks: counts.total || 0, open: counts.open || 0, testing: counts.testing || 0, testing_status_ids: testingIds, release: release || null },
+    delivery: { tasks: counts.total || 0, open: counts.open || 0, testing: counts.testing || 0,
+      modules: all('SELECT name FROM project_modules WHERE project_id = ? ORDER BY name COLLATE NOCASE', p.id).map(x => x.name), testing_status_ids: testingIds, release: release || null },
     stack: {
       development: tech.filter(t => !['Database', 'Data', 'Infrastructure', 'DevOps', 'OS'].includes(t.category)),
       database: tech.filter(t => t.category === 'Database' || t.category === 'Data'),
