@@ -51,11 +51,28 @@ export async function sendMail({ to, subject, text, ticketNo, autoReply }) {
       });
       return { ok: true, via };
     } catch (e) {
-      lastError = e.message;
+      lastError = explainMailError(e.message, m) + (explainMailError(e.message, m) !== e.message ? ` (Server said: ${String(e.message).slice(0, 160)})` : '');
       console.error(`Email through the ${via} mailbox failed:`, e.message);
     }
   }
   return { ok: false, error: lastError || 'Email is not set up.' };
+}
+
+// Mail servers answer with codes; say what they mean and what to change.
+export function explainMailError(msg, m = {}) {
+  const e = String(msg || '');
+  const user = m.user || 'this mailbox';
+  if (/SendAsDenied|5\.7\.60|not allowed to send as|send as permission/i.test(e))
+    return `${user} is not allowed to send as ${m.from}. Put the same address in "Send from" as in "User name", or ask your email admin to give ${user} "Send As" permission on ${m.from}.`;
+  if (/5\.7\.139|SmtpClientAuthentication|basic authentication is disabled|security defaults/i.test(e))
+    return `Microsoft 365 blocked the sign-in for ${user}. Ask your Microsoft 365 admin to turn on "Authenticated SMTP" for this mailbox (admin.microsoft.com → Users → the user → Mail → Manage email apps). If the mailbox uses two-step sign-in (MFA) or the company has "Security defaults" on, this kind of sign-in is blocked: use a mailbox without MFA, or an app password.`;
+  if (/5\.7\.3\b|535|Invalid login|Authentication unsuccessful|authentication failed|Username and Password not accepted/i.test(e))
+    return `The mail server did not accept the user name or password for ${user}. Re-type the password and save again. (For Microsoft 365, "Authenticated SMTP" must also be on for this mailbox.)`;
+  if (/wrong version number|SSL routines|ssl3_get_record|packet length too long/i.test(e))
+    return 'The "SSL/TLS from the start" tick does not match the port: for port 587 leave it unticked; for port 465 tick it.';
+  if (/ETIMEDOUT|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|Greeting never received|Connection timeout|ECONNECTION/i.test(e))
+    return `The app could not reach the mail server "${m.host}" on port ${m.port || 587}. Check the server name and port (Microsoft 365: smtp.office365.com, port 587).`;
+  return e;
 }
 
 // Fire and forget: used after a change is saved, so a mail problem never fails the action.
