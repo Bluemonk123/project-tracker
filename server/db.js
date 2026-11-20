@@ -15,9 +15,13 @@ export const DB_FILE = path.join(DATA_DIR, 'tracker.db');
 
 for (const d of [DATA_DIR, UPLOAD_DIR, BACKUP_DIR]) fs.mkdirSync(d, { recursive: true });
 
-export const db = new DatabaseSync(DB_FILE);
-db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
-db.exec(fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
+function openDb() {
+  const d = new DatabaseSync(DB_FILE);
+  d.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
+  d.exec(fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
+  return d;
+}
+export let db = openDb(); // (let: replaced when a full backup is restored on a new install)
 
 // ---------- small query helpers ----------
 const clean = (row) => (row ? { ...row } : row);
@@ -420,6 +424,16 @@ migrate();
 
 // Remove expired sessions on start
 run("DELETE FROM sessions WHERE expires_at < datetime('now')");
+
+// Swap in another database file (restore on a fresh install). Brings it up to this version's layout.
+export function replaceDatabase(srcFile) {
+  db.close();
+  for (const f of [DB_FILE, `${DB_FILE}-wal`, `${DB_FILE}-shm`]) fs.rmSync(f, { force: true });
+  fs.copyFileSync(srcFile, DB_FILE);
+  db = openDb();
+  migrate();
+  run("DELETE FROM sessions");
+}
 
 export function backupNow(label = 'manual') {
   const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);

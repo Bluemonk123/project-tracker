@@ -345,11 +345,12 @@ function Backups() {
   return (
     <section className="panel" style={{ maxWidth: 820 }}>
       <div className="panel-head"><h3>Backups</h3>
-        <div className="actions"><button className="btn primary sm" disabled={busy} onClick={async () => { if (await run(() => api.post('/admin/backups'), 'Backup created')) reload(); }}><Icon name="database" />Back up now</button></div>
+        <div className="actions"><a className="btn sm" href="/api/admin/full-backup.zip" title="The database and all uploaded files in one zip: keep it safe, or load it on a new server"><Icon name="download" />Download full backup</a><button className="btn primary sm" disabled={busy} onClick={async () => { if (await run(() => api.post('/admin/backups'), 'Backup created')) reload(); }}><Icon name="database" />Back up now</button></div>
       </div>
       <div className="panel-body stack tight">
         <p className="small soft" style={{ margin: 0 }}>A copy of the database is made automatically once a day while the app is running, and the last 14 daily copies are kept in the <code>data/backups</code> folder. Download a copy now and then and keep it somewhere else, such as a USB drive or shared drive.</p>
-        <p className="small soft" style={{ margin: 0 }}>To restore, stop the app, replace <code>data/tracker.db</code> with a backup file renamed to <code>tracker.db</code>, and start the app again. Uploaded files live in <code>data/uploads</code>; copy that folder too when moving computers.</p>
+        <p className="small soft" style={{ margin: 0 }}><b>Download full backup</b> gives one zip with the database and every uploaded file. Keep it safe: it holds all your data. To move to a new server, open the new, empty app and choose <b>Load backup</b> on its first page.</p>
+        <p className="small soft" style={{ margin: 0 }}>To restore on this computer, stop the app, replace <code>data/tracker.db</code> with a backup file renamed to <code>tracker.db</code>, and start the app again. Uploaded files live in <code>data/uploads</code>; copy that folder too when moving computers.</p>
       </div>
       <ErrorBox error={error} />
       {loading && !data ? <Loading /> : !data?.length ? <Empty small>No backups yet. The first automatic one is made a few seconds after start-up.</Empty> : (

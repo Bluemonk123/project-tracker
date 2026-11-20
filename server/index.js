@@ -23,6 +23,7 @@ import emailRoutes from './routes/email.js';
 import calendarRoutes from './routes/calendar.js';
 import sprintRoutes from './routes/sprints.js';
 import { startTimers, cronHandler } from './cron.js';
+import { fullBackupRoutes, restoreRoutes } from './routes/transfer.js';
 
 // CSRF protection (double-submit token): every browser gets a random pt_csrf cookie, and every
 // request that changes something must echo it in the X-CSRF-Token header. Another site can make
@@ -63,10 +64,12 @@ export function createApp() {
   api.get('/health', (_req, res) => { res.setHeader('Cache-Control', 'no-store'); res.json({ ok: true, time: new Date().toISOString() }); });
   api.get('/cron', cronHandler); // scheduled jobs for hosts without background timers (needs CRON_KEY)
   api.use(authRoutes); // setup, login, logout, me (individual routes guard themselves)
+  api.use(restoreRoutes); // new install only: load a full backup instead of creating the first administrator
   api.use(publicTicketRoutes); // login-page "Contact admin" form (no sign-in)
   api.use(requireAuth);
   api.use(adminRoutes);
   api.use(backupCopyRoutes);
+  api.use(fullBackupRoutes);
   api.use(projectRoutes);
   api.use(overviewRoutes);
   api.use(taskImportRoutes); // before wpRoutes: POST /work-packages/import

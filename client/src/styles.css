@@ -1381,3 +1381,11 @@ a.ov-stage-row:hover { background: var(--sunken); }
 .tech-group-toggle { display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; padding: 0; cursor: pointer; color: var(--ink); font: inherit; font-size: 15px; }
 .tech-group-toggle .kb-count { background: var(--sunken); }
 .tech-group-sums { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+
+/* Setup page: load a full backup instead */
+.setup-restore { width: 100%; max-width: 380px; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--line, #e5e5e5); display: grid; gap: 8px; }
+.setup-restore h3 { margin: 0; font-size: 15px; }
+.setup-restore p { margin: 0; }
+.setup-restore-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.setup-restore-row input[type=file] { flex: 1 1 200px; min-width: 0; font-size: 13px; }
+.setup-restore-ok { color: #1b7a3a; font-weight: 600; }

@@ -107,6 +107,38 @@ function ContactAdminModal({ onClose }) {
   );
 }
 
+// Moving from another computer: load its full backup instead of starting empty.
+function RestoreBackup() {
+  const { reload } = useApp();
+  const [file, setFile] = useState(null);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(null);
+  const go = async () => {
+    if (!file) return;
+    setBusy(true); setError(null);
+    try {
+      const fd = new FormData(); fd.append('file', file);
+      const r = await api.post('/setup/restore', fd);
+      setDone(r);
+      setTimeout(() => { reload(); }, 2500);
+    } catch (err) { setError(err); setBusy(false); }
+  };
+  return (
+    <div className="setup-restore">
+      <h3>Moving from another computer?</h3>
+      <p className="small soft">Instead of creating an administrator, load the <b>full backup</b> downloaded from your current Project Tracker (Administration → Backups → Download full backup). All projects, tasks, people and files come across, and everyone signs in with their usual email and password.</p>
+      <ErrorBox error={error} />
+      {done ? <p className="setup-restore-ok">Backup loaded: {done.people} people and {done.files} files. Opening the sign-in page…</p> : (
+        <div className="setup-restore-row">
+          <input type="file" accept=".zip,.db" onChange={(e) => setFile(e.target.files?.[0] || null)} disabled={busy} />
+          <button type="button" className="btn" disabled={!file || busy} onClick={go}>{busy ? 'Loading… (this can take a minute)' : 'Load backup'}</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Setup() {
   const { reload, appName } = useApp();
   const [f, setF] = useState({ app_name: appName || 'Project Tracker', name: '', email: '', password: '', confirm: '' });
@@ -137,6 +169,7 @@ export function Setup() {
           <Field label="Repeat password"><input type="password" value={f.confirm} onChange={set('confirm')} required autoComplete="new-password" /></Field>
           <button className="btn primary" disabled={busy}>{busy ? 'Creating…' : 'Create administrator and continue'}</button>
         </form>
+        <RestoreBackup />
       </div>
     </div>
   );

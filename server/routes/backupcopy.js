@@ -106,6 +106,8 @@ let lastOkAt = 0;
 export async function copyDue() {
   const cfg = copyConfig();
   if (!cfg.dir) return { skipped: 'no folder set' };
+  // on hosting (timers off), copies to the app's own folder would only fill the disk: only when a folder was chosen
+  if (/^(1|true|yes)$/i.test(String(process.env.DISABLE_TIMERS || '')) && !getSetting(KEY)) return { skipped: 'no folder chosen' };
   const last = lastResult();
   if (last?.ok) lastOkAt = Math.max(lastOkAt, Date.parse(last.at));
   const lastTry = last ? Date.parse(last.at) : 0;
