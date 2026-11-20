@@ -64,6 +64,8 @@ export function explainMailError(msg, m = {}) {
   const user = m.user || 'this mailbox';
   if (/SendAsDenied|5\.7\.60|not allowed to send as|send as permission/i.test(e))
     return `${user} is not allowed to send as ${m.from}. Put the same address in "Send from" as in "User name", or ask your email admin to give ${user} "Send As" permission on ${m.from}.`;
+  if (/5\.7\.139/.test(e) && /credentials were incorrect/i.test(e))
+    return `Microsoft 365 did not accept the sign-in for ${user}. Either the password is wrong, or Microsoft blocks this kind of sign-in for the mailbox: two-step sign-in (MFA), "Security defaults", or "Authenticated SMTP" switched off. Re-type the password first; if it still fails, ask your Microsoft 365 admin to turn on "Authenticated SMTP" for this mailbox and allow it without MFA (or give it an app password).`;
   if (/5\.7\.139|SmtpClientAuthentication|basic authentication is disabled|security defaults/i.test(e))
     return `Microsoft 365 blocked the sign-in for ${user}. Ask your Microsoft 365 admin to turn on "Authenticated SMTP" for this mailbox (admin.microsoft.com → Users → the user → Mail → Manage email apps). If the mailbox uses two-step sign-in (MFA) or the company has "Security defaults" on, this kind of sign-in is blocked: use a mailbox without MFA, or an app password.`;
   if (/5\.7\.3\b|535|Invalid login|Authentication unsuccessful|authentication failed|Username and Password not accepted/i.test(e))
