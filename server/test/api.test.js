@@ -602,7 +602,9 @@ test('hours: estimate on tasks, logged time on board, project board and task rep
   assert.equal((await admin.post('/time-entries', { wp_id: wp.id, hours: 3, spent_on: today })).status, 201);
   assert.equal((await admin.post('/time-entries', { wp_id: wp.id, hours: 2, spent_on: '2020-01-06' })).status, 201);
   // board: totals and hours in the range
-  let r = await admin.get(`/board?from=${today}&to=${today}&project_id=${p.id}`);
+  // (a task made on a weekend starts on the next working day, so the range covers the coming week)
+  const weekOn = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
+  let r = await admin.get(`/board?from=${today}&to=${weekOn}&project_id=${p.id}`);
   const row = r.data.rows.find(x => x.id === wp.id);
   assert.equal(row.estimated_hours, 8); assert.equal(row.spent_hours, 5); assert.equal(row.range_hours, 3); assert.equal(row.can_log, true);
   // project board figures
@@ -890,4 +892,19 @@ test('task list: stage filter (Task Board column)', async () => {
   assert.ok(rows.some(x => x.id === a.id) && rows.every(x => x.board_column === 'testing'));
   const two = (await admin.get('/work-packages?status=all&stage=testing,closed&limit=2000')).data.rows;
   assert.ok(two.every(x => ['testing', 'closed'].includes(x.board_column)));
+});
+
+test('cron address: hidden without CRON_KEY, needs the key, runs the daily backup once', async () => {
+  const c = client();
+  delete process.env.CRON_KEY;
+  assert.equal((await c.get('/cron?key=x')).status, 404);
+  process.env.CRON_KEY = 'test-cron-key-0123456789';
+  assert.equal((await c.get('/cron?key=wrong')).status, 403);
+  const r1 = await c.get('/cron?key=test-cron-key-0123456789');
+  assert.equal(r1.status, 200);
+  assert.ok(r1.data.jobs.backup.ran || r1.data.jobs.backup.skipped);
+  const r2 = await c.get('/cron?key=test-cron-key-0123456789');
+  assert.equal(r2.data.jobs.backup.skipped, 'already done today');
+  assert.equal(r2.data.jobs.mailbox.skipped, 'email intake is off');
+  delete process.env.CRON_KEY;
 });

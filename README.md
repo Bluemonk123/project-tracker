@@ -127,6 +127,8 @@ Set these as environment variables if you need to change the defaults:
 | `PORT` | `4000` | Port the app listens on |
 | `DATA_DIR` | `./data` | Where the database, uploads and backups are kept |
 | `MAX_UPLOAD_MB` | `25` | Largest file people can attach. Normally set in **Administration → General** instead; this variable overrides it |
+| `DISABLE_TIMERS` | (off) | Set to `1` on hosting that does not allow background timers (e.g. Hostinger Cloud). Then use `CRON_KEY` |
+| `CRON_KEY` | (none) | A long random text (16+ characters). Enables `GET /api/cron?key=<CRON_KEY>`, which runs the scheduled jobs that are due: the daily backup, the backup copy and the support-mailbox check. Have the host's Cron Jobs call it every 5 minutes, e.g. `curl -s "https://your-site/api/cron?key=..."` |
 
 On Windows: `set PORT=8080` then `start.bat`, in the same Command Prompt window.
 

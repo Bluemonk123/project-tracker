@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ROOT_DIR, DB_FILE, BACKUP_DIR, backupNow } from './db.js';
+import { ROOT_DIR, DB_FILE } from './db.js';
 import { loadUser, requireAuth, HttpError } from './access.js';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
@@ -17,12 +17,12 @@ import meetingRoutes from './routes/meetings.js';
 import miscRoutes from './routes/misc.js';
 import techRoutes from './routes/tech.js';
 import projectBoardRoutes from './routes/projectboard.js';
-import { backupCopyRoutes, scheduleCopies } from './routes/backupcopy.js';
+import { backupCopyRoutes } from './routes/backupcopy.js';
 import { publicTicketRoutes, ticketRoutes } from './routes/tickets.js';
 import emailRoutes from './routes/email.js';
 import calendarRoutes from './routes/calendar.js';
 import sprintRoutes from './routes/sprints.js';
-import { scheduleInbound } from './inbound.js';
+import { startTimers, cronHandler } from './cron.js';
 
 // CSRF protection (double-submit token): every browser gets a random pt_csrf cookie, and every
 // request that changes something must echo it in the X-CSRF-Token header. Another site can make
@@ -58,6 +58,7 @@ export function createApp() {
   const api = express.Router();
   // Lightweight check used by the Connected / Disconnected indicator in the top bar
   api.get('/health', (_req, res) => { res.setHeader('Cache-Control', 'no-store'); res.json({ ok: true, time: new Date().toISOString() }); });
+  api.get('/cron', cronHandler); // scheduled jobs for hosts without background timers (needs CRON_KEY)
   api.use(authRoutes); // setup, login, logout, me (individual routes guard themselves)
   api.use(publicTicketRoutes); // login-page "Contact admin" form (no sign-in)
   api.use(requireAuth);
@@ -98,20 +99,6 @@ export function createApp() {
   return app;
 }
 
-// Keep a daily copy of the database; prune to the newest 14 automatic backups.
-function scheduleBackups() {
-  const run = () => {
-    try {
-      const today = new Date().toISOString().slice(0, 10);
-      const existing = fs.readdirSync(BACKUP_DIR).filter(f => f.includes('-auto.db'));
-      if (!existing.some(f => f.startsWith(`tracker-${today}`))) backupNow('auto');
-      existing.concat().sort().reverse().slice(14).forEach(f => fs.rmSync(path.join(BACKUP_DIR, f), { force: true }));
-    } catch (e) { console.error('Backup failed:', e.message); }
-  };
-  setTimeout(run, 10_000);
-  setInterval(run, 6 * 3600 * 1000).unref();
-}
-
 export function startServer() {
   const app = createApp();
   app.listen(PORT, HOST, () => {
@@ -122,7 +109,5 @@ export function startServer() {
     console.log(`\n  Data file: ${DB_FILE}`);
     console.log('  Keep this window open while people use the app. Press Ctrl+C to stop.\n');
   });
-  scheduleBackups();
-  scheduleCopies();
-  scheduleInbound();
+  startTimers();
 }

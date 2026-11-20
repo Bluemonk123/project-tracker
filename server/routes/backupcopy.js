@@ -102,19 +102,22 @@ export async function copyNow() {
 
 // Checked every 10 minutes: copy when the last successful copy is older than the chosen interval.
 let lastOkAt = 0;
+// Runs a copy when one is due (or a retry after a failure). Returns what it did; used by the timer and by /api/cron.
+export async function copyDue() {
+  const cfg = copyConfig();
+  if (!cfg.dir) return { skipped: 'no folder set' };
+  const last = lastResult();
+  if (last?.ok) lastOkAt = Math.max(lastOkAt, Date.parse(last.at));
+  const lastTry = last ? Date.parse(last.at) : 0;
+  const due = Date.now() - lastOkAt >= cfg.hours * 3600e3;
+  const retry = !last?.ok && Date.now() - lastTry >= 30 * 60e3; // after a failure, retry every 30 minutes
+  if (!(due && (last?.ok !== false || retry))) return { skipped: 'not due' };
+  try { const r = await copyNow(); return { ran: true, ok: r?.ok !== false }; } catch (e) { return { ran: true, ok: false, error: e.message }; }
+}
+
 export function scheduleCopies() {
-  const tick = () => {
-    const cfg = copyConfig();
-    if (!cfg.dir) return;
-    const last = lastResult();
-    if (last?.ok) lastOkAt = Math.max(lastOkAt, Date.parse(last.at));
-    const lastTry = last ? Date.parse(last.at) : 0;
-    const due = Date.now() - lastOkAt >= cfg.hours * 3600e3;
-    const retry = !last?.ok && Date.now() - lastTry >= 30 * 60e3; // after a failure, retry every 30 minutes
-    if (due && (last?.ok !== false || retry)) copyNow().catch(() => {});
-  };
-  setTimeout(tick, 20_000);
-  setInterval(tick, 10 * 60e3).unref();
+  setTimeout(() => copyDue().catch(() => {}), 20_000);
+  setInterval(() => copyDue().catch(() => {}), 10 * 60e3).unref();
 }
 
 // Suggested folders: Documents on this computer, and the root of any other drive (a second disk or USB drive).

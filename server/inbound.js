@@ -104,16 +104,20 @@ export async function checkMailbox({ cfg = imapConfig() } = {}) {
   return result;
 }
 
-// Checks every few minutes (1, 2, 5, 10 or 15, as set) while email intake is switched on.
+// Checks the mailbox when the set number of minutes (1, 2, 5, 10 or 15) has passed since the last check.
+// Used by the in-app timer and by /api/cron (hosting without background timers).
+let lastRun = 0;
+export async function inboundDue() {
+  const cfg = imapConfig();
+  if (!cfg.enabled || !cfg.host) return { skipped: 'email intake is off' };
+  const prev = Math.max(lastRun, Date.parse(lastCheck()?.at || 0) || 0);
+  if (Date.now() - prev < (Number(cfg.minutes) || 2) * 60e3 - 5000) return { skipped: 'not due' };
+  lastRun = Date.now();
+  try { const r = await checkMailbox({ cfg }); return { ran: true, ok: r?.ok !== false, created: r?.created || 0, replies: r?.replies || 0 }; } catch (e) { return { ran: true, ok: false, error: e.message }; }
+}
+
 export function scheduleInbound() {
-  let lastRun = 0;
-  setInterval(() => {
-    const cfg = imapConfig();
-    if (!cfg.enabled || !cfg.host) return;
-    if (Date.now() - lastRun < (Number(cfg.minutes) || 2) * 60e3 - 5000) return;
-    lastRun = Date.now();
-    checkMailbox({ cfg }).catch(() => {});
-  }, 30e3).unref();
+  setInterval(() => { inboundDue().catch(() => {}); }, 30e3).unref();
 }
 
 export const validAddress = isEmail;
