@@ -908,3 +908,14 @@ test('cron address: hidden without CRON_KEY, needs the key, runs the daily backu
   assert.equal(r2.data.jobs.mailbox.skipped, 'email intake is off');
   delete process.env.CRON_KEY;
 });
+
+test('login: too many wrong passwords from one address are refused for a while', async () => {
+  const { resetLoginLimits } = await import('../routes/auth.js');
+  resetLoginLimits();
+  const c = client();
+  for (let i = 0; i < 10; i++) assert.equal((await c.post('/auth/login', { email: 'limit@office.local', password: 'wrong-pass' })).status, 401);
+  assert.equal((await c.post('/auth/login', { email: 'limit@office.local', password: 'wrong-pass' })).status, 429);
+  resetLoginLimits();
+  assert.equal((await c.post('/auth/login', { email: 'limit@office.local', password: 'wrong-pass' })).status, 401);
+  resetLoginLimits();
+});

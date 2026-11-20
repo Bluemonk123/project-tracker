@@ -129,8 +129,27 @@ Set these as environment variables if you need to change the defaults:
 | `MAX_UPLOAD_MB` | `25` | Largest file people can attach. Normally set in **Administration → General** instead; this variable overrides it |
 | `DISABLE_TIMERS` | (off) | Set to `1` on hosting that does not allow background timers (e.g. Hostinger Cloud). Then use `CRON_KEY` |
 | `CRON_KEY` | (none) | A long random text (16+ characters). Enables `GET /api/cron?key=<CRON_KEY>`, which runs the scheduled jobs that are due: the daily backup, the backup copy and the support-mailbox check. Have the host's Cron Jobs call it every 5 minutes, e.g. `curl -s "https://your-site/api/cron?key=..."` |
+| `TRUST_PROXY` | (off) | Set to `1` when the app runs behind the host's proxy (e.g. Hostinger), so visitors' addresses and HTTPS are seen correctly |
 
 On Windows: `set PORT=8080` then `start.bat`, in the same Command Prompt window.
+
+## Hosting on Hostinger Cloud (no VPS)
+
+1. **hPanel → Websites → Add website → Node.js app**, connect GitHub repo `Bluemonk123/project-tracker`, branch `main`.
+2. Node.js version **22.x** (the app needs 22.13 or newer; with an older one it stops with a clear message in the app log).
+3. Build command: `npm ci --include=dev && npm run build` · Start command: `npm start` (or entry file `server/start.js`).
+4. Environment variables (do not set `PORT`; Hostinger sets it):
+   - `DATA_DIR=/home/<hostinger-user>/tracker-data`: outside `hbuilds`/`public_html`, so redeploys never touch the data
+   - `DISABLE_TIMERS=1`
+   - `CRON_KEY=<long random text>`
+   - `TRUST_PROXY=1`
+5. **hPanel → Advanced → Cron Jobs**, every 5 minutes: `curl -s "https://<your-domain>/api/cron?key=<CRON_KEY>" > /dev/null`
+6. Open the site. On a new install, create the first administrator; to bring the office data, see below.
+7. Upload test: attach a ~20 MB file to a task. If it fails, lower the limit in **Administration → General**.
+8. Download a backup from **Administration → Backups** every week and keep it off the server.
+
+**Moving the office data:** close the app on the office PC, then copy `tracker.db` and the `uploads` folder from its `data` folder into `tracker-data` (hPanel File Manager), and restart the Node.js app.
+**Updating:** push to GitHub, then redeploy in hPanel. The data folder stays as it is.
 
 ## Docker (optional)
 

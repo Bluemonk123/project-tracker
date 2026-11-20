@@ -5,7 +5,22 @@ import { requireText } from '../util.js';
 
 const r = Router();
 
-const cookieOpts = (maxAge) => ({ httpOnly: true, sameSite: 'lax', maxAge, path: '/' });
+// secure: sent only over HTTPS when the site is served over HTTPS (behind a proxy, set TRUST_PROXY so this is known)
+const cookieOpts = (maxAge, req) => ({ httpOnly: true, sameSite: 'lax', maxAge, path: '/', secure: !!req?.secure });
+
+// Wrong passwords: at most 10 per account per address and 30 per address in 15 minutes.
+const failures = new Map();
+const WINDOW = 15 * 60e3;
+function recent(key) { const now = Date.now(); const l = (failures.get(key) || []).filter(t => now - t < WINDOW); failures.set(key, l); return l; }
+function checkLoginLimit(ip, email) {
+  if (recent(`ip:${ip}`).length >= 30 || recent(`acc:${ip}:${email}`).length >= 10) fail(429, 'Too many wrong passwords. Wait 15 minutes and try again.');
+}
+function noteFailure(ip, email) {
+  const now = Date.now();
+  recent(`ip:${ip}`).push(now); recent(`acc:${ip}:${email}`).push(now);
+  if (failures.size > 5000) for (const [k, l] of failures) if (!l.some(t => now - t < WINDOW)) failures.delete(k);
+}
+export function resetLoginLimits() { failures.clear(); }
 const MIN_PW = 8;
 
 function checkPassword(pw) {
@@ -28,17 +43,19 @@ r.post('/setup', (req, res) => {
     name, email, hashPassword(req.body.password), 1, managerRole?.id, req.body.job_title || 'Administrator');
   if (req.body.app_name) run("UPDATE settings SET value = ? WHERE key = 'app_name'", String(req.body.app_name).trim());
   const s = createSession(id);
-  res.cookie(SESSION_COOKIE, s.token, cookieOpts(s.maxAge));
+  res.cookie(SESSION_COOKIE, s.token, cookieOpts(s.maxAge, req));
   res.json({ ok: true });
 });
 
 r.post('/auth/login', (req, res) => {
   const email = String(req.body.email || '').trim();
+  const ip = req.ip || '';
+  checkLoginLimit(ip, email.toLowerCase());
   const user = get('SELECT * FROM users WHERE email = ?', email);
-  if (!user || !verifyPassword(String(req.body.password || ''), user.password_hash)) fail(401, 'Email or password is incorrect.');
+  if (!user || !verifyPassword(String(req.body.password || ''), user.password_hash)) { noteFailure(ip, email.toLowerCase()); fail(401, 'Email or password is incorrect.'); }
   if (user.status !== 'active') fail(403, 'This account is locked. Ask an administrator to unlock it.');
   const s = createSession(user.id);
-  res.cookie(SESSION_COOKIE, s.token, cookieOpts(s.maxAge));
+  res.cookie(SESSION_COOKIE, s.token, cookieOpts(s.maxAge, req));
   res.json({ ok: true });
 });
 

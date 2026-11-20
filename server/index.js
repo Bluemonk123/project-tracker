@@ -33,7 +33,7 @@ function csrf(req, res, next) {
   const had = typeof token === 'string' && /^[a-f0-9]{48}$/.test(token);
   if (!had) {
     token = crypto.randomBytes(24).toString('hex');
-    res.cookie(CSRF_COOKIE, token, { sameSite: 'lax', path: '/', maxAge: 365 * 86400e3 });
+    res.cookie(CSRF_COOKIE, token, { sameSite: 'lax', path: '/', maxAge: 365 * 86400e3, secure: req.secure });
   }
   if (req.path.startsWith('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
     const sent = String(req.get('x-csrf-token') || '');
@@ -49,6 +49,9 @@ const HOST = process.env.HOST || '0.0.0.0';
 export function createApp() {
   const app = express();
   app.disable('x-powered-by');
+  // Behind a hosting proxy (e.g. Hostinger): TRUST_PROXY=1 so the visitor's address and HTTPS are seen correctly.
+  const tp = String(process.env.TRUST_PROXY || '').trim();
+  if (tp) app.set('trust proxy', /^\d+$/.test(tp) ? Number(tp) : /^(true|yes)$/i.test(tp) ? true : tp);
   app.use(express.json({ limit: '5mb' }));
   app.use(cookieParser());
   app.use(csrf);
