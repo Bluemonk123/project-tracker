@@ -135,7 +135,7 @@ On Windows: `set PORT=8080` then `start.bat`, in the same Command Prompt window.
 
 ## Branches: staging and production
 
-- `main`: everyday changes. The office copy (staging) gets them with **update.bat**.
+- `main`: everyday changes. The office copy (staging) runs with **staging.bat**, which checks GitHub every 30 seconds and installs each new `main` version by itself (database backed up first; `data`, `node_modules` and Node.js never touched). A striped STAGING bar marks it.
 - `production`: what runs on the live site. Hostinger deploys this branch automatically on every push.
 - Releasing: move `production` to the tested `main` (`git push origin main:production`). Check it went live at `https://<domain>/api/health`: `build.commit` shows the deployed commit.
 

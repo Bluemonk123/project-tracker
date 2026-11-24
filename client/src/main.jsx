@@ -1,4 +1,4 @@
-import { StrictMode } from 'react';
+import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate, useOutletContext, useParams } from 'react-router-dom';
 import '@fontsource-variable/instrument-sans';
@@ -106,10 +106,23 @@ function Root() {
   );
 }
 
+// A bar across the top on the testing copy (APP_ENV=staging), so nobody mistakes it for the live site.
+function StagingBar() {
+  const [info, setInfo] = useState(null);
+  useEffect(() => {
+    fetch('/api/health', { cache: 'no-store' }).then(r => r.json()).then(h => {
+      if (h.env === 'staging') { setInfo(h); document.title = `STAGING · ${document.title.replace(/^STAGING · /, '')}`; }
+    }).catch(() => {});
+  }, []);
+  if (!info) return null;
+  return <div className="staging-bar">STAGING: test copy on this computer, not the live site{info.build?.commit ? ` · version ${info.build.commit}` : ''}</div>;
+}
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <AppProvider>
       <BrowserRouter>
+        <StagingBar />
         <Root />
         <ConfirmHost />
         <Toasts />

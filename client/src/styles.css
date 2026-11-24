@@ -1452,3 +1452,5 @@ a.ov-stage-row:hover { background: var(--sunken); }
   .sec-clip { max-width: 220px; }
 }
 .sec-top h3 svg { width: 16px; height: 16px; color: var(--danger); }
+/* Testing copy marker */
+.staging-bar { position: sticky; top: 0; z-index: 200; background: repeating-linear-gradient(135deg, #f5a623 0 14px, #f0b84a 14px 28px); color: #1f1a10; font-weight: 700; font-size: 12.5px; text-align: center; padding: 4px 12px; letter-spacing: .02em; }

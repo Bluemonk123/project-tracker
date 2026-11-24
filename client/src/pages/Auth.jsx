@@ -56,7 +56,7 @@ export function Login() {
           <Field label="Email" htmlFor="email"><input id="email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus /></Field>
           <Field label="Password" htmlFor="password"><input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></Field>
           <button className="btn primary" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
-          <p className="small muted">Forgot your password? Ask your administrator to set a new one for you.</p>
+          <p className="small muted">Forgot your password? Contact your administrator.</p>
           <button type="button" className="btn ghost tk-contact-link" onClick={() => setContact(true)}>Contact admin for access/issues</button>
         </form>
       </div>
