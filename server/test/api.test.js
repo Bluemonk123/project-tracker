@@ -919,3 +919,35 @@ test('login: too many wrong passwords from one address are refused for a while',
   assert.equal((await c.post('/auth/login', { email: 'limit@office.local', password: 'wrong-pass' })).status, 401);
   resetLoginLimits();
 });
+
+test('data security checklist: 45 checks, edit rights, import, history and CSV', async () => {
+  const pid = ids.project;
+  let r = await dev.get(`/projects/${pid}/security`);
+  assert.equal(r.status, 200);
+  assert.equal(r.data.checks.length, 45);
+  assert.equal(r.data.totals.open, 45);
+  assert.equal(r.data.can_edit, false); // Developer role: view only
+  assert.equal((await dev.put(`/projects/${pid}/security/A1`, { status: 'covered' })).status, 403);
+  assert.ok([401, 403].includes((await outsider.get(`/projects/${pid}/security`)).status));
+
+  r = await admin.put(`/projects/${pid}/security/A1`, { status: 'covered', evidence: 'server/db.js: prepared statements' });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.checks.find(c => c.code === 'A1').status, 'covered');
+  assert.equal(r.data.sections.find(s => s.key === 'A').counts.covered, 1);
+  assert.equal((await admin.put(`/projects/${pid}/security/A1`, { status: 'maybe' })).status, 400);
+  assert.equal((await admin.put(`/projects/${pid}/security/Z9`, { status: 'covered' })).status, 404);
+
+  r = await admin.post(`/projects/${pid}/security/import`, { items: [
+    { code: 'C9', status: 'missing', next_step: 'Add a Content-Security-Policy header' },
+    { code: 'b6', status: 'partial', evidence: 'auth.js login limit' },
+  ] });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.changed, 2);
+  assert.deepEqual(r.data.top, ['C9', 'B6']);
+  assert.equal((await admin.post(`/projects/${pid}/security/import`, { items: [{ code: 'Q1', status: 'covered' }] })).status, 400);
+
+  r = await admin.get(`/projects/${pid}/security/A1/history`);
+  assert.equal(r.data[0].status_to, 'covered');
+  r = await admin.get(`/projects/${pid}/security.csv`);
+  assert.match(r.data, /A1,.*Covered,server\/db\.js: prepared statements/);
+});

@@ -41,6 +41,7 @@ export const PROJECT_PERMISSIONS = [
   { key: 'files.upload',      group: 'Files',          label: 'Upload files' },
   { key: 'tech.manage',       group: 'Technologies',   label: 'Add, edit and remove technologies' },
   { key: 'tech.version',      group: 'Technologies',   label: 'Update the version used of technologies' },
+  { key: 'security.manage',   group: 'Data security',  label: 'Update data security checks' },
 ];
 
 export const ALL_GLOBAL_KEYS = GLOBAL_PERMISSIONS.map(p => p.key);
@@ -69,7 +70,7 @@ export const DEFAULT_ROLES = [
     description: 'Leads a team inside a project: assigns and reviews work.',
     permissions: ['project.view', 'wp.view', 'wp.create', 'wp.edit', 'wp.assign', 'wp.comment',
       'time.log', 'time.view_all', 'meetings.view', 'meetings.manage', 'wiki.view', 'wiki.edit', 'files.upload', 'news.manage',
-      'tech.manage', 'tech.version', 'project.documents'],
+      'tech.manage', 'tech.version', 'project.documents', 'security.manage'],
   },
   {
     name: 'Project manager', scope: 'project', builtin: 0,

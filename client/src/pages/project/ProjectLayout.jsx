@@ -22,6 +22,7 @@ export default function ProjectLayout() {
     ['time', 'Time', has('time.log') || has('time.view_all')],
     ['wiki', 'Wiki', has('wiki.view')],
     ['technologies', 'Technologies', true],
+    ['security', 'Data Security', true],
     ['members', 'Members', true],
     ['activity', 'Activity', has('wp.view')],
     ['settings', 'Settings', has('project.edit') || has('project.versions') || has('project.archive')],

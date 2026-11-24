@@ -588,3 +588,27 @@ CREATE TABLE IF NOT EXISTS project_modules (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE (project_id, name)
 );
+
+-- Project -> Data Security: one row per project and checklist code (A1..E11), plus a change log
+CREATE TABLE IF NOT EXISTS project_security_checks (
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  code TEXT NOT NULL,
+  status TEXT CHECK (status IS NULL OR status IN ('covered','partial','missing','na')),
+  evidence TEXT,
+  next_step TEXT,
+  updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  updated_at TEXT,
+  PRIMARY KEY (project_id, code)
+);
+CREATE TABLE IF NOT EXISTS project_security_log (
+  id INTEGER PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  code TEXT NOT NULL,
+  status_from TEXT,
+  status_to TEXT,
+  changed TEXT,
+  source TEXT,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_security_log ON project_security_log(project_id, code);

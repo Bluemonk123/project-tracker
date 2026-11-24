@@ -419,6 +419,16 @@ function migrate() {
     db.exec("INSERT OR IGNORE INTO project_modules(project_id, name) SELECT project_id, TRIM(module) FROM work_packages WHERE TRIM(COALESCE(module, '')) <> '' GROUP BY project_id, LOWER(TRIM(module))");
     setSetting('project_modules_v1', '1');
   }
+  // Data Security tab: roles that manage the tech stack may also update the security checks
+  if (!getSetting('migration_security_perm_v1')) {
+    tx(() => {
+      for (const role of all("SELECT id, permissions FROM roles WHERE scope = 'project'")) {
+        let perms = []; try { perms = JSON.parse(role.permissions) || []; } catch { /* ignore */ }
+        if (perms.includes('tech.manage') && !perms.includes('security.manage')) run('UPDATE roles SET permissions = ? WHERE id = ?', JSON.stringify([...perms, 'security.manage']), role.id);
+      }
+      setSetting('migration_security_perm_v1', '1');
+    });
+  }
 }
 migrate();
 

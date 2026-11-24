@@ -23,6 +23,7 @@ import Meetings from './pages/Meetings.jsx';
 import MeetingDetail from './pages/MeetingDetail.jsx';
 import Time from './pages/Time.jsx';
 import Wiki from './pages/project/Wiki.jsx';
+import DataSecurity from './pages/project/DataSecurity.jsx';
 import Technologies from './pages/project/Technologies.jsx';
 import TechOverview from './pages/TechOverview.jsx';
 import ProjectBoard from './pages/ProjectBoard.jsx';
@@ -77,6 +78,7 @@ function Root() {
           <Route path="wiki" element={<WikiRoute />} />
           <Route path="wiki/:pageId" element={<WikiRoute />} />
           <Route path="technologies" element={<InProject Component={Technologies} />} />
+          <Route path="security" element={<InProject Component={DataSecurity} />} />
           <Route path="members" element={<InProject Component={Members} />} />
           <Route path="activity" element={<InProject Component={Activity} />} />
           <Route path="settings" element={<InProject Component={ProjectSettings} />} />
