@@ -5,6 +5,11 @@
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { applyHostEnv } from './hostenv.js';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const host = applyHostEnv(ROOT);
+for (const n of host.notes) console.log(`  ${n}`);
 
 function showStartupError(message) {
   console.error(`\n  Project Tracker could not start: ${message}\n`);
@@ -22,8 +27,8 @@ function showStartupError(message) {
 // On hosting (deploy folder under hbuilds / public_html, or DISABLE_TIMERS set) the data must live outside the
 // deploy folder, or every deployment would start over with an empty database.
 function unsafeDataDir() {
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-  const hosted = /[\\/](hbuilds|public_html|domains)[\\/]/.test(root) || /^(1|true|yes)$/i.test(String(process.env.DISABLE_TIMERS || ''));
+  const root = ROOT;
+  const hosted = host.hosted || /^(1|true|yes)$/i.test(String(process.env.DISABLE_TIMERS || ''));
   if (!hosted) return null;
   if (!process.env.DATA_DIR) return 'The setting DATA_DIR is missing, so the app would start with a new, empty database. Add DATA_DIR (e.g. /home/<user>/tracker-data) in the hosting environment variables and redeploy.';
   const dir = path.resolve(process.env.DATA_DIR);
