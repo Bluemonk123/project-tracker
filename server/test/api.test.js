@@ -978,3 +978,28 @@ test('notification emails: pending when email is set up, one email per person, r
   assert.equal(dbGet("SELECT email_state FROM notifications WHERE wp_id = ? AND user_id = ?", r.data.id, ids.dev).email_state, null);
   await admin.put('/admin/email', { main: null, notify_email: true });
 });
+
+test('data security Check now: needs links, refuses private addresses, GitHub token is admin-only', async () => {
+  const pid = ids.project;
+  assert.equal((await dev.post(`/projects/${pid}/security/check`, {})).status, 403);
+  let r = await admin.post(`/projects/${pid}/security/check`, {});
+  assert.equal(r.status, 200);
+  assert.match(r.data.website.error, /No live address/);
+  assert.match(r.data.code.error, /No GitHub link/);
+  r = await admin.post(`/projects/${pid}/security/check`, { website: 'http://127.0.0.1:4000', scan_code: false });
+  assert.match(r.data.website.error, /private or local network/);
+  r = await admin.post(`/projects/${pid}/security/check`, { website: 'http://169.254.169.254/latest/meta-data', scan_code: false });
+  assert.match(r.data.website.error, /private or local network/);
+  r = await admin.post(`/projects/${pid}/security/check`, { repository: 'https://gitlab.com/a/b', scan_website: false });
+  assert.match(r.data.code.error, /not a GitHub repository link/);
+  assert.equal((await dev.get('/admin/github-token')).status, 403);
+  assert.equal((await admin.put('/admin/github-token', { token: 'nope' })).status, 400);
+  r = await admin.put('/admin/github-token', { token: 'github_pat_' + 'a'.repeat(40) });
+  assert.equal(r.data.has_token, true);
+  assert.equal(JSON.stringify((await admin.get('/admin/github-token')).data).includes('github_pat_'), false);
+  await admin.put('/admin/github-token', { token: '' });
+  // applying results records them as "Check now" in the history
+  r = await admin.post(`/projects/${pid}/security/import`, { items: [{ code: 'E1', status: 'partial', evidence: 'Auto-check: Referrer-Policy missing' }], source: 'auto' });
+  assert.equal(r.status, 200);
+  assert.equal((await admin.get(`/projects/${pid}/security/E1/history`)).data[0].source, 'auto');
+});

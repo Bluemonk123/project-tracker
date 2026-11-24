@@ -1,7 +1,7 @@
 // Project → Data Security: the team's 45-point Data Security Checklist (sections A–E) for this project.
 // Each check gets a status (Covered / Partial / Not covered / Not applicable), the evidence and the next step.
 // "Copy audit prompt" gives a prompt for an AI code review; "Import report" reads its tables back in.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api.js';
 import { useLoad, useApp } from '../../context.jsx';
 import Icon from '../../components/Icon.jsx';
@@ -118,6 +118,86 @@ function ImportModal({ project, data, onClose, onDone }) {
   );
 }
 
+// Check now: the server scans the live website (8 checks) and the GitHub code (8 checks); the person picks what to apply.
+const AUTO_CODES = { website: ['C1', 'D3', 'E1', 'C9', 'A11', 'C3', 'C4', 'E2'], code: ['A1', 'A4', 'A7', 'A9', 'A10', 'A12', 'C7', 'B8'] };
+function GithubToken({ onClose }) {
+  const { data } = useLoad(() => api.get('/admin/github-token'), []);
+  const [token, setToken] = useState('');
+  const [busy, run] = useAsync();
+  const save = async (value) => { if (await run(() => api.put('/admin/github-token', { token: value }), value ? 'GitHub access saved' : 'GitHub access removed')) onClose(); };
+  return (
+    <Modal title="GitHub access for private repositories" onClose={onClose} onSubmit={() => save(token)}
+      footer={<>{data?.has_token && <button type="button" className="btn danger" style={{ marginRight: 'auto' }} onClick={() => save('')}>Remove</button>}<button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy || !token}>Save</button></>}>
+      <p className="small soft" style={{ marginTop: 0 }}>Public repositories need nothing. For private ones, create a <b>fine-grained personal access token</b> on GitHub (Settings → Developer settings → Personal access tokens) with <b>read-only "Contents"</b> access to the repositories, and paste it here. It is stored on the server and never shown again. {data?.has_token ? 'A token is saved now.' : 'No token saved yet.'}</p>
+      <Field label="Token"><input type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} placeholder="github_pat_…" /></Field>
+    </Modal>
+  );
+}
+
+function CheckModal({ project, data, onClose, onDone }) {
+  const { user } = useApp();
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [pick, setPick] = useState({});
+  const [tokenOpen, setTokenOpen] = useState(false);
+  const [busy, run] = useAsync();
+  const byCode = new Map(data.checks.map(c => [c.code, c]));
+  const start = async () => {
+    setError(null); setResult(null);
+    try {
+      const r = await api.post(`/projects/${project.id}/security/check`, {});
+      setResult(r);
+      const p = {}; for (const x of r.items) { const now = byCode.get(x.code); p[x.code] = !now?.status || now.status !== x.status || !now.evidence; } setPick(p);
+    } catch (e) { setError(e); }
+  };
+  useEffect(() => { start(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const chosen = (result?.items || []).filter(x => pick[x.code]);
+  const apply = async () => {
+    const r = await run(() => api.post(`/projects/${project.id}/security/import`, { items: chosen, source: 'auto' }), null);
+    if (r) { onDone(r); onClose(); }
+  };
+  const Part = ({ title, part, codes }) => (
+    <div className="sec-check-part">
+      <div className="row" style={{ gap: 8 }}><b>{title}</b><span className="xs soft">{codes.join(' · ')}</span></div>
+      {!part ? null : part.error
+        ? <div className="small sec-check-err">{part.target ? <><code>{part.target}</code>: </> : null}{part.error}</div>
+        : <div className="small soft">Checked <code>{part.target}</code>{part.scanned ? `: ${part.scanned} files` : ''}, {part.results.length} results</div>}
+    </div>
+  );
+  return (
+    <Modal title="Check now" wide onClose={onClose}
+      footer={<>{user.is_admin && <button type="button" className="btn ghost" style={{ marginRight: 'auto' }} onClick={() => setTokenOpen(true)}>GitHub access…</button>}
+        <button className="btn" onClick={onClose}>Cancel</button>
+        {result && <button className="btn" onClick={start}>Run again</button>}
+        <button className="btn primary" disabled={!chosen.length || busy} onClick={apply}>{busy ? 'Saving…' : `Apply ${chosen.length || ''} results`}</button></>}>
+      <p className="small soft" style={{ marginTop: 0 }}>Checks the live website from the <b>Hosting</b> link (production, else staging) and the code from the <b>Code repository</b> link in the Technologies card. The website is only read, like a visitor; nothing is changed. Code findings are hints: please confirm them.</p>
+      {!result && !error && <div className="sec-check-wait"><span className="spinner" /> Checking the website and the code… this can take up to a minute.</div>}
+      <ErrorBox error={error} />
+      {result && <>
+        <Part title="Live website" part={result.website} codes={AUTO_CODES.website} />
+        <Part title="Code on GitHub" part={result.code} codes={AUTO_CODES.code} />
+        {result.items.length > 0 && (
+          <div className="table-wrap sec-import-preview">
+            <table className="table">
+              <thead><tr><th style={{ width: 28 }}><input type="checkbox" aria-label="Pick all" checked={result.items.every(x => pick[x.code])} onChange={(e) => setPick(Object.fromEntries(result.items.map(x => [x.code, e.target.checked])))} /></th>
+                <th>#</th><th>Check</th><th>Now</th><th>Found</th><th>Evidence</th></tr></thead>
+              <tbody>{result.items.map(x => (
+                <tr key={x.code}>
+                  <td><input type="checkbox" checked={!!pick[x.code]} onChange={(e) => setPick({ ...pick, [x.code]: e.target.checked })} aria-label={`Apply ${x.code}`} /></td>
+                  <td className="key">{x.code}</td><td>{byCode.get(x.code)?.title}</td>
+                  <td><StatusPill status={byCode.get(x.code)?.status} /></td><td><StatusPill status={x.status} /></td>
+                  <td className="small"><div className="sec-clip" title={`${x.evidence}${x.next_step ? `\nNext: ${x.next_step}` : ''}`}>{x.evidence.replace(/^Auto-check [\d-]+: /, '')}</div>{x.next_step && <div className="xs soft sec-clip">Next: {x.next_step}</div>}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+      </>}
+      {tokenOpen && <GithubToken onClose={() => setTokenOpen(false)} />}
+    </Modal>
+  );
+}
+
 function EditModal({ project, check, canEdit, onClose, onSaved }) {
   const [f, setF] = useState({ status: check.status || '', evidence: check.evidence || '', next_step: check.next_step || '' });
   const [busy, run] = useAsync();
@@ -151,7 +231,7 @@ function EditModal({ project, check, canEdit, onClose, onSaved }) {
           <div className="xs muted" style={{ fontWeight: 600, marginBottom: 4 }}>History</div>
           {history.map((h, i) => (
             <div key={i} className="small">
-              <span className="soft">{fmtDateTime(h.created_at)}</span> · {h.user_name || 'Someone'}{h.source === 'import' ? ' (imported report)' : ''}:{' '}
+              <span className="soft">{fmtDateTime(h.created_at)}</span> · {h.user_name || 'Someone'}{h.source === 'import' ? ' (imported report)' : h.source === 'auto' ? ' (Check now)' : ''}:{' '}
               {h.status_from !== h.status_to ? <>{h.status_from ? SEC_STATUS[h.status_from].label : 'Not checked'} → <b>{h.status_to ? SEC_STATUS[h.status_to].label : 'Not checked'}</b></> : 'status unchanged'}
               {h.changed && <span className="soft">{` · ${h.changed.split(',').map(k => (k === 'next_step' ? 'next step' : k)).join(' and ')} changed`}</span>}
             </div>
@@ -171,6 +251,7 @@ export default function DataSecurity({ project }) {
   const [q, setQ] = useState('');
   const [edit, setEdit] = useState(null);
   const [importing, setImporting] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [closed, setClosed] = useState({});
   const [busy, run] = useAsync();
 
@@ -203,6 +284,7 @@ export default function DataSecurity({ project }) {
         </div>
         <div className="head-actions">
           <button className="btn" onClick={copyPrompt} title="A prompt for an AI code review of this project against the checklist"><Icon name="copy" />Copy audit prompt</button>
+          {data.can_edit && <button className="btn primary" onClick={() => setChecking(true)} title="Checks the live website and the GitHub code automatically (16 of the 45 checks)"><Icon name="scan" />Check now</button>}
           {data.can_edit && <button className="btn" onClick={() => setImporting(true)}><Icon name="upload" />Import report</button>}
           <a className="btn" href={`/api/projects/${project.id}/security.csv`}><Icon name="download" />Export</a>
         </div>
@@ -286,6 +368,7 @@ export default function DataSecurity({ project }) {
       {!data.checks.some(shown) && <div className="panel"><p className="soft" style={{ padding: 16, margin: 0 }}>No checks match.</p></div>}
 
       {edit && <EditModal project={project} check={byCode.get(edit.code)} canEdit={data.can_edit} onClose={() => setEdit(null)} onSaved={setFresh} />}
+      {checking && <CheckModal project={project} data={data} onClose={() => setChecking(false)} onDone={(r) => { setFresh(r); toast(`${r.changed} checks updated from Check now`); }} />}
       {importing && <ImportModal project={project} data={data} onClose={() => setImporting(false)} onDone={(r) => { setFresh(r); toast(`${r.changed} checks updated from the report`); }} />}
     </div>
   );

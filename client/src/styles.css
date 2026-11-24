@@ -1454,3 +1454,6 @@ a.ov-stage-row:hover { background: var(--sunken); }
 .sec-top h3 svg { width: 16px; height: 16px; color: var(--danger); }
 /* Testing copy marker */
 .staging-bar { position: sticky; top: 0; z-index: 200; background: repeating-linear-gradient(135deg, #f5a623 0 14px, #f0b84a 14px 28px); color: #1f1a10; font-weight: 700; font-size: 12.5px; text-align: center; padding: 4px 12px; letter-spacing: .02em; }
+.sec-check-part { display: grid; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--line-2); }
+.sec-check-err { color: var(--danger); }
+.sec-check-wait { display: flex; align-items: center; gap: 10px; padding: 18px 0; color: var(--ink-2); }

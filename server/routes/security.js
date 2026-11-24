@@ -1,7 +1,8 @@
 // Project → Data Security: the 45-point checklist with a status, evidence and next step per check.
 // View: anyone who can see the project. Change: "Update data security checks" (security.manage) or "Edit project".
 import { Router } from 'express';
-import { get, all, run, tx } from '../db.js';
+import { get, all, run, tx, getSetting, setSetting } from '../db.js';
+import { scanWebsite, scanRepo, parseRepo } from '../securityScan.js';
 import { need, can, fail } from '../access.js';
 import { resolveProject } from './projects.js';
 import { SECURITY_SECTIONS, SECURITY_CHECKS, SECURITY_STATUSES, CHECK_BY_CODE } from '../securityChecklist.js';
@@ -85,7 +86,8 @@ r.post('/projects/:pid/security/import', (req, res) => {
   const unknown = items.filter(x => !CHECK_BY_CODE.has(String(x?.code || '').toUpperCase())).map(x => x?.code);
   if (unknown.length) fail(400, `Unknown checks: ${unknown.slice(0, 5).join(', ')}.`);
   let changed = 0;
-  tx(() => { for (const x of items) if (save(req, p.id, x.code, x, 'import')) changed++; });
+  const source = req.body?.source === 'auto' ? 'auto' : 'import';
+  tx(() => { for (const x of items) if (save(req, p.id, x.code, x, source)) changed++; });
   res.json({ ...summary(loadRows(p.id)), can_edit: true, changed });
 });
 
@@ -96,6 +98,41 @@ r.get('/projects/:pid/security/:code/history', (req, res) => {
   if (!CHECK_BY_CODE.has(code)) fail(404, 'Check not found.');
   res.json(all(`SELECT l.status_from, l.status_to, l.changed, l.source, l.created_at, u.name AS user_name FROM project_security_log l
                 LEFT JOIN users u ON u.id = l.user_id WHERE l.project_id = ? AND l.code = ? ORDER BY l.id DESC LIMIT 50`, p.id, code));
+});
+
+// Check now: scan the live website (Hosting link) and the code (Code repository link). Nothing is saved here:
+// the person sees the findings next to the current values and applies them (POST .../import with source "auto").
+const running = new Set();
+r.post('/projects/:pid/security/check', async (req, res) => {
+  const p = resolveProject(req.params.pid);
+  if (!canEdit(req, p.id)) fail(403, 'You need "Update data security checks" or "Edit project" in this project.');
+  if (running.has(p.id)) fail(409, 'A check is already running for this project.');
+  let board = {}; try { board = JSON.parse(get('SELECT board_data FROM projects WHERE id = ?', p.id)?.board_data || '{}') || {}; } catch { /* none */ }
+  const site = String(req.body?.website ?? board.hosting?.production ?? board.hosting?.staging ?? '').trim() || board.hosting?.staging || '';
+  const repo = String(req.body?.repository ?? '').trim() || [board.repository?.production, board.repository?.staging].find(x => parseRepo(x)) || '';
+  const want = { website: req.body?.scan_website !== false, code: req.body?.scan_code !== false };
+  running.add(p.id);
+  try {
+    const [website, code] = await Promise.all([
+      !want.website ? null : site ? scanWebsite(site).catch(e => ({ target: site, error: e.message })) : { error: 'No live address: add the production link under Hosting in the Technologies card.' },
+      !want.code ? null : repo ? scanRepo(repo, getSetting('github_token', '')).catch(e => ({ target: repo, error: e.message })) : { error: 'No GitHub link: add it under Code repository in the Technologies card.' },
+    ]);
+    const items = [...(website?.results || []), ...(code?.results || [])];
+    res.json({ website, code, items, checked_at: new Date().toISOString() });
+  } finally { running.delete(p.id); }
+});
+
+// GitHub access token for private repositories (administrators; never sent back to the browser)
+r.get('/admin/github-token', (req, res) => {
+  if (!req.user.is_admin) fail(403, 'Administrators only.');
+  res.json({ has_token: !!getSetting('github_token', '') });
+});
+r.put('/admin/github-token', (req, res) => {
+  if (!req.user.is_admin) fail(403, 'Administrators only.');
+  const t = String(req.body?.token ?? '').trim();
+  if (t && !/^(gh[pousr]_|github_pat_)[A-Za-z0-9_]{20,}$/.test(t)) fail(400, 'That does not look like a GitHub token (it starts with github_pat_ or ghp_).');
+  setSetting('github_token', t);
+  res.json({ has_token: !!t });
 });
 
 const LABEL = { covered: 'Covered', partial: 'Partial', missing: 'Not covered', na: 'Not applicable' };
