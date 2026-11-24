@@ -1,6 +1,7 @@
 // Administration -> Email: company mailbox (and backup mailbox) used for ticket alerts.
 import { Router } from 'express';
 import { fail } from '../access.js';
+import { getSetting, setSetting } from '../db.js';
 import { mailConfig, saveMailConfig, sendMail, isEmail } from '../mailer.js';
 import { imapConfig, saveImapConfig, lastCheck, checkMailbox } from '../inbound.js';
 
@@ -31,6 +32,7 @@ r.get('/admin/email', (req, res) => {
     inbound: { enabled: !!i.enabled, host: i.host || '', port: i.port || 993, secure: i.secure !== false, user: i.user || '', has_pass: !!i.pass,
       folder: i.folder || 'INBOX', address: i.address || '', minutes: i.minutes || 2 },
     inbound_last: lastCheck(),
+    notify_email: getSetting('notify_email', '1') !== '0',
   });
 });
 
@@ -41,6 +43,7 @@ r.put('/admin/email', (req, res) => {
   const backup = clean(req.body.backup, prev.backup);
   if (backup && !main) fail(400, 'Set up the main mailbox before a backup one.');
   saveMailConfig({ main, backup });
+  if ('notify_email' in req.body) setSetting('notify_email', req.body.notify_email ? '1' : '0');
   res.json({ ok: true });
 });
 

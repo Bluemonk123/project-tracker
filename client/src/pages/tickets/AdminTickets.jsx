@@ -190,20 +190,23 @@ function EmailForm({ data, onSaved }) {
   const [main, setMain] = useState({ ...BLANK, ...(data.main || {}), pass: '' });
   const [backup, setBackup] = useState({ ...BLANK, ...(data.backup || {}), pass: '' });
   const [showBackup, setShowBackup] = useState(!!data.backup);
+  const [notifyAll, setNotifyAll] = useState(data.notify_email !== false);
   const [busy, run] = useAsync();
   const save = async (e) => {
     e.preventDefault();
-    if (await run(() => api.put('/admin/email', { main: main.host ? main : null, backup: showBackup && backup.host ? backup : null }), 'Email settings saved')) onSaved();
+    if (await run(() => api.put('/admin/email', { main: main.host ? main : null, backup: showBackup && backup.host ? backup : null, notify_email: notifyAll }), 'Email settings saved')) onSaved();
   };
   const test = async () => { const r = await run(() => api.post('/admin/email/test')); if (r) window.alert(`Test email sent to ${r.to} through the ${r.via} mailbox.`); };
   return (
     <form className="panel" onSubmit={save}>
-      <div className="panel-head"><h3>Outgoing email (SMTP)</h3><span className="xs muted">The company mailbox that sends ticket alerts to requesters. Leave empty and nothing is emailed.</span></div>
+      <div className="panel-head"><h3>Outgoing email (SMTP)</h3><span className="xs muted">The company mailbox that sends emails from the app: ticket alerts and people's notifications. Leave empty and nothing is emailed.</span></div>
       <div className="panel-body stack">
         <MailboxFields title="Main mailbox" m={main} setM={setMain} hasPass={data.main?.has_pass} />
         {showBackup
           ? <MailboxFields title="Backup mailbox (used when the main one fails)" m={backup} setM={setBackup} hasPass={data.backup?.has_pass} />
           : <button type="button" className="btn sm ghost" style={{ alignSelf: 'flex-start' }} onClick={() => setShowBackup(true)}><Icon name="plus" />Add a backup mailbox</button>}
+        <label className="row small"><input type="checkbox" checked={notifyAll} onChange={(e) => setNotifyAll(e.target.checked)} />
+          Also email people their notifications (task assigned, mentions, comments, stage changes, meetings, approvals, tickets). Each person can turn this off in My profile.</label>
       </div>
       <div className="modal-foot">
         {data.main && <button type="button" className="btn" disabled={busy} onClick={test}>Send a test email to me</button>}

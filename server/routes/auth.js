@@ -90,7 +90,8 @@ r.post('/auth/password', requireAuth, (req, res) => {
 
 r.patch('/auth/profile', requireAuth, (req, res) => {
   const name = requireText(req.body.name ?? req.user.name, 'Name');
-  run('UPDATE users SET name = ?, job_title = ? WHERE id = ?', name, req.body.job_title ?? req.user.job_title, req.user.id);
+  run('UPDATE users SET name = ?, job_title = ?, email_notify = ? WHERE id = ?', name, req.body.job_title ?? req.user.job_title,
+    'email_notify' in req.body ? (req.body.email_notify ? 1 : 0) : (req.user.email_notify ?? 1), req.user.id);
   res.json({ ok: true });
 });
 

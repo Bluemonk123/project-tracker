@@ -419,6 +419,10 @@ function migrate() {
     db.exec("INSERT OR IGNORE INTO project_modules(project_id, name) SELECT project_id, TRIM(module) FROM work_packages WHERE TRIM(COALESCE(module, '')) <> '' GROUP BY project_id, LOWER(TRIM(module))");
     setSetting('project_modules_v1', '1');
   }
+  // Email copies of notifications: per-notification state, and each person's choice (on unless turned off)
+  if (!all('PRAGMA table_info(notifications)').some(c => c.name === 'email_state')) db.exec('ALTER TABLE notifications ADD COLUMN email_state TEXT');
+  if (!all('PRAGMA table_info(users)').some(c => c.name === 'email_notify')) db.exec('ALTER TABLE users ADD COLUMN email_notify INTEGER NOT NULL DEFAULT 1');
+  db.exec("CREATE INDEX IF NOT EXISTS idx_notif_email ON notifications(email_state) WHERE email_state = 'pending'");
   // Data Security tab: roles that manage the tech stack may also update the security checks
   if (!getSetting('migration_security_perm_v1')) {
     tx(() => {

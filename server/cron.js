@@ -9,6 +9,7 @@ import crypto from 'node:crypto';
 import { BACKUP_DIR, backupNow } from './db.js';
 import { copyDue, scheduleCopies } from './routes/backupcopy.js';
 import { inboundDue, scheduleInbound } from './inbound.js';
+import { flushNotificationEmails } from './notifymail.js';
 
 // Keep a daily copy of the database; prune to the newest 14 automatic backups.
 export function autoBackup() {
@@ -30,7 +31,8 @@ export async function runDueJobs() {
     const backup = autoBackup();
     const copy = await copyDue();
     const mailbox = await inboundDue();
-    return { backup, copy, mailbox };
+    const notifications = await flushNotificationEmails().catch(e => ({ ok: false, error: e.message }));
+    return { backup, copy, mailbox, notifications };
   })();
   try { return await running; } finally { running = null; }
 }
@@ -43,6 +45,7 @@ export function startTimers() {
   setInterval(autoBackup, 6 * 3600 * 1000).unref();
   scheduleCopies();
   scheduleInbound();
+  setInterval(() => { flushNotificationEmails().catch(() => {}); }, 60_000).unref();
 }
 
 // GET /api/cron?key=...  (or header X-Cron-Key). Without CRON_KEY set, the address does not exist.

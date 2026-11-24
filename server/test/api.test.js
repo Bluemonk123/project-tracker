@@ -951,3 +951,30 @@ test('data security checklist: 45 checks, edit rights, import, history and CSV',
   r = await admin.get(`/projects/${pid}/security.csv`);
   assert.match(r.data, /A1,.*Covered,server\/db\.js: prepared statements/);
 });
+
+test('notification emails: pending when email is set up, one email per person, respects the personal switch', async () => {
+  const { get: dbGet, run: dbRun } = await import('../db.js');
+  const { flushNotificationEmails } = await import('../notifymail.js');
+  // no outgoing email: nothing pending
+  let r = await admin.post('/work-packages', { project_id: ids.project, subject: 'Mail test 1', assignee_id: ids.dev });
+  assert.equal(r.status, 201);
+  assert.equal(dbGet("SELECT email_state FROM notifications WHERE wp_id = ? AND user_id = ?", r.data.id, ids.dev).email_state, null);
+  // outgoing email set up (a server that refuses connections, so sending fails fast)
+  assert.equal((await admin.put('/admin/email', { main: { host: '127.0.0.1', port: 1, user: 'x', pass: 'y', from: 'tracker@office.local' } })).status, 200);
+  r = await admin.post('/work-packages', { project_id: ids.project, subject: 'Mail test 2', assignee_id: ids.dev });
+  assert.equal(dbGet("SELECT email_state FROM notifications WHERE wp_id = ? AND user_id = ?", r.data.id, ids.dev).email_state, 'pending');
+  dbRun("UPDATE notifications SET created_at = datetime('now', '-1 minute') WHERE email_state = 'pending'");
+  const out = await flushNotificationEmails();
+  assert.equal(out.failed, 1); // one email for the person (not one per notification)
+  // the person turns emails off
+  assert.equal((await dev.patch('/auth/profile', { name: 'Dev One', email_notify: false })).status, 200);
+  r = await admin.post('/work-packages', { project_id: ids.project, subject: 'Mail test 3', assignee_id: ids.dev });
+  assert.equal(dbGet("SELECT email_state FROM notifications WHERE wp_id = ? AND user_id = ?", r.data.id, ids.dev).email_state, null);
+  // administrator switch off
+  await dev.patch('/auth/profile', { name: 'Dev One', email_notify: true });
+  assert.equal((await admin.put('/admin/email', { main: { host: '127.0.0.1', port: 1, user: 'x', from: 'tracker@office.local' }, notify_email: false })).status, 200);
+  assert.equal((await admin.get('/admin/email')).data.notify_email, false);
+  r = await admin.post('/work-packages', { project_id: ids.project, subject: 'Mail test 4', assignee_id: ids.dev });
+  assert.equal(dbGet("SELECT email_state FROM notifications WHERE wp_id = ? AND user_id = ?", r.data.id, ids.dev).email_state, null);
+  await admin.put('/admin/email', { main: null, notify_email: true });
+});

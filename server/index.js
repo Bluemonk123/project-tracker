@@ -24,6 +24,7 @@ import calendarRoutes from './routes/calendar.js';
 import sprintRoutes from './routes/sprints.js';
 import securityRoutes from './routes/security.js';
 import { startTimers, cronHandler } from './cron.js';
+import { rememberOrigin } from './notifymail.js';
 import { fullBackupRoutes, restoreRoutes } from './routes/transfer.js';
 
 // CSRF protection (double-submit token): every browser gets a random pt_csrf cookie, and every
@@ -59,6 +60,7 @@ export function createApp() {
   app.use(csrf);
   app.use((_, res, next) => { res.setHeader('X-Frame-Options', 'SAMEORIGIN'); next(); });
   app.use(loadUser);
+  app.use((req, _res, next) => { if (req.user) rememberOrigin(req); next(); }); // links in notification emails
 
   const api = express.Router();
   // Lightweight check used by the Connected / Disconnected indicator in the top bar

@@ -5,7 +5,7 @@ import { Field, useAsync, Avatar } from '../components/ui.jsx';
 
 export default function Profile() {
   const { user, me, reload, projects } = useApp();
-  const [f, setF] = useState({ name: user.name, job_title: user.job_title || '' });
+  const [f, setF] = useState({ name: user.name, job_title: user.job_title || '', email_notify: user.email_notify !== 0 });
   const [pw, setPw] = useState({ current: '', password: '', confirm: '' });
   const [busy, run] = useAsync();
   const saveProfile = async (e) => { e.preventDefault(); if (await run(() => api.patch('/auth/profile', f), 'Profile saved')) reload(); };
@@ -28,6 +28,7 @@ export default function Profile() {
             <Field label="Name"><input type="text" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required /></Field>
             <Field label="Job title"><input type="text" value={f.job_title} onChange={(e) => setF({ ...f, job_title: e.target.value })} placeholder="e.g. Backend developer" /></Field>
             <Field label="Email" hint="Ask an administrator to change your email."><input type="email" value={user.email} disabled /></Field>
+            <label className="row small"><input type="checkbox" checked={f.email_notify} onChange={(e) => setF({ ...f, email_notify: e.target.checked })} />Email me my notifications (tasks, mentions, comments, meetings, tickets)</label>
           </div>
           <div className="modal-foot"><button className="btn primary" disabled={busy}>Save profile</button></div>
         </form>

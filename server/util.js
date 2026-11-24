@@ -1,13 +1,16 @@
 import { run, get } from './db.js';
 import { fail } from './access.js';
+import { wantsEmail, scheduleFlush } from './notifymail.js';
 
 export function notify(userIds, { actorId = null, projectId = null, wpId = null, meetingId = null, ticketId = null, link = null, reason, message }) {
   const uniq = [...new Set(userIds.filter(Boolean).map(Number))].filter(id => id !== Number(actorId));
   for (const uid of uniq) {
     const active = get("SELECT id FROM users WHERE id = ? AND status = 'active'", uid);
     if (!active) continue;
-    run(`INSERT INTO notifications(user_id, actor_id, project_id, wp_id, meeting_id, ticket_id, link, reason, message)
-         VALUES(?,?,?,?,?,?,?,?,?)`, uid, actorId, projectId, wpId, meetingId, ticketId, link, reason, message);
+    const email = wantsEmail(uid, reason);
+    run(`INSERT INTO notifications(user_id, actor_id, project_id, wp_id, meeting_id, ticket_id, link, reason, message, email_state)
+         VALUES(?,?,?,?,?,?,?,?,?,?)`, uid, actorId, projectId, wpId, meetingId, ticketId, link, reason, message, email ? 'pending' : null);
+    if (email) scheduleFlush();
   }
 }
 
