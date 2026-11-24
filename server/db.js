@@ -155,7 +155,7 @@ function migrate() {
     });
   }
 
-  // Design / Develop / Testing: one person per stage on every work package.
+  // Design / Develop / Testing: one person per stage on every task.
   const wpCols = all('PRAGMA table_info(work_packages)').map(c => c.name);
   for (const c of ['designer_id', 'developer_id', 'tester_id']) {
     if (!wpCols.includes(c)) db.exec(`ALTER TABLE work_packages ADD COLUMN ${c} INTEGER REFERENCES users(id) ON DELETE SET NULL`);

@@ -232,7 +232,7 @@ r.post('/meetings/:id/agenda', (req, res) => {
   let wpId = intOrNull(req.body.wp_id) || null;
   let title = req.body.title ? String(req.body.title).trim() : '';
   if (wpId) {
-    const wp = get(`SELECT wp.id, wp.project_id, wp.subject, p.identifier || '-' || wp.number AS key FROM work_packages wp JOIN projects p ON p.id = wp.project_id WHERE wp.id = ?`, wpId) || fail(400, 'Work package not found.');
+    const wp = get(`SELECT wp.id, wp.project_id, wp.subject, p.identifier || '-' || wp.number AS key FROM work_packages wp JOIN projects p ON p.id = wp.project_id WHERE wp.id = ?`, wpId) || fail(400, 'Task not found.');
     need(req, 'wp.view', wp.project_id);
     if (!title) title = `${wp.key} ${wp.subject}`;
   }
@@ -272,7 +272,7 @@ r.delete('/meetings/:id/agenda/:itemId', (req, res) => {
   res.json({ ok: true });
 });
 
-// ---------- action items (create a real work package) ----------
+// ---------- action items (create a real task) ----------
 r.post('/meetings/:id/actions', (req, res) => {
   const m = loadMeeting(req, req.params.id);
   if (!m.project_id) fail(400, 'Action items need a project meeting.');

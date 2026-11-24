@@ -429,7 +429,7 @@ export default function KanbanBoard({ project }) {
                   )}
                   <button type="button" className="kb-add kb-expand" onClick={() => setExpanded(col.key)} title={`Expand ${col.name}`} aria-label={`Expand ${col.name} in a larger view`}><Icon name="maximize" /></button>
                   {canCreateIn && col.statuses.length > 0 && !['closed', 'rejected'].includes(col.key) && (
-                    <button type="button" className="kb-add" onClick={() => setAdding(col)} title={`Add to ${col.name}`} aria-label={`Add a work package to ${col.name}`}><Icon name="plus" /></button>
+                    <button type="button" className="kb-add" onClick={() => setAdding(col)} title={`Add to ${col.name}`} aria-label={`Add a task to ${col.name}`}><Icon name="plus" /></button>
                   )}
                 </div>
                 <div className="kb-cards">

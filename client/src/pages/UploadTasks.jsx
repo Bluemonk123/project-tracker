@@ -1,5 +1,5 @@
 // Upload tasks (Sprint Planning): read a CSV or Excel file, check every row on the server, then import the good ones.
-// Uploaded tasks are not in any sprint; they appear under "Not in a sprint" and in All work.
+// Uploaded tasks are not in any sprint; they appear under "Not in a sprint" and in All tasks.
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
@@ -124,7 +124,7 @@ export default function UploadTasksModal({ defaultProject, onClose, onDone }) {
     return (
       <Modal title="Tasks uploaded" onClose={onClose} footer={<button type="button" className="btn primary" onClick={onClose}>Done</button>}>
         <p><b>{done.created}</b> task{done.created === 1 ? '' : 's'} added{done.skipped ? <>, <b>{done.skipped}</b> row{done.skipped === 1 ? '' : 's'} skipped because of problems</> : ''}.</p>
-        <p className="small muted">They are not in any sprint yet: you'll find them under <b>Not in a sprint</b>, ready to pick into a sprint, and in <Link to="/work-packages" onClick={onClose}>All work</Link>.</p>
+        <p className="small muted">They are not in any sprint yet: you'll find them under <b>Not in a sprint</b>, ready to pick into a sprint, and in <Link to="/work-packages" onClick={onClose}>All tasks</Link>.</p>
         <div className="up-keys">{done.items.slice(0, 40).map(x => <Link key={x.id} to={`/wp/${x.id}`} className="tag" onClick={onClose}>{x.key}</Link>)}{done.items.length > 40 && <span className="xs muted">and {done.items.length - 40} more</span>}</div>
       </Modal>
     );

@@ -108,7 +108,7 @@ function ReviewSummary({ m }) {
         <div>
           <div className="small soft" style={{ fontWeight: 600, marginBottom: 6 }}>Hours logged <span className="muted">({fmtHours(data.hours.reduce((s, h) => s + h.hours, 0))})</span></div>
           {data.hours.length ? data.hours.map(h => <div key={h.name} className="row small"><span className="grow">{h.name}</span><span className="num">{fmtHours(h.hours)}</span></div>) : <div className="xs muted">No time logged.</div>}
-          <div className="xs muted" style={{ marginTop: 6 }}>{data.created} new work packages created</div>
+          <div className="xs muted" style={{ marginTop: 6 }}>{data.created} new tasks created</div>
         </div>
         {data.blockers.length > 0 && <div className="span-2" style={{ gridColumn: '1 / -1' }}>
           <div className="small soft" style={{ fontWeight: 600, marginBottom: 6 }}>Blockers raised in stand-ups</div>
@@ -210,7 +210,7 @@ export default function MeetingDetail() {
     e?.preventDefault();
     if (!action.subject.trim()) return;
     const body = { ...action, type_id: action.type_id || undefined, due_date: action.due_date || null };
-    if (await run(() => api.post(`/meetings/${m.id}/actions`, body), 'Action item created as a work package')) { setAction({ subject: '', assignee_id: null, due_date: '', type_id: '' }); reload(); }
+    if (await run(() => api.post(`/meetings/${m.id}/actions`, body), 'Action item created as a task')) { setAction({ subject: '', assignee_id: null, due_date: '', type_id: '' }); reload(); }
   };
   const agendaChange = async (dir, item) => {
     if (!dir) return reload();
@@ -302,7 +302,7 @@ export default function MeetingDetail() {
                     <input type="text" placeholder="Add an agenda item" value={newItem.title} onChange={(e) => setNewItem({ ...newItem, title: e.target.value })} />
                     <button className="btn" disabled={busy || (!newItem.title.trim() && !newItem.wp_id)}>Add</button>
                   </div>
-                  {m.project_id && <div className="row"><span className="xs muted nowrap">or discuss a work package</span><span className="grow"><WpSearchSelect projectId={m.project_id} value={newItem.wp_id} onChange={(v) => setNewItem({ ...newItem, wp_id: v })} /></span></div>}
+                  {m.project_id && <div className="row"><span className="xs muted nowrap">or discuss a task</span><span className="grow"><WpSearchSelect projectId={m.project_id} value={newItem.wp_id} onChange={(v) => setNewItem({ ...newItem, wp_id: v })} /></span></div>}
                 </form>
               )}
             </div>
@@ -310,7 +310,7 @@ export default function MeetingDetail() {
 
           {m.project_id && (
             <section className="panel">
-              <div className="panel-head"><h3>Action items</h3><div className="actions"><span className="small muted">Each becomes a tracked work package</span></div></div>
+              <div className="panel-head"><h3>Action items</h3><div className="actions"><span className="small muted">Each becomes a tracked task</span></div></div>
               <div className="panel-body" style={{ paddingTop: 6 }}>
                 {m.actions.map(a => (
                   <div key={a.id} className="child-row" style={{ paddingLeft: 0, paddingRight: 0 }}>

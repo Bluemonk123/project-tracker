@@ -73,7 +73,7 @@ export default function Roadmap({ project, reloadProject }) {
                       <MoreMenu>
                         <button className="menu-item" onClick={() => setModal({ version: v })}><Icon name="edit" size={16} />Edit</button>
                         <button className="menu-item danger" onClick={async () => {
-                          if (await confirmDialog({ message: `Delete version ${v.name}? Its work packages stay but lose the version.`, confirmLabel: 'Delete', danger: true })) {
+                          if (await confirmDialog({ message: `Delete version ${v.name}? Its tasks stay but lose the version.`, confirmLabel: 'Delete', danger: true })) {
                             await run(() => api.del(`/projects/${project.id}/versions/${v.id}`)); refresh(); wps.reload();
                           }
                         }}><Icon name="trash" size={16} />Delete</button>
@@ -84,7 +84,7 @@ export default function Roadmap({ project, reloadProject }) {
                 <div className="panel-body stack tight">
                   {v.description && <p className="soft small" style={{ margin: 0 }}>{v.description}</p>}
                   <Progress value={v.progress || 0} color={project.color} />
-                  <span className="xs muted">{v.closed} of {v.total} work packages done</span>
+                  <span className="xs muted">{v.closed} of {v.total} tasks done</span>
                 </div>
                 {items.length > 0 && (
                   <div style={{ borderTop: '1px solid var(--line-2)' }}>

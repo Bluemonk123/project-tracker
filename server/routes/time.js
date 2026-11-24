@@ -67,7 +67,7 @@ r.get('/time-entries/tasks', (req, res) => {
 });
 
 r.get('/time-entries/report', (req, res) => {
-  const groups = { user: 'u.name', project: 'p.name', activity: 'te.activity', wp: "COALESCE(p2.identifier || '-' || wp.number || ' ' || wp.subject, '(no work package)')", day: 'te.spent_on', week: "strftime('%Y-W%W', te.spent_on)", month: "strftime('%Y-%m', te.spent_on)" };
+  const groups = { user: 'u.name', project: 'p.name', activity: 'te.activity', wp: "COALESCE(p2.identifier || '-' || wp.number || ' ' || wp.subject, '(no task)')", day: 'te.spent_on', week: "strftime('%Y-W%W', te.spent_on)", month: "strftime('%Y-%m', te.spent_on)" };
   const rowsBy = groups[req.query.rows] || groups.user;
   const colsBy = groups[req.query.cols] || null;
   const { where, params } = filters(req, req.query);
@@ -81,9 +81,9 @@ r.get('/time-entries/report', (req, res) => {
 function resolveTarget(req, b) {
   let wp = null;
   if (b.wp_id) {
-    wp = get('SELECT id, project_id FROM work_packages WHERE id = ?', b.wp_id) || fail(400, 'Work package not found.');
+    wp = get('SELECT id, project_id FROM work_packages WHERE id = ?', b.wp_id) || fail(400, 'Task not found.');
   }
-  const projectId = wp ? wp.project_id : (b.project_id ? resolveProject(b.project_id).id : fail(400, 'Choose a project or work package.'));
+  const projectId = wp ? wp.project_id : (b.project_id ? resolveProject(b.project_id).id : fail(400, 'Choose a project or task.'));
   return { wp, projectId };
 }
 

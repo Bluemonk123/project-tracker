@@ -206,7 +206,7 @@ for (const [table, cols] of Object.entries(ENUMS)) {
     need(req, 'admin.settings');
     const row = get(`SELECT * FROM ${table} WHERE id = ?`, req.params.id) || fail(404, 'Not found.');
     const used = get(`SELECT COUNT(*) AS n FROM work_packages WHERE ${USAGE_COL[table]} = ?`, row.id).n;
-    if (used) fail(400, `${used} work package(s) still use “${row.name}”. Change them first.`);
+    if (used) fail(400, `${used} task(s) still use “${row.name}”. Change them first.`);
     if (get(`SELECT COUNT(*) AS n FROM ${table}`).n <= 1) fail(400, 'At least one entry is required.');
     run(`DELETE FROM ${table} WHERE id = ?`, row.id);
     res.json({ ok: true });

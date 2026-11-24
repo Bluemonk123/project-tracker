@@ -79,7 +79,7 @@ export default function WorkPackages({ project }) {
   const allSelected = rows.length > 0 && selected.length === rows.length;
 
   const bulk = async (changes) => {
-    const r = await run(() => api.patch('/work-packages-bulk', { ids: selected, changes }), `${selected.length} work package(s) updated`);
+    const r = await run(() => api.patch('/work-packages-bulk', { ids: selected, changes }), `${selected.length} task(s) updated`);
     if (r) { setSelected([]); reload(); }
   };
 
@@ -195,7 +195,7 @@ export default function WorkPackages({ project }) {
           </table>
         </div>
         {data && !rows.length && (
-          <Empty title="No work packages match" action={canCreate && <button className="btn primary" onClick={() => setCreating(true)}><Icon name="plus" />New task</button>}>
+          <Empty title="No tasks match" action={canCreate && <button className="btn primary" onClick={() => setCreating(true)}><Icon name="plus" />New task</button>}>
             Change the filters above, or create the first item for this list.
           </Empty>
         )}

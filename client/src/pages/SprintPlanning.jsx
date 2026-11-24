@@ -163,7 +163,7 @@ export default function SprintPlanning() {
   const [limit, setLimit] = useState(500);
   const [busy, run] = useAsync();
 
-  // ?sprint=<id>: only that sprint's tasks (e.g. from the Sprints column in All work)
+  // ?sprint=<id>: only that sprint's tasks (e.g. from the Sprints column in All tasks)
   const sprintFilter = /^\d+$/.test(sp.get('sprint') || '') ? Number(sp.get('sprint')) : null;
   const tab = sprintFilter ? { key: 'sprint', q: { sprint_id: sprintFilter }, status: 'all' } : TABS.find(t => t.key === sp.get('tab')) || TABS[0];
   const f = Object.fromEntries(FILTERS.map(k => [k, sp.get(k) || undefined]));

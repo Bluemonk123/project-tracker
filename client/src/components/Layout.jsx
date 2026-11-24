@@ -44,7 +44,7 @@ function GlobalSearch() {
       {open && res && (
         <div className="search-results">
           {empty && <div className="small muted" style={{ padding: 10 }}>Nothing matches “{q}”.</div>}
-          {res.workPackages.length > 0 && <h5>Work packages</h5>}
+          {res.workPackages.length > 0 && <h5>Tasks</h5>}
           {res.workPackages.map((w, i) => (
             <a key={w.id} href={`/wp/${w.id}`} className={i === 0 ? 'hl' : ''} onClick={(e) => { e.preventDefault(); go(`/wp/${w.id}`); }}>
               <span className="key" style={{ '--pc': w.project_color }}>{w.key}</span><span className="ellipsis grow">{w.subject}</span>
@@ -117,7 +117,7 @@ export default function Layout() {
           <NavLink to="/project-board" className="nav-link" title="Project Board"><Icon name="briefcase" /><span className="nav-text">Project Board</span></NavLink>
           <NavLink to="/sprint-planning" className="nav-link" title="Sprint Planning"><Icon name="flag" /><span className="nav-text">Sprint Planning</span></NavLink>
           <NavLink to="/board" className="nav-link" title="Task Board"><Icon name="board" /><span className="nav-text">Task Board</span></NavLink>
-          <NavLink to="/work-packages" className={() => `nav-link${['/work-packages', '/meetings', '/time'].some(p => loc.pathname.startsWith(p)) ? ' active' : ''}`} title="All work, meetings and time"><Icon name="list" /><span className="nav-text">All work</span></NavLink>
+          <NavLink to="/work-packages" className={() => `nav-link${['/work-packages', '/meetings', '/time'].some(p => loc.pathname.startsWith(p)) ? ' active' : ''}`} title="All tasks, meetings and time"><Icon name="list" /><span className="nav-text">All tasks</span></NavLink>
           <NavLink to="/teams" className="nav-link" title="Teams"><Icon name="users" /><span className="nav-text">Teams</span></NavLink>
           {can('tickets.view') && <NavLink to="/ticket-board" className="nav-link" title="Ticket Board"><Icon name="ticket" /><span className="nav-text">Ticket Board</span></NavLink>}
           <NavLink to="/tickets-raised" className="nav-link" title="Tickets Raised"><Icon name="inbox" /><span className="nav-text">Tickets Raised</span></NavLink>

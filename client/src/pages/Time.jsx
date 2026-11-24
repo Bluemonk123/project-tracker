@@ -45,7 +45,7 @@ export function LogTimeModal({ wp, entry, projectId, onClose, onSaved, date }) {
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </Field>
-          <Field label="Work package" hint="Optional"><WpSearchSelect projectId={f.project_id} value={f.wp_id} onChange={(v) => set('wp_id', v)} /></Field>
+          <Field label="Task" hint="Optional"><WpSearchSelect projectId={f.project_id} value={f.wp_id} onChange={(v) => set('wp_id', v)} /></Field>
         </div>
       )}
       <div className="form-grid three">
@@ -133,7 +133,7 @@ function WeekView({ project, userFilter }) {
   );
 }
 
-const GROUPS = { user: 'Person', project: 'Project', activity: 'Activity', wp: 'Work package', day: 'Day', week: 'Week', month: 'Month' };
+const GROUPS = { user: 'Person', project: 'Project', activity: 'Activity', wp: 'Task', day: 'Day', week: 'Week', month: 'Month' };
 
 function Report({ project }) {
   const { activeUsers } = useApp();

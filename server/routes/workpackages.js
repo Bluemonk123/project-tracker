@@ -395,7 +395,7 @@ r.get('/work-packages/export.csv', (req, res) => {
 });
 
 export function loadWp(id) {
-  return get(`${BASE_SELECT} WHERE wp.id = ?`, id) || fail(404, 'Work package not found.');
+  return get(`${BASE_SELECT} WHERE wp.id = ?`, id) || fail(404, 'Task not found.');
 }
 
 export function canEditWp(req, wp) {
@@ -448,12 +448,12 @@ function validateRefs(projectId, f, wpId = null) {
   if (f.responsible_id !== undefined) f.responsible_id = checkMemberOrNull(projectId, f.responsible_id, 'Accountable');
   for (const [k, label] of Object.entries(STAGE_LABEL)) if (f[k] !== undefined) f[k] = checkMemberOrNull(projectId, f[k], label);
   if (f.parent_id) {
-    const parent = get('SELECT id, project_id FROM work_packages WHERE id = ?', f.parent_id) || fail(400, 'Parent work package not found.');
+    const parent = get('SELECT id, project_id FROM work_packages WHERE id = ?', f.parent_id) || fail(400, 'Parent task not found.');
     if (wpId) {
       // prevent cycles
       let cur = parent.id;
       for (let i = 0; cur && i < 100; i++) {
-        if (cur === wpId) fail(400, 'A work package cannot be placed under one of its own children.');
+        if (cur === wpId) fail(400, 'A task cannot be placed under one of its own children.');
         cur = get('SELECT parent_id FROM work_packages WHERE id = ?', cur)?.parent_id;
       }
     }
@@ -640,7 +640,7 @@ const TRACKED = ['type_id', 'subject', 'location', 'module', 'description', 'sol
   'version_id', 'sprint_id', 'category_id', 'start_date', 'due_date', 'estimated_hours', 'done_ratio', 'designer_id', 'developer_id', 'tester_id'];
 
 export function updateWp(req, wp, body) {
-  if (!canEditWp(req, wp)) fail(403, 'You do not have permission to edit this work package.');
+  if (!canEditWp(req, wp)) fail(403, 'You do not have permission to edit this task.');
   const f = readFields(body);
   let projectId = wp.project_id;
   if (body.project_id && Number(body.project_id) !== wp.project_id) {
@@ -753,7 +753,7 @@ r.patch('/work-packages/:id', (req, res) => {
 
 r.patch('/work-packages-bulk', (req, res) => {
   const ids = (req.body.ids || []).map(Number).filter(Boolean);
-  if (!ids.length) fail(400, 'Select at least one work package.');
+  if (!ids.length) fail(400, 'Select at least one task.');
   const allowed = ['status_id', 'priority_id', 'criticality_id', 'assignee_id', 'responsible_id', 'version_id', 'type_id', 'due_date', 'start_date', 'done_ratio',
     'designer_id', 'developer_id', 'tester_id', 'sprint_id'];
   const changes = Object.fromEntries(Object.entries(req.body.changes || {}).filter(([k]) => allowed.includes(k)));
@@ -795,14 +795,14 @@ r.patch('/journals/:id', (req, res) => {
 
 r.post('/work-packages/:id/relations', (req, res) => {
   const wp = loadWp(req.params.id);
-  if (!canEditWp(req, wp)) fail(403, 'You do not have permission to edit this work package.');
+  if (!canEditWp(req, wp)) fail(403, 'You do not have permission to edit this task.');
   const type = ['relates', 'blocks', 'precedes', 'duplicates', 'blocked_by', 'follows'].includes(req.body.type) ? req.body.type : fail(400, 'Unknown relation type.');
   const other = loadWp(req.body.to_id);
   need(req, 'wp.view', other.project_id);
-  if (other.id === wp.id) fail(400, 'A work package cannot relate to itself.');
+  if (other.id === wp.id) fail(400, 'A task cannot relate to itself.');
   // store inverse types in canonical direction
   const [from, to, t] = type === 'blocked_by' ? [other.id, wp.id, 'blocks'] : type === 'follows' ? [other.id, wp.id, 'precedes'] : [wp.id, other.id, type];
-  if (get('SELECT id FROM wp_relations WHERE ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))', from, to, to, from)) fail(400, 'These work packages are already related.');
+  if (get('SELECT id FROM wp_relations WHERE ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))', from, to, to, from)) fail(400, 'These tasks are already related.');
   const { id } = run('INSERT INTO wp_relations(from_id, to_id, type) VALUES(?,?,?)', from, to, t);
   run('INSERT INTO journals(wp_id, user_id, changes) VALUES(?,?,?)', wp.id, req.user.id, JSON.stringify({ relation_added: [null, `${type} ${other.key}`] }));
   res.status(201).json({ id });

@@ -56,7 +56,7 @@ export default function ProjectOverview() {
   return (
     <div className="content">
       <div className="figures">
-        <Link className="figure" to={`${base}/work-packages`}><div className="n">{s.open}</div><div className="l">Open work packages</div></Link>
+        <Link className="figure" to={`${base}/work-packages`}><div className="n">{s.open}</div><div className="l">Open tasks</div></Link>
         <Link className={`figure${s.overdue ? ' danger' : ''}`} to={`${base}/work-packages?overdue=1`}><div className="n">{s.overdue}</div><div className="l">Overdue</div></Link>
         <div className="figure"><div className="n">{s.closed}</div><div className="l">Done</div></div>
         <div className="figure"><div className="n">{Math.round(s.progress)}%</div><div className="l">Overall progress</div></div>
@@ -87,7 +87,7 @@ export default function ProjectOverview() {
           <section className="panel">
             <div className="panel-head"><h3>Work by status</h3><div className="actions"><Link to={`${base}/board`} className="small">Open board</Link></div></div>
             <div className="panel-body">
-              {!totalWp ? <p className="muted small" style={{ margin: 0 }}>No work packages yet.</p> : <>
+              {!totalWp ? <p className="muted small" style={{ margin: 0 }}>No tasks yet.</p> : <>
                 <div className="stacked-bar" aria-hidden="true">
                   {project.statusCounts.filter(x => x.n).map(x => <span key={x.id} style={{ width: `${(x.n / totalWp) * 100}%`, background: x.color }} title={`${x.name}: ${x.n}`} />)}
                 </div>

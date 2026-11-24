@@ -14,7 +14,7 @@ export default function ProjectLayout() {
   const HIDDEN_TABS = new Set(['requirements', 'gantt', 'calendar', 'meetings', 'time', 'wiki']);
   const tabs = [
     ['', 'Overview', true],
-    ['work-packages', 'Work packages', has('wp.view')],
+    ['work-packages', 'Tasks', has('wp.view')],
     ['requirements', 'Requirements', has('wp.view')],
     ['board', 'Board', has('wp.view')],
     ['gantt', 'Gantt', has('wp.view')],

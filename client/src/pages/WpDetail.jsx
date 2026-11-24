@@ -164,7 +164,7 @@ function Journal({ j, label, canEditOwn, onSaved }) {
     <div className="journal" id={`j${j.id}`}>
       <Avatar id={j.user_id} name={j.user_name || 'Someone'} size="sm" />
       <div className="body">
-        <div className="meta"><b>{j.user_name || 'Someone'}</b> {created ? 'created this work package' : j.notes && !Object.keys(changes).length ? 'commented' : 'made changes'} <span title={fmtDateTime(j.created_at)}>{timeAgo(j.created_at)}</span>
+        <div className="meta"><b>{j.user_name || 'Someone'}</b> {created ? 'created this task' : j.notes && !Object.keys(changes).length ? 'commented' : 'made changes'} <span title={fmtDateTime(j.created_at)}>{timeAgo(j.created_at)}</span>
           {canEditOwn && j.user_id === user.id && j.notes && !editing && <button className="btn sm ghost" style={{ height: 22, marginLeft: 6 }} onClick={() => setEditing(true)}>Edit</button>}
         </div>
         {!created && Object.keys(changes).length > 0 && (
@@ -198,13 +198,13 @@ function AddRelation({ wp, onDone, onClose }) {
   const save = async () => { if (await run(() => api.post(`/work-packages/${wp.id}/relations`, { to_id: to, type }), 'Relation added')) { onDone(); onClose(); } };
   return (
     <Modal title="Add relation" onClose={onClose} footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={!to || busy} onClick={save}>Add relation</button></>}>
-      <Field label="This work package">
+      <Field label="This task">
         <select value={type} onChange={(e) => setType(e.target.value)}>
           <option value="relates">is related to</option><option value="blocks">blocks</option><option value="blocked_by">is blocked by</option>
           <option value="precedes">precedes (must finish before)</option><option value="follows">follows (starts after)</option><option value="duplicates">duplicates</option>
         </select>
       </Field>
-      <Field label="Other work package"><WpSearchSelect value={to} onChange={setTo} excludeId={wp.id} /></Field>
+      <Field label="Other task"><WpSearchSelect value={to} onChange={setTo} excludeId={wp.id} /></Field>
     </Modal>
   );
 }
@@ -216,7 +216,7 @@ function MoveModal({ wp, onClose, onDone }) {
   const save = async () => { const r = await run(() => api.patch(`/work-packages/${wp.id}`, { project_id: Number(pid) }), 'Moved'); if (r) { onDone(r); onClose(); } };
   return (
     <Modal title={`Move ${wp.key} to another project`} onClose={onClose} footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={!pid || busy} onClick={save}>Move</button></>}>
-      <p className="soft small" style={{ margin: 0 }}>The work package gets a new ID in the target project. Version and category are cleared.</p>
+      <p className="soft small" style={{ margin: 0 }}>The task gets a new ID in the target project. Version and category are cleared.</p>
       <Field label="Target project">
         <select value={pid} onChange={(e) => setPid(e.target.value)}>
           <option value="">Choose a project</option>
@@ -263,7 +263,7 @@ export default function WpDetail() {
   };
   const del = async () => {
     if (!await confirmDialog({ title: `Delete ${wp.key}?`, message: `“${wp.subject}” and its comments and time links will be removed. Child items stay but lose their parent.`, confirmLabel: 'Delete', danger: true })) return;
-    if (await run(() => api.del(`/work-packages/${wp.id}`), 'Work package deleted')) nav(`/projects/${wp.project_identifier}/work-packages`);
+    if (await run(() => api.del(`/work-packages/${wp.id}`), 'Task deleted')) nav(`/projects/${wp.project_identifier}/work-packages`);
   };
   const toggleWatch = async () => {
     if (wp.watching) await run(() => api.del(`/work-packages/${wp.id}/watchers/${user.id}`));
@@ -293,7 +293,7 @@ export default function WpDetail() {
     <div className="content" style={{ '--pc': wp.project_color }}>
       <div className="breadcrumbs">
         <Link to={`/projects/${wp.project_identifier}`}><span className="key" style={{ '--pc': wp.project_color }}>{wp.project_name}</span></Link>
-        <span>/</span><Link to={`/projects/${wp.project_identifier}/work-packages`}>Work packages</Link>
+        <span>/</span><Link to={`/projects/${wp.project_identifier}/work-packages`}>Tasks</Link>
         {wp.ancestors.map(a => <span key={a.id} className="row" style={{ gap: 6 }}><span>/</span><Link to={`/wp/${a.id}`} title={a.subject}>{a.key}</Link></span>)}
       </div>
       <div className="wp-layout">
@@ -412,10 +412,10 @@ export default function WpDetail() {
             </div>
           )}
 
-          <div className="wp-tabs" role="tablist" aria-label="Stages, relations and child work packages">
+          <div className="wp-tabs" role="tablist" aria-label="Stages, relations and child tasks">
             {!isMilestone && <button type="button" role="tab" aria-selected={curTab === 'stages'} className={curTab === 'stages' ? 'active' : ''} onClick={() => setTab('stages')}>Stages</button>}
             <button type="button" role="tab" aria-selected={curTab === 'relations'} className={curTab === 'relations' ? 'active' : ''} onClick={() => setTab('relations')}>Relations <span className="muted">({wp.relations.length})</span></button>
-            <button type="button" role="tab" aria-selected={curTab === 'children'} className={curTab === 'children' ? 'active' : ''} onClick={() => setTab('children')}>Child work packages <span className="muted">({wp.children.length})</span></button>
+            <button type="button" role="tab" aria-selected={curTab === 'children'} className={curTab === 'children' ? 'active' : ''} onClick={() => setTab('children')}>Child tasks <span className="muted">({wp.children.length})</span></button>
             <button type="button" role="tab" aria-selected={curTab === 'comments'} className={curTab === 'comments' ? 'active' : ''} onClick={() => setTab('comments')}>Comments <span className="muted">({talk.length})</span></button>
           </div>
           <div className="wp-tab-body">
@@ -455,7 +455,7 @@ export default function WpDetail() {
               </div>
             )}
             {curTab === 'children' && <>
-              <div className="section-title">Child work packages <span className="muted">({wp.children.length})</span>
+              <div className="section-title">Child tasks <span className="muted">({wp.children.length})</span>
                 {can.create && <span className="actions"><button className="btn sm ghost" onClick={() => setModal('child')}><Icon name="plus" />Add child</button></span>}
               </div>
               {wp.children.length > 0 ? (

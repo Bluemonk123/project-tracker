@@ -139,11 +139,11 @@ export default function Gantt({ project }) {
       </div>
       <ErrorBox error={error} />
       {loading && !data ? <Loading /> : !rows.length ? (
-        <div className="panel"><Empty title="Nothing to draw yet">Give work packages a start and finish date and they appear here.</Empty></div>
+        <div className="panel"><Empty title="Nothing to draw yet">Give tasks a start and finish date and they appear here.</Empty></div>
       ) : (
         <div className="gantt">
           <div className="gantt-left">
-            <div className="gantt-head row" style={{ padding: '0 10px' }}><span className="small soft">Work package</span></div>
+            <div className="gantt-head row" style={{ padding: '0 10px' }}><span className="small soft">Task</span></div>
             {rows.map(r => (
               <div key={r.id} className="gantt-row" style={{ paddingLeft: 10 + r.depth * 16 }}>
                 <Key k={r.key} color={project.color} />

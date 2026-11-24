@@ -38,7 +38,7 @@ export default function ProjectSettings({ project, reloadProject }) {
           <div className="panel-head"><h3>Project details</h3></div>
           <div className="panel-body form-grid">
             <Field label="Name"><input type="text" value={f.name} onChange={(e) => set('name', e.target.value)} required /></Field>
-            <Field label="Short key" hint="Changing it renames every work package ID, e.g. CRM-12."><input type="text" value={f.identifier} maxLength={10} onChange={(e) => set('identifier', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} required /></Field>
+            <Field label="Short key" hint="Changing it renames every task ID, e.g. CRM-12."><input type="text" value={f.identifier} maxLength={10} onChange={(e) => set('identifier', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} required /></Field>
             <Field label="Product Manager (PdM)" hint="Also shown under Key people."><UserSelect value={f.manager_id} onChange={(v) => set('manager_id', v)} placeholder="Nobody" /></Field>
             <Field label="Part of">
               <select value={f.parent_id} onChange={(e) => set('parent_id', e.target.value)}>
@@ -96,7 +96,7 @@ export default function ProjectSettings({ project, reloadProject }) {
               <button className="btn" onClick={() => archive(!project.archived)}><Icon name="archive" />{project.archived ? 'Restore' : 'Archive'}</button>
             </div>
             <div className="row wrap">
-              <div className="grow"><b>Delete permanently</b><div className="small soft">Removes the project with all its work packages, meetings, time entries and wiki pages. This cannot be undone.</div></div>
+              <div className="grow"><b>Delete permanently</b><div className="small soft">Removes the project with all its tasks, meetings, time entries and wiki pages. This cannot be undone.</div></div>
               <button className="btn danger" onClick={() => setModal('delete')}><Icon name="trash" />Delete project</button>
             </div>
           </div>
