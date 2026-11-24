@@ -3,6 +3,8 @@
 // If the app cannot start (Node.js too old, data folder not writable, ...), a small page explains why
 // instead of the host showing a bare "503".
 import http from 'node:http';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 function showStartupError(message) {
   console.error(`\n  Project Tracker could not start: ${message}\n`);
@@ -17,9 +19,23 @@ function showStartupError(message) {
     .listen(port, process.env.HOST || '0.0.0.0');
 }
 
+// On hosting (deploy folder under hbuilds / public_html, or DISABLE_TIMERS set) the data must live outside the
+// deploy folder, or every deployment would start over with an empty database.
+function unsafeDataDir() {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const hosted = /[\\/](hbuilds|public_html|domains)[\\/]/.test(root) || /^(1|true|yes)$/i.test(String(process.env.DISABLE_TIMERS || ''));
+  if (!hosted) return null;
+  if (!process.env.DATA_DIR) return 'The setting DATA_DIR is missing, so the app would start with a new, empty database. Add DATA_DIR (e.g. /home/<user>/tracker-data) in the hosting environment variables and redeploy.';
+  const dir = path.resolve(process.env.DATA_DIR);
+  if (dir === root || dir.startsWith(root + path.sep)) return `DATA_DIR (${dir}) is inside the deploy folder, which is replaced on every deployment. Point it to a folder outside it, e.g. /home/<user>/tracker-data.`;
+  return null;
+}
+
 const [maj, min] = process.versions.node.split('.').map(Number);
 if (maj < 22 || (maj === 22 && min < 13)) {
   showStartupError(`It needs Node.js 22.13 or newer, but this server runs ${process.version}. Choose Node.js 24 (or the newest 22) in the hosting settings.`);
+} else if (unsafeDataDir()) {
+  showStartupError(unsafeDataDir());
 } else {
   import('./index.js')
     .then(({ startServer }) => startServer())

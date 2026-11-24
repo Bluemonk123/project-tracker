@@ -107,6 +107,12 @@ function ContactAdminModal({ onClose }) {
   );
 }
 
+function SetupDataDir() {
+  const { dataDir } = useApp();
+  if (!dataDir) return null;
+  return <p className="xs muted" style={{ marginTop: 18, maxWidth: 380, wordBreak: 'break-all' }}>Data folder: <code>{dataDir}</code><br />Expected your existing data here? Then the server setting DATA_DIR is wrong or missing: fix it and restart instead of creating a new administrator.</p>;
+}
+
 // Moving from another computer: load its full backup instead of starting empty.
 function RestoreBackup() {
   const { reload } = useApp();
@@ -170,6 +176,7 @@ export function Setup() {
           <button className="btn primary" disabled={busy}>{busy ? 'Creating…' : 'Create administrator and continue'}</button>
         </form>
         <RestoreBackup />
+        <SetupDataDir />
       </div>
     </div>
   );

@@ -33,7 +33,7 @@ export function AppProvider({ children }) {
     } catch (e) {
       if (e.status === 401) {
         const s = await api.get('/setup-status').catch(() => ({ needsSetup: false, appName: 'Project Tracker' }));
-        setState({ loading: false, me: null, needsSetup: s.needsSetup, appName: s.appName });
+        setState({ loading: false, me: null, needsSetup: s.needsSetup, appName: s.appName, dataDir: s.dataDir });
       } else {
         setState(s => ({ ...s, loading: false, error: e.message }));
       }
