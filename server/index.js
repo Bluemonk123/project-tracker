@@ -58,7 +58,14 @@ export function createApp() {
   app.use(express.json({ limit: '5mb' }));
   app.use(cookieParser());
   app.use(csrf);
-  app.use((_, res, next) => { res.setHeader('X-Frame-Options', 'SAMEORIGIN'); next(); });
+  // Security headers (Data Security E1 / C1). HSTS only over HTTPS, so the office http:// copy keeps working.
+  app.use((req, res, next) => {
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    if (req.secure) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
+    next();
+  });
   app.use(loadUser);
   app.use((req, _res, next) => { if (req.user) rememberOrigin(req); next(); }); // links in notification emails
 
