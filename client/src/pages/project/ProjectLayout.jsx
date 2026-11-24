@@ -10,6 +10,8 @@ export default function ProjectLayout() {
   if (error) return <div className="content"><ErrorBox error={error} /></div>;
   const has = (p) => project.permissions.includes(p);
   const base = `/projects/${project.identifier}`;
+  // Hidden from the tab bar (the pages still open from links, search and notifications)
+  const HIDDEN_TABS = new Set(['requirements', 'gantt', 'calendar', 'meetings', 'time', 'wiki']);
   const tabs = [
     ['', 'Overview', true],
     ['work-packages', 'Work packages', has('wp.view')],
@@ -26,7 +28,7 @@ export default function ProjectLayout() {
     ['members', 'Members', true],
     ['activity', 'Activity', has('wp.view')],
     ['settings', 'Settings', has('project.edit') || has('project.versions') || has('project.archive')],
-  ].filter(t => t[2]);
+  ].filter(t => t[2] && !HIDDEN_TABS.has(t[0]));
   return (
     <div style={{ '--pc': project.color }}>
       <div className="project-head">
