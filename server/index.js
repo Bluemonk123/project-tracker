@@ -62,7 +62,10 @@ export function createApp() {
 
   const api = express.Router();
   // Lightweight check used by the Connected / Disconnected indicator in the top bar
-  api.get('/health', (_req, res) => { res.setHeader('Cache-Control', 'no-store'); res.json({ ok: true, time: new Date().toISOString() }); });
+  // build: when the web interface was built and from which commit (written by npm run build), to check a deployment
+  let build = null;
+  try { build = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'client', 'dist', 'build.json'), 'utf8')); } catch { /* not built */ }
+  api.get('/health', (_req, res) => { res.setHeader('Cache-Control', 'no-store'); res.json({ ok: true, time: new Date().toISOString(), build }); });
   api.get('/cron', cronHandler); // scheduled jobs for hosts without background timers (needs CRON_KEY)
   api.use(authRoutes); // setup, login, logout, me (individual routes guard themselves)
   api.use(restoreRoutes); // new install only: load a full backup instead of creating the first administrator

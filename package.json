@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning server/start.js",
     "dev": "concurrently -k -n api,web \"node --watch --disable-warning=ExperimentalWarning server/start.js\" \"vite\"",
-    "build": "vite build",
+    "build": "vite build && node scripts/stamp-build.js",
     "demo": "node --disable-warning=ExperimentalWarning server/demo.js",
     "test": "node --disable-warning=ExperimentalWarning --test server/test/*.test.js"
   },

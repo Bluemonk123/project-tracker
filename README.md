@@ -133,9 +133,15 @@ Set these as environment variables if you need to change the defaults:
 
 On Windows: `set PORT=8080` then `start.bat`, in the same Command Prompt window.
 
+## Branches: staging and production
+
+- `main`: everyday changes. The office copy (staging) gets them with **update.bat**.
+- `production`: what runs on the live site. Hostinger deploys this branch automatically on every push.
+- Releasing: move `production` to the tested `main` (`git push origin main:production`). Check it went live at `https://<domain>/api/health`: `build.commit` shows the deployed commit.
+
 ## Hosting on Hostinger Cloud (no VPS)
 
-1. **hPanel → Websites → Add website → Node.js app**, connect GitHub repo `Bluemonk123/project-tracker`, branch `main`.
+1. **hPanel → Websites → Add website → Node.js app**, connect GitHub repo `Bluemonk123/project-tracker`, branch `production` (auto-deploy on).
 2. Node.js version **22.x** (the app needs 22.13 or newer; with an older one it stops with a clear message in the app log).
 3. Build command: `npm ci --include=dev && npm run build` · Start command: `npm start` (or entry file `server/start.js`).
 4. Environment variables (do not set `PORT`; Hostinger sets it):
