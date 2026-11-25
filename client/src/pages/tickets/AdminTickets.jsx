@@ -175,6 +175,8 @@ function InboundForm({ data, onSaved }) {
             Last check {new Date(last.at).toLocaleString()}: {last.ok
               ? `${last.read} new email${last.read === 1 ? '' : 's'} — ${last.created} new ticket${last.created === 1 ? '' : 's'}, ${last.replies} repl${last.replies === 1 ? 'y' : 'ies'}, ${last.skipped} skipped (automatic replies, duplicates).`
               : `could not read the mailbox — ${last.error}`}
+            {last.ok && last.total != null && <span className="soft">{` (${last.total} emails in ${f.folder || 'INBOX'}, ${last.unread ?? last.read} unread)`}</span>}
+            {last.items?.length > 0 && <ul className="tk-inbound-items">{last.items.map((x, i) => <li key={i}><b>{x.from || 'unknown sender'}</b> “{x.subject || 'no subject'}”: {x.outcome}</li>)}</ul>}
           </div>
         )}
         <p className="xs muted" style={{ margin: 0 }}>Each email is marked as read once it is handled. Out-of-office replies, bounces and mailing lists are skipped. Only the person who raised a ticket can add to it by email; anyone else starts a new ticket. Up to 2 attachments of 5 MB are kept, with the same checks as uploads.</p>

@@ -68,7 +68,7 @@ export async function checkMailbox({ cfg = imapConfig() } = {}) {
   if (!cfg.host || !cfg.user) throw new Error('Enter the incoming mail server and user name first.');
   if (running) return lastCheck();
   running = true;
-  const result = { at: new Date().toISOString(), ok: true, read: 0, created: 0, replies: 0, skipped: 0, error: null };
+  const result = { at: new Date().toISOString(), ok: true, read: 0, created: 0, replies: 0, skipped: 0, error: null, unread: 0, items: [] };
   let client;
   try {
     const [{ ImapFlow }, { simpleParser }] = await Promise.all([import('imapflow'), import('mailparser')]);
@@ -81,18 +81,27 @@ export async function checkMailbox({ cfg = imapConfig() } = {}) {
     const lock = await client.getMailboxLock(cfg.folder || 'INBOX');
     try {
       const uids = (await client.search({ seen: false }, { uid: true })) || [];
+      result.unread = uids.length;
+      result.total = client.mailbox?.exists ?? null;
       for (const uid of uids.slice(0, MAX_PER_CHECK)) {
         const msg = await client.fetchOne(uid, { source: true }, { uid: true });
         result.read++;
+        // what happened to each email, shown under "Check now" (helps when an email did not become a ticket)
+        const note = { from: '', subject: '', outcome: '' };
         try {
-          const out = handleParsed(await simpleParser(msg.source));
-          if (out.action === 'created') result.created++;
-          else if (out.action === 'reply') result.replies++;
-          else result.skipped++;
+          const parsed = await simpleParser(msg.source);
+          note.from = String(parsed.from?.value?.[0]?.address || '').slice(0, 120);
+          note.subject = String(parsed.subject || '').slice(0, 120);
+          const out = handleParsed(parsed);
+          if (out.action === 'created') { result.created++; note.outcome = `ticket created${out.ticket_no ? ` (${out.ticket_no})` : ''}`; }
+          else if (out.action === 'reply') { result.replies++; note.outcome = 'added to its ticket'; }
+          else { result.skipped++; note.outcome = `skipped: ${out.reason || out.action}`; }
         } catch (e) {
           result.skipped++;
+          note.outcome = `could not be read: ${e.message}`;
           console.error('An email could not be turned into a ticket:', e.message);
         }
+        if (result.items.length < 20) result.items.push(note);
         await client.messageFlagsAdd(uid, ['\\Seen'], { uid: true });
       }
     } finally { lock.release(); }

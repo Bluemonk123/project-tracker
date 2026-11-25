@@ -1457,3 +1457,4 @@ a.ov-stage-row:hover { background: var(--sunken); }
 .sec-check-part { display: grid; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--line-2); }
 .sec-check-err { color: var(--danger); }
 .sec-check-wait { display: flex; align-items: center; gap: 10px; padding: 18px 0; color: var(--ink-2); }
+.tk-inbound-items { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 2px; font-size: 12.5px; }
