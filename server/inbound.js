@@ -21,7 +21,9 @@ export function isAutomatic(headers, fromEmail) {
   if (h('auto-submitted') && h('auto-submitted') !== 'no') return 'automatic reply';
   if (['bulk', 'junk', 'list', 'auto_reply'].includes(h('precedence'))) return 'bulk or list email';
   if (headers.has('x-autoreply') || headers.has('x-autorespond') || headers.has('list-id') || h('x-auto-response-suppress').includes('all')) return 'automatic reply';
-  if (/^(mailer-daemon|postmaster|no-?reply|do-?not-?reply)@/i.test(fromEmail)) return 'system address';
+  // server and robot senders (cPanel's own notices, no-reply addresses...): nobody to answer
+  if (/^(mailer-daemon|postmaster|no-?reply|do-?not-?reply|noreply[-.\w]*|cpanel|root|daemon|bounces?|notifications?|alerts?|system|webmaster|hostmaster|abuse)@/i.test(fromEmail)) return 'system address';
+  if (headers.has('x-cpanel-notice') || /^cpanel/i.test(h('x-mailer')) || /^(cpanel|whm)\b/i.test(h('x-cpanel-generator'))) return 'hosting control panel notice';
   const own = [mailConfig().main?.from, mailConfig().backup?.from, imapConfig().address, imapConfig().user].filter(Boolean).map(s => String(s).toLowerCase());
   if (own.includes(fromEmail)) return 'sent by this app';
   return null;
