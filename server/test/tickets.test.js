@@ -632,3 +632,17 @@ test('email intake: "Requestor - email" in the body raises the ticket for that u
   out = handleParsed(await mail(['From: sam@office.local', 'Subject: Mouse broken', 'Message-ID: <rq5@office.local>'], 'Please replace it.'));
   assert.equal(get('SELECT requester_user_id FROM tickets WHERE ticket_no = ?', out.ticket_no).requester_user_id, ids.staff);
 });
+
+test('change requester: administrators only, logged in the thread', async () => {
+  const t = get("SELECT * FROM tickets WHERE requester_user_id IS NOT NULL ORDER BY id LIMIT 1");
+  assert.equal((await agent.put(`/tickets/${t.ticket_no}/requester`, { user_id: ids.other })).status, 403);
+  assert.equal((await admin.put(`/tickets/${t.ticket_no}/requester`, { user_id: 999999 })).status, 400);
+  const r = await admin.put(`/tickets/${t.ticket_no}/requester`, { user_id: ids.other });
+  assert.equal(r.status, 200);
+  const n = get('SELECT * FROM tickets WHERE id = ?', t.id);
+  assert.equal(n.requester_user_id, ids.other);
+  assert.equal(n.requester_email, 'olga@office.local');
+  assert.ok(all('SELECT body FROM ticket_messages WHERE ticket_id = ?', t.id).some(m => /Requester changed from .* to Olga Other/.test(m.body)));
+  assert.equal((await admin.get(`/tickets/${t.ticket_no}`)).data.can.change_requester, true);
+  assert.equal((await agent.get(`/tickets/${t.ticket_no}`)).data.can.change_requester, false);
+});

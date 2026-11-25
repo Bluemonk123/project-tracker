@@ -583,7 +583,7 @@ r.get('/tickets/:no', (req, res) => {
     engineers: engs,
     options: { statuses: STATUSES, priorities: PRIORITIES, types: TYPES, groups: activeGroups() },
     macros: all('SELECT id, name, body_template, set_status, set_group, is_internal FROM ticket_macros WHERE active = 1 ORDER BY display_order, id'),
-    can: { edit: can(req, 'tickets.edit'), delete: !!req.user.is_admin },
+    can: { edit: can(req, 'tickets.edit'), delete: !!req.user.is_admin, change_requester: !!req.user.is_admin },
     me: { id: req.user.id, name: req.user.name },
     reply_hint: replyHint(t),
     linked_task: linkedTask(t.wp_id),
@@ -713,6 +713,23 @@ r.patch('/tickets/:no', (req, res) => {
   const c = applyChanges(req, t, req.body || {});
   const saved = commit(req, t, c);
   res.json({ ok: true, changed: Object.keys(c.changes), status: saved.status });
+});
+
+// Change the requester to another user of this app (administrators only). Logged in the thread and the audit trail.
+r.put('/tickets/:no/requester', (req, res) => {
+  if (!req.user.is_admin) fail(403, 'Only administrators can change the requester.');
+  const t = findTicket(req.params.no);
+  const u = get("SELECT id, name, email FROM users WHERE id = ? AND status = 'active'", Number(req.body?.user_id)) || fail(400, 'Choose an active user.');
+  if (u.id === t.requester_user_id) return res.json({ ok: true });
+  const before = userById(t.requester_user_id)?.name || t.raised_by || t.requester_email;
+  const at = nowIso();
+  tx(() => {
+    run("UPDATE tickets SET requester_user_id = ?, requester_kind = 'staff', raised_by = ?, requester_email = ?, partner_code = NULL WHERE id = ?", u.id, u.name, u.email, t.id);
+    systemLine(t.id, `Requester changed from ${before} to ${u.name} (${u.email})`, req.user.name, at);
+    saveFields(get('SELECT * FROM tickets WHERE id = ?', t.id), {}, at);
+  });
+  audit(req, 'TICKET_UPDATED', get('SELECT * FROM tickets WHERE id = ?', t.id), { requester: [before, u.name] });
+  res.json({ ok: true });
 });
 
 r.post('/tickets/:no/take', (req, res) => {

@@ -105,6 +105,7 @@ function TicketView({ d, embedded, onChanged, onClose, onDeleted }) {
           <div className="small">{d.requester.kind_label}{d.requester.detail ? ` · ${d.requester.detail}` : ''}</div>
           {d.requester.email && <div className="small"><a href={`mailto:${d.requester.email}`}>{d.requester.email}</a></div>}
           <div className="xs muted" style={{ marginTop: 4 }}>{d.requester.total} ticket{d.requester.total === 1 ? '' : 's'} · {d.requester.unsolved} unsolved</div>
+          {d.can.change_requester && <RequesterChange d={d} onChanged={onChanged} />}
         </div>
         <div className="tk-prop-list">
           <Prop label="Assignee">
@@ -176,6 +177,34 @@ function TextProp({ value, onSave, disabled, max, required, placeholder }) {
   };
   return <input type="text" value={v} maxLength={max} disabled={disabled} placeholder={placeholder}
     onChange={(e) => setV(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } if (e.key === 'Escape') setV(value); }} />;
+}
+
+// Administrators only: pick another user as the requester.
+function RequesterChange({ d, onChanged }) {
+  const { activeUsers, toast } = useApp();
+  const [q, setQ] = useState('');
+  const [busy, setBusy] = useState(false);
+  const people = (activeUsers || []).filter(u => u.id !== d.ticket.requester_user_id && `${u.name} ${u.email || ''}`.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 50);
+  const pick = async (u) => {
+    setBusy(true);
+    try { await api.put(`/tickets/${d.ticket.ticket_no}/requester`, { user_id: u.id }); toast(`Requester changed to ${u.name}`); onChanged(); }
+    catch (e) { toast(e.message, 'error'); } finally { setBusy(false); }
+  };
+  return (
+    <Popover align="left" trigger={({ toggle }) => <button type="button" className="link-btn xs" style={{ marginTop: 6 }} onClick={toggle} disabled={busy}>Change requester</button>}>
+      <div style={{ padding: 6, width: 280 }}>
+        <input type="search" placeholder="Search people" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+        <div style={{ maxHeight: 260, overflow: 'auto', marginTop: 4 }}>
+          {people.map(u => (
+            <button type="button" key={u.id} className="menu-item" disabled={busy} onClick={() => pick(u)}>
+              <span className="grow ellipsis">{u.name}</span><span className="xs muted ellipsis" style={{ maxWidth: 130 }}>{u.email}</span>
+            </button>
+          ))}
+          {!people.length && <div className="xs muted" style={{ padding: 6 }}>No one matches.</div>}
+        </div>
+      </div>
+    </Popover>
+  );
 }
 
 // Searchable list of engineers, with "(you)" and each one's open-ticket count.
