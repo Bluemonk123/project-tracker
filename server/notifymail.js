@@ -65,7 +65,7 @@ export async function flushNotificationEmails() {
       const first = list[0];
       const subject = list.length === 1 ? String(first.message).replace(/\s+/g, ' ').slice(0, 120) : `${list.length} new notifications`;
       const lines = list.map(n => {
-        const who = n.actor_name ? `${n.actor_name}: ` : '';
+        const who = n.actor_name && !String(n.message).startsWith(n.actor_name) ? `${n.actor_name}: ` : '';
         const where = n.project_name ? ` (${n.project_name})` : '';
         return `• ${who}${String(n.message).trim()}${where}${base ? `\n  Open: ${base}${linkOf(n)}` : ''}`;
       });

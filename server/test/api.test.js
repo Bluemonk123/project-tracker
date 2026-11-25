@@ -1011,3 +1011,15 @@ test('email settings: optional reply-to address', async () => {
   assert.equal((await admin.get('/admin/email')).data.main.reply_to, 'admin@example.com');
   await admin.put('/admin/email', { main: null });
 });
+
+test('notification pop-ups: only notifications newer than the last one seen', async () => {
+  let r = await dev.get('/notifications/latest');
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.data.items, []); // first call: just the newest id, nothing pops up
+  const since = r.data.max_id;
+  await admin.post('/work-packages', { project_id: ids.project, subject: 'Popup test', assignee_id: ids.dev });
+  r = await dev.get(`/notifications/latest?after=${since}`);
+  assert.ok(r.data.items.some(n => /Popup test/.test(n.message)), JSON.stringify(r.data.items));
+  assert.ok(r.data.unread >= 1);
+  assert.equal((await dev.get(`/notifications/latest?after=${r.data.max_id}`)).data.items.length, 0);
+});

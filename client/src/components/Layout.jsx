@@ -6,6 +6,7 @@ import { useApp } from '../context.jsx';
 import { api, qs } from '../api.js';
 import NewProjectModal from '../pages/NewProjectModal.jsx';
 import ConnectionStatus from './ConnectionStatus.jsx';
+import NotificationPopups from './NotificationPopups.jsx';
 import RaiseTicketModal from '../pages/tickets/RaiseTicketModal.jsx';
 
 function BrandMark() {
@@ -173,6 +174,7 @@ export default function Layout() {
           </div>
         </header>
         <Outlet />
+          <NotificationPopups />
       </div>
       {newProject && <NewProjectModal onClose={() => setNewProject(false)} />}
     </div>

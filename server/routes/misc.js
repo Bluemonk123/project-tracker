@@ -162,6 +162,19 @@ r.get('/notifications', (req, res) => {
                 WHERE n.user_id = ? ${where} ORDER BY n.created_at DESC, n.id DESC LIMIT 200`, req.user.id));
 });
 
+// Pop-ups (top right): notifications newer than ?after=<id>; without it only the newest id, so old ones never pop up.
+r.get('/notifications/latest', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const unread = get('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL', req.user.id).n;
+  const maxId = get('SELECT COALESCE(MAX(id), 0) AS m FROM notifications WHERE user_id = ?', req.user.id).m;
+  const after = Number(req.query.after);
+  const items = Number.isInteger(after) && after >= 0 ? all(`SELECT n.id, n.reason, n.message, n.link, n.wp_id, n.meeting_id, n.ticket_id, n.created_at, n.read_at,
+        u.name AS actor_name, p.identifier AS project_identifier, p.name AS project_name
+      FROM notifications n LEFT JOIN users u ON u.id = n.actor_id LEFT JOIN projects p ON p.id = n.project_id
+      WHERE n.user_id = ? AND n.id > ? AND n.read_at IS NULL ORDER BY n.id DESC LIMIT 5`, req.user.id, after) : [];
+  res.json({ unread, max_id: maxId, items });
+});
+
 r.post('/notifications/read', (req, res) => {
   if (req.body.all) run("UPDATE notifications SET read_at = datetime('now') WHERE user_id = ? AND read_at IS NULL", req.user.id);
   else for (const id of req.body.ids || []) run("UPDATE notifications SET read_at = datetime('now') WHERE id = ? AND user_id = ?", id, req.user.id);
