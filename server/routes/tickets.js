@@ -311,6 +311,12 @@ const TICKET_IN_SUBJECT = /\bticket\s*#?\s*(\d{8})\b|#(\d{8})\b/i;
 const cleanEmailSubject = (s) => String(s || '').replace(/^\s*(\[[^\]]*\]\s*)*((re|fw|fwd|aw|wg)\s*:\s*)+/i, '').replace(/^\s*(\[[^\]]*\]\s*)+/, '').trim();
 const asUpload = (a) => ({ originalname: Buffer.from(String(a.filename || 'file'), 'utf8').toString('latin1'), buffer: a.content });
 
+// "Requestor - a@b.com", "Requestor: a@b.com", "Requester – <a@b.com>", "Requestor - Name <a@b.com>" (any line)
+export function requestorInBody(text) {
+  const m = String(text || '').match(/\brequest[oe]r\s*[-:–—=]\s*(?:[^<\n@]*<)?\s*(?:mailto:)?([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i);
+  return m ? m[1].toLowerCase() : null;
+}
+
 export function ingestEmail(m) {
   const from = String(m.fromEmail || '').trim().toLowerCase();
   if (!isEmail(from)) return { action: 'skipped', reason: 'no sender address' };
@@ -362,19 +368,42 @@ export function ingestEmail(m) {
   }
   const staff = get("SELECT id, name, email FROM users WHERE lower(email) = ? AND status = 'active'", from);
   const subject = cleanEmailSubject(m.subject).slice(0, MAX_SUBJECT) || null;
+  // "Requestor - person@company.com" anywhere in the body: raise the ticket for that person (a user of this app)
+  // instead of the sender. Only honoured when the sender is also a user, so outsiders cannot raise tickets in
+  // someone else's name.
+  const notes = [];
+  let requester = staff;
+  const named = requestorInBody(m.rawText ?? m.text);
+  if (named && named !== from) {
+    const target = get("SELECT id, name, email FROM users WHERE lower(email) = ? AND status = 'active'", named);
+    if (!staff) notes.push(`"Requestor - ${named}" in the email was not used: the sender ${from} is not a user of this app.`);
+    else if (!target) notes.push(`"Requestor - ${named}" in the email is not a user of this app, so the ticket is raised for the sender.`);
+    else { requester = target; notes.push(`Raised by ${staff.name} (${from}) on behalf of ${target.name} (${target.email}), from the "Requestor" line in the email.`); }
+  }
+  const reqEmail = String(requester?.email || from).toLowerCase();
+  if (requester !== staff && get("SELECT COUNT(*) AS n FROM tickets WHERE channel = 'email' AND lower(requester_email) = ? AND created_at > ?", reqEmail, since).n >= 20) {
+    return { action: 'skipped', reason: 'too many emails for this requestor in the last hour' };
+  }
   const out = createTicket(EMAIL_SYS, {
     subject, feedback: body || subject || '(no text)',
-    requester_kind: staff ? 'staff' : 'guest', requester_user_id: staff?.id || null,
-    raised_by: staff?.name || String(m.fromName || '').trim().replace(/^\[+/, '').slice(0, 100) || from,
-    requester_email: from, channel: 'email', source: 'email', firstLine: `Received by email from ${from}`,
+    requester_kind: requester ? 'staff' : 'guest', requester_user_id: requester?.id || null,
+    raised_by: requester?.name || String(m.fromName || '').trim().replace(/^\[+/, '').slice(0, 100) || from,
+    requester_email: reqEmail, channel: 'email', source: 'email', firstLine: `Received by email from ${from}`,
   }, files);
   run('UPDATE tickets SET email_message_id = ? WHERE id = ?', msgId, out.id);
   out.warnings.forEach(w => systemLine(out.id, w, 'Email', nowIso()));
-  // acknowledgement, so the sender has the ticket number and can reply to it
+  notes.forEach(n => systemLine(out.id, n, 'Email', nowIso()));
+  // acknowledgement, so the requester has the ticket number and can reply to it (replies are accepted from the
+  // requester's address); when raised for someone else, the sender gets a short note too
   sendMailLater({
-    to: from, ticketNo: out.ticket_no, autoReply: true,
+    to: reqEmail, ticketNo: out.ticket_no, autoReply: true,
     subject: `Ticket ${out.ticket_no} received: ${subject || 'your request'}`,
-    text: `Hello ${staff?.name || m.fromName || ''},\n\nThanks, we have your request. Its ticket number is ${out.ticket_no}.\nReply to this email to add more details.`,
+    text: `Hello ${requester?.name || m.fromName || ''},\n\nThanks, we have your request. Its ticket number is ${out.ticket_no}.${requester !== staff ? `\n${staff.name} raised it for you.` : ''}\nReply to this email to add more details.`,
+  });
+  if (requester !== staff) sendMailLater({
+    to: from, ticketNo: out.ticket_no, autoReply: true,
+    subject: `Ticket ${out.ticket_no} raised for ${requester.name}: ${subject || 'request'}`,
+    text: `Hello ${staff.name},\n\nThe ticket ${out.ticket_no} was raised for ${requester.name} (${requester.email}), as named in your email. Updates go to them.`,
   });
   return { action: 'created', ticket_no: out.ticket_no };
 }

@@ -187,7 +187,7 @@ function InboundForm({ data, onSaved }) {
             {late && ' The cron job does not seem to run: check it in the hosting panel (every 5 minutes or less). Until then, use Check now.'}
           </div>;
         })()}
-        <p className="xs muted" style={{ margin: 0 }}>Each email is marked as read once it is handled. Out-of-office replies, bounces and mailing lists are skipped. Only the person who raised a ticket can add to it by email; anyone else starts a new ticket. Up to 2 attachments of 5 MB are kept, with the same checks as uploads.</p>
+        <p className="xs muted" style={{ margin: 0 }}>Each email is marked as read once it is handled. Out-of-office replies, bounces and mailing lists are skipped. Only the person who raised a ticket can add to it by email; anyone else starts a new ticket. To raise a ticket for someone else, a user of this app writes <b>Requestor - their@email</b> anywhere in the email; if that address belongs to a user, they become the requester (otherwise the sender stays the requester). Up to 2 attachments of 5 MB are kept, with the same checks as uploads.</p>
       </div>
       <div className="modal-foot">
         <button type="button" className="btn" disabled={busy || !f.host || !f.user} onClick={check}>Check now</button>

@@ -57,6 +57,7 @@ export function handleParsed(parsed) {
   const attachments = (parsed.attachments || []).filter(a => !a.related && a.filename && a.content?.length);
   return ingestEmail({
     fromEmail, fromName: from.name, subject: parsed.subject, text, attachments,
+    rawText: parsed.text || htmlToText(parsed.html), // the whole body, for a "Requestor - email" line anywhere
     messageId: parsed.messageId, inReplyTo: parsed.inReplyTo,
     references: Array.isArray(parsed.references) ? parsed.references : parsed.references ? [parsed.references] : [],
   });

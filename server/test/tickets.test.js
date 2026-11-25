@@ -598,3 +598,37 @@ test('work list CSV export follows the filters, with task details', async () => 
   r = await admin.get(`/work-packages/export.csv?project_id=${ids.proj.id}&status=all`);
   assert.ok(r.data.split('\r\n').length > lines.length);
 });
+
+test('email intake: "Requestor - email" in the body raises the ticket for that user', async () => {
+  const { simpleParser } = await import('mailparser');
+  const { handleParsed } = await import('../inbound.js');
+  const { requestorInBody } = await import('../routes/tickets.js');
+  const mail = (headers, body) => simpleParser(Buffer.from(`${headers.join('\r\n')}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${body}`));
+  for (const [line, want] of [['Requestor - sam@office.local', 'sam@office.local'], ['requester: <SAM@office.local>', 'sam@office.local'],
+    ['Requestor – Sam Staff <sam@office.local>', 'sam@office.local'], ['Requestor: mailto:sam@office.local', 'sam@office.local'], ['No requestor here', null]]) {
+    assert.equal(requestorInBody(`Hello\n${line}\nThanks`), want, line);
+  }
+  // a user (Ravi) sends it naming another user (Sam): Sam is the requester
+  let out = handleParsed(await mail(['From: Ravi Agent <ravi@office.local>', 'Subject: Laptop not booting', 'Message-ID: <rq1@office.local>'],
+    'The laptop at reception does not boot.\n\nRequestor - sam@office.local\n\nRegards, Ravi'));
+  assert.equal(out.action, 'created');
+  let t = get('SELECT * FROM tickets WHERE ticket_no = ?', out.ticket_no);
+  assert.equal(t.requester_user_id, ids.staff);
+  assert.equal(t.requester_email, 'sam@office.local');
+  assert.ok(all('SELECT body FROM ticket_messages WHERE ticket_id = ?', t.id).some(m => /on behalf of Sam Staff/.test(m.body)));
+  // Sam can then reply by email to that ticket
+  out = handleParsed(await mail(['From: sam@office.local', `Subject: Re: Ticket ${t.ticket_no} received`, 'Message-ID: <rq2@office.local>'], 'It shows a black screen.'));
+  assert.equal(out.action, 'reply');
+  // an unknown requestor email: the sender stays the requester
+  out = handleParsed(await mail(['From: ravi@office.local', 'Subject: Printer jam', 'Message-ID: <rq3@office.local>'], 'Requestor - nobody@else.com'));
+  t = get('SELECT * FROM tickets WHERE ticket_no = ?', out.ticket_no);
+  assert.equal(t.requester_email, 'ravi@office.local');
+  // an outsider cannot raise a ticket in a user's name
+  out = handleParsed(await mail(['From: mallory@evil.com', 'Subject: Reset my password', 'Message-ID: <rq4@evil.com>'], 'Requestor - sam@office.local'));
+  t = get('SELECT * FROM tickets WHERE ticket_no = ?', out.ticket_no);
+  assert.equal(t.requester_email, 'mallory@evil.com');
+  assert.equal(t.requester_user_id, null);
+  // no line: the sender is the requester, as before
+  out = handleParsed(await mail(['From: sam@office.local', 'Subject: Mouse broken', 'Message-ID: <rq5@office.local>'], 'Please replace it.'));
+  assert.equal(get('SELECT requester_user_id FROM tickets WHERE ticket_no = ?', out.ticket_no).requester_user_id, ids.staff);
+});
