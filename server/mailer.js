@@ -41,7 +41,8 @@ export async function sendMail({ to, subject, text, ticketNo, autoReply }) {
     try {
       const t = await transport(m);
       const inbound = inboundConfig();
-      const replyTo = inbound?.enabled && isEmail(inbound.address) ? inbound.address : undefined;
+      // replies: the mailbox's own reply-to address, else the ticket intake mailbox (so replies become ticket comments)
+      const replyTo = (isEmail(m.reply_to) && m.reply_to) || (inbound?.enabled && isEmail(inbound.address) ? inbound.address : undefined);
       const domain = String(m.from).split('@')[1] || 'project-tracker.local';
       await t.sendMail({
         from: m.from_name ? `"${String(m.from_name).replace(/"/g, '')}" <${m.from}>` : m.from, to, replyTo,
@@ -70,6 +71,8 @@ export function explainMailError(msg, m = {}) {
     return `Microsoft 365 blocked the sign-in for ${user}. Ask your Microsoft 365 admin to turn on "Authenticated SMTP" for this mailbox (admin.microsoft.com → Users → the user → Mail → Manage email apps). If the mailbox uses two-step sign-in (MFA) or the company has "Security defaults" on, this kind of sign-in is blocked: use a mailbox without MFA, or an app password.`;
   if (/5\.7\.3\b|535|Invalid login|Authentication unsuccessful|authentication failed|Username and Password not accepted/i.test(e))
     return `The mail server did not accept the user name or password for ${user}. Re-type the password and save again. (For Microsoft 365, "Authenticated SMTP" must also be on for this mailbox.)`;
+  if (/certificate|self[- ]signed|altnames|CERT_|unable to verify/i.test(e))
+    return `The mail server's security certificate does not match "${m.host}". Use the exact server name your email host gives for outgoing mail (in cPanel: Email Accounts → Connect Devices → Outgoing Server), e.g. the hosting server's own name instead of mail.yourdomain.`;
   if (/wrong version number|SSL routines|ssl3_get_record|packet length too long/i.test(e))
     return 'The "SSL/TLS from the start" tick does not match the port: for port 587 leave it unticked; for port 465 tick it.';
   if (/ETIMEDOUT|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|Greeting never received|Connection timeout|ECONNECTION/i.test(e))

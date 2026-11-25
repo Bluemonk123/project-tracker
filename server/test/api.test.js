@@ -1003,3 +1003,11 @@ test('data security Check now: needs links, refuses private addresses, GitHub to
   assert.equal(r.status, 200);
   assert.equal((await admin.get(`/projects/${pid}/security/E1/history`)).data[0].source, 'auto');
 });
+
+test('email settings: optional reply-to address', async () => {
+  const box = { host: 'mail.example.com', port: 465, secure: true, user: 'alerts@example.com', pass: 'x', from: 'alerts@example.com', from_name: 'Alerts' };
+  assert.equal((await admin.put('/admin/email', { main: { ...box, reply_to: 'not an email' } })).status, 400);
+  assert.equal((await admin.put('/admin/email', { main: { ...box, reply_to: 'admin@example.com' } })).status, 200);
+  assert.equal((await admin.get('/admin/email')).data.main.reply_to, 'admin@example.com');
+  await admin.put('/admin/email', { main: null });
+});

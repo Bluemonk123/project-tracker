@@ -9,7 +9,7 @@ const r = Router();
 const adminOnly = (req) => { if (!req.user.is_admin) fail(403, 'Only administrators can change the email settings.'); };
 
 // Passwords are never sent back to the browser; has_pass says whether one is saved.
-const forClient = (m) => (m ? { host: m.host || '', port: m.port || 587, secure: !!m.secure, user: m.user || '', from: m.from || '', from_name: m.from_name || '', has_pass: !!m.pass } : null);
+const forClient = (m) => (m ? { host: m.host || '', port: m.port || 587, secure: !!m.secure, user: m.user || '', from: m.from || '', from_name: m.from_name || '', reply_to: m.reply_to || '', has_pass: !!m.pass } : null);
 
 function clean(input, previous) {
   if (!input || !String(input.host || '').trim()) return null;
@@ -20,7 +20,9 @@ function clean(input, previous) {
   const from = String(input.from || '').trim();
   if (!isEmail(from)) fail(400, 'Enter the address the emails are sent from.');
   const pass = input.pass ? String(input.pass) : (input.keep_pass !== false ? previous?.pass || '' : '');
-  return { host, port, secure: !!input.secure, user: String(input.user || '').trim(), pass, from, from_name: String(input.from_name || '').trim().slice(0, 80) };
+  const replyTo = String(input.reply_to || '').trim();
+  if (replyTo && !isEmail(replyTo)) fail(400, 'The reply-to address is not a valid email address.');
+  return { host, port, secure: !!input.secure, user: String(input.user || '').trim(), pass, from, from_name: String(input.from_name || '').trim().slice(0, 80), reply_to: replyTo };
 }
 
 r.get('/admin/email', (req, res) => {

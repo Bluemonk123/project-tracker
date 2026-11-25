@@ -131,7 +131,7 @@ function MacroModal({ macro, groups, onClose, onSaved }) {
   );
 }
 
-const BLANK = { host: '', port: 587, secure: false, user: '', pass: '', from: '', from_name: '' };
+const BLANK = { host: '', port: 587, secure: false, user: '', pass: '', from: '', from_name: '', reply_to: '' };
 function Email() {
   const { data, error, loading, reload } = useLoad(() => api.get('/admin/email'), []);
   if (error) return <ErrorBox error={error} />;
@@ -228,6 +228,7 @@ function MailboxFields({ title, m, setM, hasPass }) {
         <Field label="Password" hint={hasPass ? 'Saved. Leave empty to keep it.' : undefined}><input type="password" autoComplete="new-password" value={m.pass} onChange={set('pass')} /></Field>
         <Field label="Send from (address)"><input type="email" placeholder="helpdesk@company.com" value={m.from} onChange={set('from')} /></Field>
         <Field label="Sender name"><input type="text" placeholder="Helpdesk" value={m.from_name} onChange={set('from_name')} /></Field>
+        <Field label="Reply-to (address)" hint="Optional. Where replies go, if not to the sender."><input type="email" placeholder="admin@company.com" value={m.reply_to || ''} onChange={set('reply_to')} /></Field>
       </div>
     </fieldset>
   );
