@@ -52,13 +52,29 @@ function ageing(w) {
 }
 const ageText = (n) => (n == null ? '—' : n === 0 ? 'Today' : `${n} day${n === 1 ? '' : 's'}`);
 
-function ExpandedCard({ w }) {
+// Stage dropdown on each expanded card: moving a task here takes it out of this stage's list.
+function StageSelect({ w, columns, onMove }) {
+  const stop = (e) => e.stopPropagation();
+  if (!w.can_edit || !onMove) return null;
+  return (
+    <select className="kbx-stage" value={w.board_column} aria-label={`Stage of ${w.key}`} title="Move to another stage"
+      onClick={stop} onMouseDown={stop} onKeyDown={stop}
+      onChange={(e) => { const c = columns.find(x => x.key === e.target.value); if (c) onMove(c, w.id); }}>
+      {columns.filter(c => c.statuses?.length).map(c => <option key={c.key} value={c.key}>{c.name}</option>)}
+    </select>
+  );
+}
+
+function ExpandedCard({ w, columns, onMove }) {
+  const nav = useNavigate();
   const age = ageing(w);
   const overdue = !w.is_closed && w.due_date && w.due_date < today();
   return (
-    <Link to={`/wp/${w.id}`} className={`kbx-card${overdue ? ' overdue' : ''}`} style={{ '--pc': w.project_color }}>
+    <article className={`kbx-card${overdue ? ' overdue' : ''}`} style={{ '--pc': w.project_color }} role="link" tabIndex={0} aria-label={`${w.key} ${w.subject}`}
+      onClick={() => nav(`/wp/${w.id}`)} onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) nav(`/wp/${w.id}`); }}>
       <div className="kbx-top">
         <span className="kbx-proj ellipsis">{w.project_name} · {w.key}</span>
+        <StageSelect w={w} columns={columns} onMove={onMove} />
         <span className="kb-type-pill" style={{ '--c': w.type_color }}>{w.type_name}</span>
       </div>
       <div className="kbx-module ellipsis">{w.module || <span className="muted">No module</span>}</div>
@@ -72,11 +88,11 @@ function ExpandedCard({ w }) {
         <div><dt>Priority</dt><dd><span className="kbx-prio" style={{ '--c': w.priority_color }}>{w.priority_name || '—'}</span></dd></div>
         <div><dt>Due</dt><dd className={overdue ? 'danger-text' : ''}>{w.due_date ? fmtDate(w.due_date, { year: true }) : <span className="muted">—</span>}</dd></div>
       </dl>
-    </Link>
+    </article>
   );
 }
 
-function StageModal({ col, items, onClose }) {
+function StageModal({ col, items, columns, onMove, onClose }) {
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('age');
   const [member, setMember] = useState('');   // assignee id, 'none' or ''
@@ -119,7 +135,7 @@ function StageModal({ col, items, onClose }) {
         <span className="small muted" style={{ marginLeft: 'auto' }}>{list.length === items.length ? '' : `${list.length} of ${items.length}`}</span>
       </div>
       <div className="kbx-grid" style={{ '--cc': col.color }}>
-        {sorted.map(w => <ExpandedCard key={w.id} w={w} />)}
+        {sorted.map(w => <ExpandedCard key={w.id} w={w} columns={columns} onMove={onMove} />)}
         {!sorted.length && <div className="kb-empty">No tasks{needle ? ' match' : ''}.</div>}
       </div>
     </Modal>
@@ -446,7 +462,7 @@ export default function KanbanBoard({ project }) {
       {raising && <RaiseTicketModal onClose={() => setRaising(false)} />}
       {expanded && data && (() => {
         const c = data.columns.find(x => x.key === expanded);
-        return c ? <StageModal col={c} items={byColumn(c)} onClose={() => setExpanded(null)} /> : null;
+        return c ? <StageModal col={c} items={byColumn(c)} columns={columns} onMove={drop} onClose={() => setExpanded(null)} /> : null;
       })()}
       {converting && (
         <NewWpModal title={`Turn ticket #${converting.ticket.ticket_no} into a task`} single

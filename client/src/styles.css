@@ -1471,3 +1471,8 @@ a.ov-stage-row:hover { background: var(--sunken); }
 .notif-pop-x:hover { color: var(--ink); }
 @keyframes notif-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .notif-pop { animation: none; } }
+/* Stage dropdown on expanded Task Board cards */
+.kbx-stage { width: auto; max-width: 130px; height: 26px; padding: 0 22px 0 8px; font-size: 12px; font-weight: 600; border-radius: 999px; margin-left: auto; flex: none; cursor: pointer; }
+.kbx-top .kbx-proj { min-width: 0; }
+.kbx-card { cursor: pointer; }
+.kbx-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
