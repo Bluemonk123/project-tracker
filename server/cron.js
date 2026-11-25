@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { BACKUP_DIR, backupNow } from './db.js';
+import { BACKUP_DIR, backupNow, setSetting } from './db.js';
 import { copyDue, scheduleCopies } from './routes/backupcopy.js';
 import { inboundDue, scheduleInbound } from './inbound.js';
 import { flushNotificationEmails } from './notifymail.js';
@@ -58,6 +58,7 @@ export async function cronHandler(req, res) {
   const b = crypto.createHash('sha256').update(want).digest();
   if (!crypto.timingSafeEqual(a, b)) return res.status(403).json({ error: 'Wrong key.' });
   const started = Date.now();
+  setSetting('cron_last_at', new Date().toISOString()); // shown in Administration, to see that the host's cron job runs
   const jobs = await runDueJobs();
   res.json({ ok: true, at: new Date().toISOString(), ms: Date.now() - started, jobs });
 }

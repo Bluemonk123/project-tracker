@@ -179,6 +179,14 @@ function InboundForm({ data, onSaved }) {
             {last.items?.length > 0 && <ul className="tk-inbound-items">{last.items.map((x, i) => <li key={i}><b>{x.from || 'unknown sender'}</b> “{x.subject || 'no subject'}”: {x.outcome}</li>)}</ul>}
           </div>
         )}
+        {data.timers_off && (() => {
+          const at = data.cron_last_at ? Date.parse(data.cron_last_at) : 0;
+          const late = !at || Date.now() - at > 15 * 60e3;
+          return <div className={`tk-inbound-status ${late ? 'bad' : 'ok'}`}>
+            Automatic checks run when the hosting's cron job calls the app{at ? `; last call ${new Date(at).toLocaleString()}` : '; no call received yet'}.
+            {late && ' The cron job does not seem to run: check it in the hosting panel (every 5 minutes or less). Until then, use Check now.'}
+          </div>;
+        })()}
         <p className="xs muted" style={{ margin: 0 }}>Each email is marked as read once it is handled. Out-of-office replies, bounces and mailing lists are skipped. Only the person who raised a ticket can add to it by email; anyone else starts a new ticket. Up to 2 attachments of 5 MB are kept, with the same checks as uploads.</p>
       </div>
       <div className="modal-foot">

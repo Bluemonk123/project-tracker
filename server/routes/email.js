@@ -35,6 +35,8 @@ r.get('/admin/email', (req, res) => {
       folder: i.folder || 'INBOX', address: i.address || '', minutes: i.minutes || 2 },
     inbound_last: lastCheck(),
     notify_email: getSetting('notify_email', '1') !== '0',
+    timers_off: /^(1|true|yes)$/i.test(String(process.env.DISABLE_TIMERS || '')),
+    cron_last_at: getSetting('cron_last_at', '') || null,
   });
 });
 
