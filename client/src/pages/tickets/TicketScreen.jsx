@@ -109,7 +109,8 @@ function TicketView({ d, embedded, onChanged, onClose, onDeleted }) {
         </div>
         <div className="tk-prop-list">
           <Prop label="Assignee">
-            <EngineerPicker engineers={d.engineers} value={t.assignee_id} disabled={!canEdit || busy} onChange={(id) => patch({ assignee_id: id })} />
+            <EngineerPicker engineers={d.engineers} value={t.assignee_id} disabled={!canEdit || busy || (d.can.assign === false && t.assignee_id && t.assignee_id !== d.me.id)}
+              onlyMe={d.can.assign === false ? d.me.id : null} onChange={(id) => patch({ assignee_id: id })} />
           </Prop>
           <Prop label="Status">
             <select value={t.status} disabled={!canEdit || busy} onChange={(e) => patch({ status: e.target.value })}>
@@ -208,10 +209,11 @@ function RequesterChange({ d, onChanged }) {
 }
 
 // Searchable list of engineers, with "(you)" and each one's open-ticket count.
-function EngineerPicker({ engineers, value, onChange, disabled }) {
+function EngineerPicker({ engineers, value, onChange, disabled, onlyMe = null }) {
   const [q, setQ] = useState('');
   const current = engineers.find(e => e.id === value);
-  const list = useMemo(() => engineers.filter(e => !e.former && e.name.toLowerCase().includes(q.trim().toLowerCase())), [engineers, q]);
+  // without "Change the assignee": only yourself can be picked
+  const list = useMemo(() => engineers.filter(e => !e.former && (onlyMe == null || e.id === onlyMe) && e.name.toLowerCase().includes(q.trim().toLowerCase())), [engineers, q, onlyMe]);
   return (
     <Popover align="left" trigger={({ toggle }) => (
       <button type="button" className="tk-picker" onClick={toggle} disabled={disabled}>

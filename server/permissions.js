@@ -17,6 +17,7 @@ export const TICKET_PERMISSIONS = [
   { key: 'tickets.view',     group: 'Ticket Board',   label: 'Open the Ticket Board and see tickets' },
   { key: 'tickets.create',   group: 'Ticket Board',   label: 'Create tickets from the board (New ticket)' },
   { key: 'tickets.edit',     group: 'Ticket Board',   label: 'Work on tickets: reply, add notes, change fields, take tickets' },
+  { key: 'tickets.assign',   group: 'Ticket Board',   label: 'Change the assignee: assign tickets to other engineers' },
 ];
 
 export const PROJECT_PERMISSIONS = [
@@ -115,7 +116,7 @@ export const DEFAULT_ROLES = [
   {
     name: 'Support agent', scope: 'ticket', builtin: 1,
     description: 'Works on tickets: sees the Ticket Board, creates, replies and changes tickets.',
-    permissions: ['tickets.view', 'tickets.create', 'tickets.edit'],
+    permissions: ['tickets.view', 'tickets.create', 'tickets.edit', 'tickets.assign'],
   },
   {
     name: 'Support viewer', scope: 'ticket', builtin: 0,

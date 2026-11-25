@@ -583,7 +583,7 @@ r.get('/tickets/:no', (req, res) => {
     engineers: engs,
     options: { statuses: STATUSES, priorities: PRIORITIES, types: TYPES, groups: activeGroups() },
     macros: all('SELECT id, name, body_template, set_status, set_group, is_internal FROM ticket_macros WHERE active = 1 ORDER BY display_order, id'),
-    can: { edit: can(req, 'tickets.edit'), delete: !!req.user.is_admin, change_requester: !!req.user.is_admin },
+    can: { edit: can(req, 'tickets.edit'), assign: can(req, 'tickets.assign'), delete: !!req.user.is_admin, change_requester: !!req.user.is_admin },
     me: { id: req.user.id, name: req.user.name },
     reply_hint: replyHint(t),
     linked_task: linkedTask(t.wp_id),
@@ -647,6 +647,10 @@ function applyChanges(req, t, body) {
   let newAssignee = null;
   if ('assignee_id' in body) {
     const id = body.assignee_id === null || body.assignee_id === '' ? null : Number(body.assignee_id);
+    // assigning to someone else (or taking a ticket away from them) needs "Change the assignee";
+    // taking an unassigned ticket yourself, or letting go of your own, only needs "Work on tickets"
+    const selfOnly = (id === req.user.id && (!t.assignee_id || t.assignee_id === req.user.id)) || (id === null && t.assignee_id === req.user.id);
+    if (id !== t.assignee_id && !selfOnly && !can(req, 'tickets.assign')) fail(403, 'You need "Change the assignee" in your ticket role to assign tickets to others.');
     if (id !== null && !engineers().some(e => e.id === id)) fail(400, 'Choose one of the engineers.');
     if (id !== t.assignee_id) {
       const oldName = userById(t.assignee_id)?.name, newName = userById(id)?.name;

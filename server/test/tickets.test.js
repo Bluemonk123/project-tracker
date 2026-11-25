@@ -55,7 +55,8 @@ test('setup: admin, an agent role, a member of staff', async () => {
   const meta = (await admin.get('/meta')).data;
   const employee = meta.roles.find(r => r.name === 'Employee').id;
   // Ticket Board access comes from a ticket role (Administration → Roles → Ticket roles)
-  let r = await admin.post('/admin/roles', { name: 'Helpdesk agent', scope: 'ticket', permissions: ['tickets.view', 'tickets.create', 'tickets.edit', 'project.view'] });
+  let r = await admin.post('/admin/roles', { name: 'Helpdesk agent', scope: 'ticket', permissions: ['tickets.view', 'tickets.create', 'tickets.edit', 'tickets.assign', 'project.view'] });
+  ids.agentRole = r.data.id;
   assert.equal(r.status, 201, JSON.stringify(r.data));
   const agentRole = r.data.id;
   r = await admin.post('/admin/roles', { name: 'Board viewer', scope: 'ticket', permissions: ['tickets.view'] });
@@ -645,4 +646,18 @@ test('change requester: administrators only, logged in the thread', async () => 
   assert.ok(all('SELECT body FROM ticket_messages WHERE ticket_id = ?', t.id).some(m => /Requester changed from .* to Olga Other/.test(m.body)));
   assert.equal((await admin.get(`/tickets/${t.ticket_no}`)).data.can.change_requester, true);
   assert.equal((await agent.get(`/tickets/${t.ticket_no}`)).data.can.change_requester, false);
+});
+
+test('change the assignee: needs its own permission; taking a ticket yourself does not', async () => {
+  const t = get("SELECT * FROM tickets WHERE status <> 'solved' ORDER BY id DESC LIMIT 1");
+  await admin.patch(`/tickets/${t.ticket_no}`, { assignee_id: null });
+  // the agent's role without "Change the assignee"
+  const role = (await admin.get('/admin/roles')).data.find(r => r.id === ids.agentRole);
+  await admin.patch(`/admin/roles/${ids.agentRole}`, { permissions: role.permissions.filter(p => p !== 'tickets.assign') });
+  assert.equal((await agent.patch(`/tickets/${t.ticket_no}`, { assignee_id: ids.admin })).status, 403);
+  assert.equal((await agent.post(`/tickets/${t.ticket_no}/take`)).status, 200); // taking it yourself is fine
+  assert.equal(get('SELECT assignee_id FROM tickets WHERE id = ?', t.id).assignee_id, ids.agent);
+  assert.equal((await agent.get(`/tickets/${t.ticket_no}`)).data.can.assign, false);
+  await admin.patch(`/admin/roles/${ids.agentRole}`, { permissions: role.permissions });
+  assert.equal((await agent.get(`/tickets/${t.ticket_no}`)).data.can.assign, true);
 });

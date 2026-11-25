@@ -492,6 +492,16 @@ function migrate() {
       setSetting('migration_ticket_roles_v1', '1');
     });
   }
+  // "Change the assignee" became its own ticket permission: roles that could work on tickets keep being able to assign
+  if (!getSetting('migration_ticket_assign_v1')) {
+    tx(() => {
+      for (const r of all("SELECT id, permissions FROM roles WHERE scope = 'ticket'")) {
+        let p = []; try { p = JSON.parse(r.permissions) || []; } catch { /* ignore */ }
+        if (p.includes('tickets.edit') && !p.includes('tickets.assign')) run('UPDATE roles SET permissions = ? WHERE id = ?', JSON.stringify([...p, 'tickets.assign']), r.id);
+      }
+      setSetting('migration_ticket_assign_v1', '1');
+    });
+  }
 }
 migrate();
 
