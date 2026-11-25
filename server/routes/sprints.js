@@ -10,8 +10,9 @@ import { loadWp, updateWp } from './workpackages.js';
 
 const r = Router();
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
-const canPlan = (req) => !!req.user.is_admin || visibleProjectIds(req, 'wp.edit').length > 0 || visibleProjectIds(req, 'wp.edit_own').length > 0;
-const canPlanIn = (req, pid) => !!req.user.is_admin || can(req, 'wp.edit', pid) || can(req, 'wp.edit_own', pid);
+// "Plan sprints" (sprint.manage) in a project's role, or in a global role for every project
+const canPlan = (req) => !!req.user.is_admin || visibleProjectIds(req, 'sprint.manage').length > 0;
+const canPlanIn = (req, pid) => !!req.user.is_admin || can(req, 'sprint.manage', pid);
 const listParam = (v) => (Array.isArray(v) ? v : v === undefined || v === null || v === '' ? [] : String(v).split(',')).map(x => String(x).trim()).filter(Boolean);
 
 // The projects chosen for a sprint (project_ids, or project_id). The person must be able to plan in each.

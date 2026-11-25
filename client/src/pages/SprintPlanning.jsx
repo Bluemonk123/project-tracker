@@ -152,7 +152,7 @@ const FILTERS = ['q', 'project_id', 'version_id', 'type_id', 'assignee_id', 'pri
 const dragIds = (e) => { const p = e.dataTransfer.getData('text/plain'); return p.startsWith('tasks:') ? p.slice(6).split(',').map(Number).filter(Boolean) : []; };
 
 export default function SprintPlanning() {
-  const { meta, projects, activeUsers } = useApp();
+  const { meta, projects, activeUsers, me } = useApp();
   const [sp, setSp] = useSearchParams();
   const [selected, setSelected] = useState([]);
   const [modal, setModal] = useState(null); // { sprint?, taskIds? } | { end: sprint }
@@ -257,7 +257,7 @@ export default function SprintPlanning() {
           <p className="small muted" style={{ margin: '4px 0 0' }}>All tasks by sprint. Pick tasks into a sprint: select them and add, or drag them onto a sprint.</p>
         </div>
         <span className="spacer" />
-        <button type="button" className="btn sm" onClick={() => setModal({ upload: true })} title="Add many tasks at once from a CSV or Excel file"><Icon name="upload" />Upload tasks</button>
+        {me?.canUploadTasks !== false && <button type="button" className="btn sm" onClick={() => setModal({ upload: true })} title="Add many tasks at once from a CSV or Excel file"><Icon name="upload" />Upload tasks</button>}
         <a className="btn sm" href={exportUrl} title={filtered ? 'Download the tasks in this list that match the filters' : 'Download the tasks in this list'}><Icon name="download" />Export CSV</a>
         {sl.data?.can_create && <button type="button" className="btn primary" onClick={() => setModal({ taskIds: selected })}><Icon name="plus" />New sprint{selected.length ? ` with ${selected.length} task${selected.length > 1 ? 's' : ''}` : ''}</button>}
       </div>

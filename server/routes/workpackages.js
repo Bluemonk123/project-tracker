@@ -314,7 +314,7 @@ r.post('/admin/import/tasks', (req, res) => {
 
 // ---------- modules of a project ----------
 // The list (project_modules) plus how many tasks use each module. ?full=1 also says whether the person may edit the list.
-const canEditModules = (req, pid) => !!req.user.is_admin || can(req, 'wp.edit', pid) || can(req, 'project.brief', pid);
+const canEditModules = (req, pid) => !!req.user.is_admin || can(req, 'modules.manage', pid);
 export const rememberModule = (projectId, name) => { const n = String(name || '').trim(); if (n) run('INSERT OR IGNORE INTO project_modules(project_id, name) VALUES(?,?)', projectId, n.slice(0, 80)); };
 function moduleList(pid) {
   return all(`SELECT m.id, m.name AS module,

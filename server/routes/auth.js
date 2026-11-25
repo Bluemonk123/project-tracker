@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { get, run, all, hashPassword, verifyPassword, getSetting, DATA_DIR } from '../db.js';
-import { createSession, SESSION_COOKIE, publicUser, requireAuth, fail, permsForClient, can } from '../access.js';
+import { createSession, SESSION_COOKIE, publicUser, requireAuth, fail, permsForClient, can, visibleProjectIds } from '../access.js';
 import { requireText } from '../util.js';
 
 const r = Router();
@@ -74,6 +74,8 @@ r.get('/auth/me', requireAuth, (req, res) => {
     user: { ...publicUser(req.user), global_role: role },
     permissions: permsForClient(req),
     canSeeReports: can(req, 'reports.view'),
+    canSeeBoard: !!req.user.is_admin || visibleProjectIds(req, 'board.view').length > 0,
+    canUploadTasks: !!req.user.is_admin || visibleProjectIds(req, 'wp.import').length > 0,
     unread,
     appName: getSetting('app_name', 'Project Tracker'),
   });

@@ -80,8 +80,8 @@ function decorate(t, now, hours) {
 
 // ---------- people ----------
 function boardUsers() {
-  const roleIds = all("SELECT id, permissions FROM roles WHERE scope = 'global'").filter(r => parseList(r.permissions).includes('tickets.view')).map(r => r.id);
-  return all(`SELECT id, name, email FROM users WHERE status = 'active' AND (is_admin = 1 ${roleIds.length ? `OR global_role_id IN (${roleIds.join(',')})` : ''}) ORDER BY name`);
+  const roleIds = all("SELECT id, permissions FROM roles WHERE scope = 'ticket'").filter(r => parseList(r.permissions).includes('tickets.view')).map(r => r.id);
+  return all(`SELECT id, name, email FROM users WHERE status = 'active' AND (is_admin = 1 ${roleIds.length ? `OR ticket_role_id IN (${roleIds.join(',')})` : ''}) ORDER BY name`);
 }
 // Engineers: active members and leads of teams whose name contains "Ticket" or "Support";
 // until such a team has members, everyone who can open the Ticket Board.

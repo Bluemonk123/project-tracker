@@ -31,7 +31,9 @@ function readDay(v) {
 }
 
 function lookups(req) {
-  const ids = visibleProjectIds(req, 'wp.create');
+  // projects the person may upload to: "Upload tasks in bulk" (wp.import) together with "Create tasks"
+  const create = new Set(visibleProjectIds(req, 'wp.create'));
+  const ids = visibleProjectIds(req, 'wp.import').filter(id => create.has(id));
   const projects = ids.length ? all(`SELECT id, name, identifier, archived FROM projects WHERE id IN (${ids.map(() => '?').join(',')})`, ...ids).filter(p => !p.archived) : [];
   return {
     projects,
@@ -117,7 +119,7 @@ r.post('/work-packages/import', (req, res) => {
   if (!rows.length) fail(400, 'The file has no task rows.');
   if (rows.length > MAX_ROWS) fail(400, `Upload at most ${MAX_ROWS} tasks at a time (this file has ${rows.length}).`);
   const L = lookups(req);
-  if (!L.projects.length) fail(403, 'You cannot add tasks to any project.');
+  if (!L.projects.length) fail(403, 'You cannot upload tasks to any project (needs "Upload tasks in bulk").');
   let defaultProject = null;
   if (b.project_id) defaultProject = L.projects.find(p => String(p.id) === String(b.project_id)) || fail(403, 'You cannot add tasks to that project.');
   const checked = rows.map((x, i) => checkRow(req, x || {}, i, L, defaultProject));

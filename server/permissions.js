@@ -9,15 +9,20 @@ export const GLOBAL_PERMISSIONS = [
   { key: 'teams.manage',     group: 'Administration', label: 'Manage teams' },
   { key: 'projects.create',  group: 'Projects',       label: 'Create projects' },
   { key: 'reports.view',     group: 'Reports',        label: 'View portfolio and workload reports' },
-  // Ticket Board (helpdesk): off for every role until ticked; administrators always have it.
-  { key: 'tickets.view',     group: 'Ticket Board',   label: 'Enable: open the Ticket Board' },
-  { key: 'tickets.create',   group: 'Ticket Board',   label: 'Add: create tickets from the board (New ticket)' },
-  { key: 'tickets.edit',     group: 'Ticket Board',   label: 'Edit: reply, add notes, change fields, take tickets' },
+];
+
+// Ticket Board (helpdesk): given through a person's TICKET role (Administration → Roles → Ticket roles),
+// separate from their global and project roles. Administrators always have all of them.
+export const TICKET_PERMISSIONS = [
+  { key: 'tickets.view',     group: 'Ticket Board',   label: 'Open the Ticket Board and see tickets' },
+  { key: 'tickets.create',   group: 'Ticket Board',   label: 'Create tickets from the board (New ticket)' },
+  { key: 'tickets.edit',     group: 'Ticket Board',   label: 'Work on tickets: reply, add notes, change fields, take tickets' },
 ];
 
 export const PROJECT_PERMISSIONS = [
   { key: 'project.view',      group: 'Project',        label: 'View project' },
   { key: 'project.edit',      group: 'Project',        label: 'Edit project details and status' },
+  { key: 'board.view',        group: 'Project',        label: 'Open the Project Board' },
   { key: 'project.brief',     group: 'Project',        label: 'Edit project brief, customer and customer user roles' },
   { key: 'project.documents', group: 'Project',        label: 'Upload project documents' },
   { key: 'project.members',   group: 'Project',        label: 'Manage project members' },
@@ -31,6 +36,9 @@ export const PROJECT_PERMISSIONS = [
   { key: 'wp.assign',         group: 'Tasks',  label: 'Assign tasks to people' },
   { key: 'wp.delete',         group: 'Tasks',  label: 'Delete tasks' },
   { key: 'wp.comment',        group: 'Tasks',  label: 'Comment on tasks' },
+  { key: 'wp.import',         group: 'Tasks',  label: 'Upload tasks in bulk (Excel / CSV)' },
+  { key: 'modules.manage',    group: 'Tasks',  label: 'Add, rename, merge and remove modules' },
+  { key: 'sprint.manage',     group: 'Sprints', label: 'Plan sprints: create, edit, start, end and move tasks between sprints' },
   { key: 'time.log',          group: 'Time tracking',  label: 'Log own time' },
   { key: 'time.view_all',     group: 'Time tracking',  label: 'View everyone\'s time' },
   { key: 'time.edit_all',     group: 'Time tracking',  label: 'Edit everyone\'s time' },
@@ -46,12 +54,13 @@ export const PROJECT_PERMISSIONS = [
 
 export const ALL_GLOBAL_KEYS = GLOBAL_PERMISSIONS.map(p => p.key);
 export const ALL_PROJECT_KEYS = PROJECT_PERMISSIONS.map(p => p.key);
+export const ALL_TICKET_KEYS = TICKET_PERMISSIONS.map(p => p.key);
 
 export const DEFAULT_ROLES = [
   {
     name: 'Manager', scope: 'global', builtin: 1,
     description: 'Monitors every project: sees all tasks, time, meetings and reports.',
-    permissions: ['projects.create', 'reports.view', 'teams.manage',
+    permissions: ['projects.create', 'reports.view', 'teams.manage', 'board.view',
       'project.view', 'wp.view', 'wp.create', 'wp.comment', 'wp.assign', 'time.log', 'time.view_all',
       'meetings.view', 'meetings.manage', 'wiki.view'],
   },
@@ -70,36 +79,47 @@ export const DEFAULT_ROLES = [
     description: 'Leads a team inside a project: assigns and reviews work.',
     permissions: ['project.view', 'wp.view', 'wp.create', 'wp.edit', 'wp.assign', 'wp.comment',
       'time.log', 'time.view_all', 'meetings.view', 'meetings.manage', 'wiki.view', 'wiki.edit', 'files.upload', 'news.manage',
-      'tech.manage', 'tech.version', 'project.documents', 'security.manage'],
+      'tech.manage', 'tech.version', 'project.documents', 'security.manage', 'board.view', 'wp.import', 'modules.manage', 'sprint.manage'],
   },
   {
     name: 'Project manager', scope: 'project', builtin: 0,
     description: 'Owns the client relationship: follows progress, meetings and time.',
     permissions: ['project.view', 'wp.view', 'wp.create', 'wp.comment', 'time.log', 'time.view_all',
-      'meetings.view', 'meetings.manage', 'wiki.view', 'files.upload', 'news.manage', 'project.brief', 'project.documents'],
+      'meetings.view', 'meetings.manage', 'wiki.view', 'files.upload', 'news.manage', 'project.brief', 'project.documents',
+      'board.view', 'wp.import', 'modules.manage'],
   },
   {
     name: 'Business analyst', scope: 'project', builtin: 0,
     description: 'Writes and maintains requirements, specs and acceptance criteria.',
     permissions: ['project.view', 'project.versions', 'wp.view', 'wp.create', 'wp.edit', 'wp.assign', 'wp.comment',
       'time.log', 'meetings.view', 'meetings.manage', 'wiki.view', 'wiki.edit', 'files.upload', 'tech.version',
-      'project.brief', 'project.documents'],
+      'project.brief', 'project.documents', 'board.view', 'wp.import', 'modules.manage', 'sprint.manage'],
   },
   {
     name: 'Developer', scope: 'project', builtin: 0,
     description: 'Works on tasks and logs time.',
     permissions: ['project.view', 'wp.view', 'wp.create', 'wp.edit_own', 'wp.comment',
-      'time.log', 'meetings.view', 'wiki.view', 'wiki.edit', 'files.upload', 'tech.version'],
+      'time.log', 'meetings.view', 'wiki.view', 'wiki.edit', 'files.upload', 'tech.version', 'board.view', 'sprint.manage'],
   },
   {
     name: 'QA / Tester', scope: 'project', builtin: 0,
     description: 'Tests features and reports bugs.',
     permissions: ['project.view', 'wp.view', 'wp.create', 'wp.edit_own', 'wp.comment',
-      'time.log', 'meetings.view', 'wiki.view', 'files.upload'],
+      'time.log', 'meetings.view', 'wiki.view', 'files.upload', 'board.view', 'sprint.manage'],
   },
   {
     name: 'Viewer', scope: 'project', builtin: 1,
     description: 'Read-only access (clients, stakeholders).',
-    permissions: ['project.view', 'wp.view', 'meetings.view', 'wiki.view'],
+    permissions: ['project.view', 'wp.view', 'meetings.view', 'wiki.view', 'board.view'],
+  },
+  {
+    name: 'Support agent', scope: 'ticket', builtin: 1,
+    description: 'Works on tickets: sees the Ticket Board, creates, replies and changes tickets.',
+    permissions: ['tickets.view', 'tickets.create', 'tickets.edit'],
+  },
+  {
+    name: 'Support viewer', scope: 'ticket', builtin: 0,
+    description: 'Sees the Ticket Board and tickets, without changing them.',
+    permissions: ['tickets.view'],
   },
 ];

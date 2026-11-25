@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { get, all, run, tx, hashPassword, getSetting, setSetting, backupNow, BACKUP_DIR, maxUploadMb, UPLOAD_LIMIT_FROM_ENV } from '../db.js';
 import { need, fail, parseList } from '../access.js';
-import { GLOBAL_PERMISSIONS, PROJECT_PERMISSIONS, ALL_GLOBAL_KEYS, ALL_PROJECT_KEYS } from '../permissions.js';
+import { GLOBAL_PERMISSIONS, PROJECT_PERMISSIONS, TICKET_PERMISSIONS, ALL_GLOBAL_KEYS, ALL_PROJECT_KEYS, ALL_TICKET_KEYS } from '../permissions.js';
 import { requireText, updateSet } from '../util.js';
 
 const r = Router();
@@ -27,13 +27,20 @@ r.get('/meta', (_req, res) => {
 r.get('/admin/users', (req, res) => {
   need(req, 'admin.users');
   res.json(all(`
-    SELECT u.id, u.name, u.email, u.job_title, u.is_admin, u.status, u.global_role_id, u.created_at, u.last_login_at, (u.password_hash <> '') AS has_password,
-           r.name AS global_role_name,
+    SELECT u.id, u.name, u.email, u.job_title, u.is_admin, u.status, u.global_role_id, u.ticket_role_id, u.created_at, u.last_login_at, (u.password_hash <> '') AS has_password,
+           r.name AS global_role_name, (SELECT name FROM roles tr WHERE tr.id = u.ticket_role_id) AS ticket_role_name,
            (SELECT COUNT(*) FROM project_members pm WHERE pm.user_id = u.id) AS project_count,
            (SELECT GROUP_CONCAT(t.name, ', ') FROM team_members tm JOIN teams t ON t.id = tm.team_id WHERE tm.user_id = u.id) AS teams
     FROM users u LEFT JOIN roles r ON r.id = u.global_role_id
     ORDER BY u.status = 'locked', u.name`));
 });
+
+function checkTicketRole(id) {
+  if (id == null || id === '') return null;
+  const role = get("SELECT id FROM roles WHERE id = ? AND scope = 'ticket'", id);
+  if (!role) fail(400, 'Choose a valid ticket role.');
+  return role.id;
+}
 
 function checkGlobalRole(id) {
   if (id == null || id === '') return null;
@@ -52,9 +59,9 @@ r.post('/admin/users', (req, res) => {
   const pw = String(req.body.password || '');
   if (pw && pw.length < 8) fail(400, 'Password must be at least 8 characters.');
   if (req.body.is_admin && !req.user.is_admin) fail(403, 'Only administrators can create administrators.');
-  const { id } = run(`INSERT INTO users(name, email, password_hash, is_admin, global_role_id, job_title, must_change_password)
-                      VALUES(?,?,?,?,?,?,1)`,
-    name, email, pw ? hashPassword(pw) : '', req.body.is_admin ? 1 : 0, checkGlobalRole(req.body.global_role_id), req.body.job_title || null);
+  const { id } = run(`INSERT INTO users(name, email, password_hash, is_admin, global_role_id, ticket_role_id, job_title, must_change_password)
+                      VALUES(?,?,?,?,?,?,?,1)`,
+    name, email, pw ? hashPassword(pw) : '', req.body.is_admin ? 1 : 0, checkGlobalRole(req.body.global_role_id), checkTicketRole(req.body.ticket_role_id), req.body.job_title || null);
   if (Array.isArray(req.body.team_ids)) for (const t of req.body.team_ids) run(`INSERT OR IGNORE INTO team_members(team_id, user_id, position)
     VALUES(?, ?, (SELECT COALESCE(MAX(position), -1) + 1 FROM team_members WHERE team_id = ?))`, t, id, t);
   res.status(201).json({ id });
@@ -73,6 +80,7 @@ r.patch('/admin/users/:id', (req, res) => {
     status: b.status !== undefined ? (['active', 'locked'].includes(b.status) ? b.status : fail(400, 'Invalid status.')) : undefined,
     is_admin: b.is_admin !== undefined ? (b.is_admin ? 1 : 0) : undefined,
     global_role_id: b.global_role_id !== undefined ? checkGlobalRole(b.global_role_id) : undefined,
+    ticket_role_id: b.ticket_role_id !== undefined ? checkTicketRole(b.ticket_role_id) : undefined,
   };
   if (fields.email && get('SELECT id FROM users WHERE email = ? AND id <> ?', fields.email, user.id)) fail(400, 'Another user already has this email.');
   if (b.password) {
@@ -111,25 +119,25 @@ r.delete('/admin/users/:id', (req, res) => {
 // ---------- roles ----------
 r.get('/admin/permissions', (req, res) => {
   need(req, 'admin.roles');
-  res.json({ global: GLOBAL_PERMISSIONS, project: PROJECT_PERMISSIONS });
+  res.json({ global: GLOBAL_PERMISSIONS, project: PROJECT_PERMISSIONS, ticket: TICKET_PERMISSIONS });
 });
 
 r.get('/admin/roles', (req, res) => {
   need(req, 'admin.roles');
   res.json(all(`SELECT r.*,
-      (SELECT COUNT(*) FROM users u WHERE u.global_role_id = r.id) AS user_count,
+      (SELECT COUNT(*) FROM users u WHERE u.global_role_id = r.id OR u.ticket_role_id = r.id) AS user_count,
       (SELECT COUNT(*) FROM project_members pm WHERE pm.role_id = r.id) AS member_count
     FROM roles r ORDER BY scope, position, id`).map(x => ({ ...x, permissions: parseList(x.permissions) })));
 });
 
 function cleanPerms(scope, perms) {
-  const allowed = scope === 'global' ? [...ALL_GLOBAL_KEYS, ...ALL_PROJECT_KEYS] : ALL_PROJECT_KEYS;
+  const allowed = scope === 'global' ? [...ALL_GLOBAL_KEYS, ...ALL_PROJECT_KEYS] : scope === 'ticket' ? ALL_TICKET_KEYS : ALL_PROJECT_KEYS;
   return [...new Set((perms || []).filter(p => allowed.includes(p)))];
 }
 
 r.post('/admin/roles', (req, res) => {
   need(req, 'admin.roles');
-  const scope = req.body.scope === 'global' ? 'global' : 'project';
+  const scope = ['global', 'ticket'].includes(req.body.scope) ? req.body.scope : 'project';
   const name = requireText(req.body.name, 'Role name');
   if (get('SELECT id FROM roles WHERE name = ? AND scope = ?', name, scope)) fail(400, 'A role with this name already exists.');
   const pos = get('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM roles').p;

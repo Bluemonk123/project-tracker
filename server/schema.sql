@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS settings (
 CREATE TABLE IF NOT EXISTS roles (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   name        TEXT NOT NULL,
-  scope       TEXT NOT NULL CHECK (scope IN ('global','project')),
+  scope       TEXT NOT NULL CHECK (scope IN ('global','project','ticket')),
   description TEXT,
   permissions TEXT NOT NULL DEFAULT '[]',
   builtin     INTEGER NOT NULL DEFAULT 0,
@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash  TEXT NOT NULL,
   is_admin       INTEGER NOT NULL DEFAULT 0,
   global_role_id INTEGER REFERENCES roles(id) ON DELETE SET NULL,
+  ticket_role_id INTEGER REFERENCES roles(id) ON DELETE SET NULL,
   job_title      TEXT,
   status         TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','locked')),
   must_change_password INTEGER NOT NULL DEFAULT 0,

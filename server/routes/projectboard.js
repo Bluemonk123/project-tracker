@@ -95,6 +95,7 @@ const r = Router();
 r.get('/projects/:pid/board-info', (req, res) => {
   const p = resolveProject(req.params.pid);
   need(req, 'project.view', p.id);
+  if (!can(req, 'board.view', p.id)) fail(403, 'You need "Open the Project Board" in this project.');
   const roles = all('SELECT id, name, description, pain_points, challenges, touch_points FROM project_customer_roles WHERE project_id = ? ORDER BY position, id', p.id);
   // Delivery figures
   const testingIds = all("SELECT id FROM statuses WHERE board_column = 'testing' AND is_closed = 0").map(x => x.id);

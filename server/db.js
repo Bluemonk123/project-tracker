@@ -433,6 +433,65 @@ function migrate() {
       setSetting('migration_security_perm_v1', '1');
     });
   }
+
+  // Ticket roles (Administration → Roles → Ticket roles) and four new project permissions. Nobody loses access:
+  //  - the roles table accepts scope 'ticket' (rebuilt once; SQLite cannot change a CHECK in place)
+  //  - users get ticket_role_id; whoever had Ticket Board permissions in their global role gets a ticket role
+  //    with the same permissions, and those permissions leave the global roles
+  //  - roles that could already plan sprints / upload / edit modules / see the Project Board get the new keys
+  if (!getSetting('migration_ticket_roles_v1')) {
+    const rolesSql = get("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'roles'")?.sql || '';
+    if (!rolesSql.includes("'ticket'")) {
+      db.exec('PRAGMA foreign_keys = OFF');
+      try {
+        tx(() => {
+          db.exec(`CREATE TABLE roles_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
+            scope TEXT NOT NULL CHECK (scope IN ('global','project','ticket')),
+            description TEXT, permissions TEXT NOT NULL DEFAULT '[]', builtin INTEGER NOT NULL DEFAULT 0,
+            position INTEGER NOT NULL DEFAULT 0, UNIQUE (name, scope))`);
+          db.exec('INSERT INTO roles_new(id, name, scope, description, permissions, builtin, position) SELECT id, name, scope, description, permissions, builtin, position FROM roles');
+          db.exec('DROP TABLE roles');
+          db.exec('ALTER TABLE roles_new RENAME TO roles');
+        });
+      } finally { db.exec('PRAGMA foreign_keys = ON'); }
+    }
+    if (!all('PRAGMA table_info(users)').some(c => c.name === 'ticket_role_id')) db.exec('ALTER TABLE users ADD COLUMN ticket_role_id INTEGER REFERENCES roles(id) ON DELETE SET NULL');
+    tx(() => {
+      const TICKET = ['tickets.view', 'tickets.create', 'tickets.edit'];
+      const list = (v) => { try { return JSON.parse(v) || []; } catch { return []; } };
+      const ensureRole = (name, perms, description, builtin = 0) => {
+        const r = get("SELECT id FROM roles WHERE scope = 'ticket' AND name = ?", name);
+        if (r) return r.id;
+        const pos = get("SELECT COALESCE(MAX(position), 0) + 1 AS p FROM roles WHERE scope = 'ticket'").p;
+        return run("INSERT INTO roles(name, scope, description, permissions, builtin, position) VALUES(?, 'ticket', ?, ?, ?, ?)", name, description, JSON.stringify(perms), builtin, pos).id;
+      };
+      const agent = ensureRole('Support agent', TICKET, 'Works on tickets: sees the Ticket Board, creates, replies and changes tickets.', 1);
+      const viewer = ensureRole('Support viewer', ['tickets.view'], 'Sees the Ticket Board and tickets, without changing them.');
+      for (const g of all("SELECT id, name, permissions FROM roles WHERE scope = 'global'")) {
+        const perms = list(g.permissions);
+        const t = TICKET.filter(k => perms.includes(k));
+        if (t.length) {
+          const same = (a, b) => a.length === b.length && a.every(k => b.includes(k));
+          const roleId = same(t, TICKET) ? agent : same(t, ['tickets.view']) ? viewer
+            : ensureRole(`Ticket access (${g.name})`, t, `Created from the "${g.name}" global role.`);
+          run('UPDATE users SET ticket_role_id = ? WHERE global_role_id = ? AND ticket_role_id IS NULL', roleId, g.id);
+        }
+        run('UPDATE roles SET permissions = ? WHERE id = ?', JSON.stringify(perms.filter(k => !TICKET.includes(k))), g.id);
+      }
+      // new project permissions, given where the same thing was allowed before
+      for (const r of all("SELECT id, scope, permissions FROM roles WHERE scope IN ('global','project')")) {
+        const p = new Set(list(r.permissions));
+        const before = p.size;
+        if (p.has('wp.edit') || p.has('wp.edit_own')) p.add('sprint.manage');
+        if (p.has('wp.create')) p.add('wp.import');
+        if (p.has('wp.edit') || p.has('project.brief')) p.add('modules.manage');
+        if (p.has('project.view') || [...p].some(k => /^(wp|project|meetings|wiki|time|tech|security|files|news)\./.test(k))) p.add('board.view');
+        if (p.size !== before) run('UPDATE roles SET permissions = ? WHERE id = ?', JSON.stringify([...p]), r.id);
+      }
+      setSetting('migration_ticket_roles_v1', '1');
+    });
+  }
 }
 migrate();
 

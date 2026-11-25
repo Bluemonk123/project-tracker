@@ -1,7 +1,7 @@
 // Sprint rules shared by the Sprint Planning routes and the task routes.
 // A sprint is planned (starts later), current (running today) or ended (past its end date, or ended with "End now").
 import { get, all } from './db.js';
-import { fail } from './access.js';
+import { fail, can } from './access.js';
 import { todayISO } from './util.js';
 
 export function sprintState(s, today = todayISO()) {
@@ -36,6 +36,7 @@ export function checkSprintMove(req, fromId, toId, projectId) {
     }
   }
   if (req.user.is_admin) return to;
+  if (projectId && !can(req, 'sprint.manage', projectId)) fail(403, 'You need "Plan sprints" in this project to change a task\'s sprint.');
   if (toId && req.sprintSetup === toId && !fromId) return to; // picking tasks while creating the sprint
   const from = fromId ? loadSprint(fromId) : null;
   const locked = (s) => { const st = sprintState(s); return st === 'current' ? 'has already started' : st === 'ended' ? 'has ended' : null; };

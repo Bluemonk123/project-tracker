@@ -115,7 +115,7 @@ export default function Layout() {
         <nav className="nav-group">
           <NavLink to="/" end className="nav-link" title="My page"><Icon name="home" /><span className="nav-text">My page</span></NavLink>
           {showReports && <NavLink to="/overview" className="nav-link" title="Manager overview"><Icon name="chart" /><span className="nav-text">Manager overview</span></NavLink>}
-          <NavLink to="/project-board" className="nav-link" title="Project Board"><Icon name="briefcase" /><span className="nav-text">Project Board</span></NavLink>
+          {me?.canSeeBoard !== false && <NavLink to="/project-board" className="nav-link" title="Project Board"><Icon name="briefcase" /><span className="nav-text">Project Board</span></NavLink>}
           <NavLink to="/sprint-planning" className="nav-link" title="Sprint Planning"><Icon name="flag" /><span className="nav-text">Sprint Planning</span></NavLink>
           <NavLink to="/board" className="nav-link" title="Task Board"><Icon name="board" /><span className="nav-text">Task Board</span></NavLink>
           <NavLink to="/work-packages" className={() => `nav-link${['/work-packages', '/meetings', '/time'].some(p => loc.pathname.startsWith(p)) ? ' active' : ''}`} title="All tasks, meetings and time"><Icon name="list" /><span className="nav-text">All tasks</span></NavLink>
