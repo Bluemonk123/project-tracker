@@ -20,7 +20,17 @@ const RESTART_RUNNER = 3; // staging.bat starts the runner again when it exits w
 const UA = { 'User-Agent': 'project-tracker-staging' };
 const win = process.platform === 'win32';
 
-const log = (m) => console.log(`[${new Date().toLocaleTimeString()}] ${m}`);
+// Also written to data/staging.log (last ~200 lines), so problems can be checked without the window.
+const LOG = path.join(DATA, 'staging.log');
+const log = (m) => {
+  const line = `[${new Date().toLocaleString()}] ${m}`;
+  console.log(line);
+  try {
+    fs.mkdirSync(DATA, { recursive: true });
+    fs.appendFileSync(LOG, line + '\n');
+    if (fs.statSync(LOG).size > 40_000) fs.writeFileSync(LOG, fs.readFileSync(LOG, 'utf8').split('\n').slice(-200).join('\n'));
+  } catch { /* logging must never stop the app */ }
+};
 const readState = () => { try { return fs.readFileSync(STATE, 'utf8').trim(); } catch { return ''; } };
 
 // ---------- the app ----------
@@ -153,6 +163,7 @@ async function tick() {
 }
 
 console.log(`\n  Project Tracker STAGING: follows GitHub ${REPO} (${BRANCH}) and updates itself.\n  Keep this window open. Close it to stop the app.\n`);
+log(`Staging started (installed version ${readState().slice(0, 7) || "none"}).`);
 try { prepare(readState()); } catch (e) { log(e.message); }
 startApp();
 setTimeout(tick, 3000);
