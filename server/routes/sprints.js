@@ -7,6 +7,8 @@ import { resolveProject } from './projects.js';
 import { todayISO } from '../util.js';
 import { sprintState, loadSprint, sprintProjectIds } from '../sprints.js';
 import { loadWp, updateWp } from './workpackages.js';
+import { calendar, isWorkingDay, holidaySet } from '../calendar.js';
+import { personRoles } from '../access.js';
 
 const r = Router();
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -65,6 +67,62 @@ r.get('/sprints', (req, res) => {
   const current = running.sort((a, b) => b.start_date.localeCompare(a.start_date) || b.id - a.id)[0] || null;
   list.sort((a, b) => a.start_date.localeCompare(b.start_date) || a.end_date.localeCompare(b.end_date) || a.id - b.id);
   res.json({ sprints: list, current_id: current?.id || null, can_create: canPlan(req), is_admin: !!req.user.is_admin, today: todayISO() });
+});
+
+// Sprint Planning → Teams: each person's load in a sprint (sprint_id), or in the running sprints when none is chosen.
+// Tasks and estimated hours = open and closed tasks of the sprint(s) assigned to them. Working days and daily hours come
+// from Time → Working calendar (weekly off days and holidays are skipped).
+r.get('/sprints/capacity', (req, res) => {
+  const visible = visibleProjectIds(req, 'wp.view');
+  const ph = (n) => (n ? Array(n).fill('?').join(',') : 'NULL');
+  const sprintRows = /^\d+$/.test(req.query.sprint_id || '')
+    ? [loadSprint(Number(req.query.sprint_id))].filter(Boolean)
+    : all('SELECT * FROM sprints WHERE ended_at IS NULL AND start_date <= ? AND end_date >= ?', todayISO(), todayISO());
+  const sprintsSeen = sprintRows.filter(s => sprintProjectIds(s.id).some(id => visible.includes(id)));
+  const want = listParam(req.query.project_id).map(v => resolveProject(v).id);
+  let pids = [...new Set(sprintsSeen.flatMap(s => sprintProjectIds(s.id)))].filter(id => visible.includes(id));
+  if (want.length) pids = pids.filter(id => want.includes(id));
+  const cal = calendar();
+  const start = sprintsSeen.map(s => s.start_date).sort()[0] || null;
+  const end = sprintsSeen.map(s => s.end_date).sort().reverse()[0] || null;
+  let workingDays = 0; let holidays = 0;
+  if (start && end) {
+    const hs = holidaySet();
+    for (let d = new Date(`${start}T00:00:00Z`); d.toISOString().slice(0, 10) <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+      const day = d.toISOString().slice(0, 10);
+      if (isWorkingDay(day, cal, hs)) workingDays++;
+      else if (hs.has(day) && !cal.off_days.includes(d.getUTCDay())) holidays++;
+    }
+  }
+  const sids = sprintsSeen.map(s => s.id);
+  const load = new Map((sids.length && pids.length ? all(`SELECT assignee_id, COUNT(*) AS tasks, COALESCE(SUM(estimated_hours), 0) AS hours,
+      SUM(CASE WHEN st.is_closed = 1 THEN 0 ELSE 1 END) AS open_tasks
+    FROM work_packages wp JOIN statuses st ON st.id = wp.status_id
+    WHERE wp.sprint_id IN (${ph(sids.length)}) AND wp.project_id IN (${ph(pids.length)}) AND wp.assignee_id IS NOT NULL GROUP BY assignee_id`, ...sids, ...pids) : [])
+    .map(x => [x.assignee_id, x]));
+  // people: members of the sprint's projects, and anyone with tasks in it
+  const memberIds = pids.length ? all(`SELECT DISTINCT user_id FROM project_members WHERE project_id IN (${ph(pids.length)})`, ...pids).map(x => x.user_id) : [];
+  const ids = [...new Set([...memberIds, ...load.keys()])];
+  const users = ids.length ? all(`SELECT * FROM users WHERE status = 'active' AND id IN (${ph(ids.length)}) ORDER BY name COLLATE NOCASE`, ...ids) : [];
+  const sprintHours = Math.round(workingDays * cal.hours_per_day * 100) / 100;
+  const rows = users.map(u => {
+    const l = load.get(u.id) || { tasks: 0, open_tasks: 0, hours: 0 };
+    const projects = pids.length ? all(`SELECT p.id, p.name, p.identifier FROM project_members pm JOIN projects p ON p.id = pm.project_id
+      WHERE pm.user_id = ? AND pm.project_id IN (${ph(pids.length)}) ORDER BY p.name COLLATE NOCASE`, u.id, ...pids) : [];
+    const hours = Math.round(Number(l.hours) * 100) / 100;
+    return {
+      id: u.id, name: u.name, roles: personRoles(u).map(r1 => r1.name), projects,
+      tasks: l.tasks, open_tasks: l.open_tasks, estimated_hours: hours,
+      occupancy: workingDays ? Math.round((hours / workingDays) * 100) / 100 : 0,            // hours per working day
+      occupancy_pct: sprintHours ? Math.round((hours / sprintHours) * 100) : 0,
+      available: Math.round((sprintHours - hours) * 100) / 100,                                 // negative = over-booked
+      daily_hours: cal.hours_per_day, sprint_hours: sprintHours,
+    };
+  });
+  res.json({
+    sprints: sprintsSeen.map(s => ({ id: s.id, code: `SPR-${s.id}`, name: s.name, start_date: s.start_date, end_date: s.end_date })),
+    start, end, working_days: workingDays, holidays, daily_hours: cal.hours_per_day, sprint_hours: sprintHours, rows,
+  });
 });
 
 function readSprint(b, prev = {}) {

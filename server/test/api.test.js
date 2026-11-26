@@ -1125,3 +1125,24 @@ test('priorities: TAT in working days on the priority; P0 - Not Required has no 
   // the working calendar page does not offer P0
   assert.ok(!(await admin.get('/work-calendar')).data.priorities.some(p => p.id === p0.id));
 });
+
+test('Sprint Planning Teams: per-person tasks, occupancy, available and sprint hours from the working calendar', async () => {
+  // a Mon–Fri sprint of two weeks with one holiday: 9 working days
+  await admin.put('/work-calendar', { off_days: [0, 6], hours_per_day: 8, priority_days: {} });
+  await admin.post('/holidays', { day: '2027-03-03', name: 'Test holiday' });
+  const s = (await admin.post('/sprints', { project_id: ids.project, name: 'Capacity', start_date: '2027-03-01', end_date: '2027-03-12' })).data;
+  const sid = s.id ?? s.sprint?.id;
+  const t = (await admin.post('/work-packages', { project_id: ids.project, subject: 'Cap task', assignee_id: ids.dev, estimated_hours: 18, sprint_id: sid })).data;
+  assert.ok(t.id);
+  const c = (await admin.get(`/sprints/capacity?sprint_id=${sid}`)).data;
+  assert.equal(c.working_days, 9);
+  assert.equal(c.holidays, 1);
+  assert.equal(c.sprint_hours, 72);
+  const row = c.rows.find(r => r.id === ids.dev);
+  assert.equal(row.tasks, 1);
+  assert.equal(row.estimated_hours, 18);
+  assert.equal(row.occupancy, 2);          // 18 h over 9 working days
+  assert.equal(row.available, 54);
+  assert.equal(row.daily_hours, 8);
+  assert.ok(row.projects.some(p => p.id === ids.project));
+});

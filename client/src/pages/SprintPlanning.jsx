@@ -6,7 +6,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { api, qs } from '../api.js';
 import { useApp, useLoad } from '../context.jsx';
 import Icon from '../components/Icon.jsx';
-import { Loading, ErrorBox, Modal, Field, TypeLabel, Priority, Due, Person, Key, useAsync, MoreMenu } from '../components/ui.jsx';
+import { Loading, ErrorBox, Modal, Field, TypeLabel, Priority, Due, Person, Key, useAsync, MoreMenu, Avatar } from '../components/ui.jsx';
 import { LOCATIONS } from './WpDetail.jsx';
 import { fmtDate, today, diffDays, fmtHours } from '../lib/format.js';
 import UploadTasksModal from './UploadTasks.jsx';
@@ -151,6 +151,53 @@ const TABS = [
 const FILTERS = ['q', 'project_id', 'version_id', 'type_id', 'assignee_id', 'priority_id', 'location', 'stage', 'status'];
 const dragIds = (e) => { const p = e.dataTransfer.getData('text/plain'); return p.startsWith('tasks:') ? p.slice(6).split(',').map(Number).filter(Boolean) : []; };
 
+// Teams view: each person's load in the chosen sprint (or the running sprints)
+const hrs = (n) => `${Math.round(Number(n || 0) * 10) / 10} h`;
+function TeamCapacity({ sprintId, projectIds, onTasks }) {
+  const { data, error, loading } = useLoad(() => api.get('/sprints/capacity' + qs({ sprint_id: sprintId || undefined, project_id: projectIds.join(',') || undefined })), [sprintId, projectIds.join(',')]);
+  if (error) return <ErrorBox error={error} />;
+  if (loading && !data) return <Loading />;
+  const label = data.sprints.length ? data.sprints.map(s => `${s.code} ${s.name}`).join(', ') : null;
+  return (
+    <section className="panel sp-team" aria-label="Team capacity">
+      <div className="sp-team-head">
+        {label ? <>
+          <span><b>{sprintId ? label : `Running sprints: ${label}`}</b></span>
+          <span className="muted small">{fmtDate(data.start, { year: true })} – {fmtDate(data.end, { year: true })} · {data.working_days} working day{data.working_days === 1 ? '' : 's'}{data.holidays ? ` (${data.holidays} holiday${data.holidays === 1 ? '' : 's'} excluded)` : ''} · {hrs(data.daily_hours)} a day · {hrs(data.sprint_hours)} per person</span>
+        </> : <span className="muted">No sprint is running. Choose a sprint in the Sprint filter to see the team's load.</span>}
+      </div>
+      {data.rows.length ? (
+        <div className="table-wrap">
+          <table className="table sp-team-table">
+            <thead><tr>
+              <th>Member name</th><th>Roles</th><th>Projects</th>
+              <th className="num" title="Tasks of the sprint assigned to this person">Tasks</th>
+              <th className="num" title="Estimated hours of their tasks, per working day of the sprint">Occupancy</th>
+              <th className="num" title="Sprint hours minus the estimated hours of their tasks">Available</th>
+              <th className="num" title="Working hours a day (Time → Working calendar)">Daily hours</th>
+              <th className="num" title="Working hours in the sprint: working days × daily hours (weekly off days and holidays excluded)">Sprint hours</th>
+            </tr></thead>
+            <tbody>
+              {data.rows.map(r => (
+                <tr key={r.id}>
+                  <td><span className="row" style={{ gap: 8 }}><Avatar id={r.id} name={r.name} size="sm" />{r.name}</span></td>
+                  <td className="small">{r.roles.length ? r.roles.join(', ') : <span className="muted">—</span>}</td>
+                  <td className="small">{r.projects.length ? r.projects.map(p => p.name).join(', ') : <span className="muted">—</span>}</td>
+                  <td className="num">{r.tasks ? <button type="button" className="link" onClick={() => onTasks(r.id)} title={`${r.open_tasks} open`}>{r.tasks}</button> : <span className="muted">0</span>}</td>
+                  <td className="num"><span className={r.occupancy_pct > 100 ? 'danger-text' : ''}>{hrs(r.occupancy)}/day</span> <span className="xs muted">{r.occupancy_pct}%</span></td>
+                  <td className={`num${r.available < 0 ? ' danger-text' : ''}`}>{hrs(r.available)}</td>
+                  <td className="num">{hrs(r.daily_hours)}</td>
+                  <td className="num">{hrs(r.sprint_hours)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : label ? <div className="kb-empty" style={{ margin: 14 }}>Nobody is a member of this sprint's projects yet.</div> : null}
+    </section>
+  );
+}
+
 export default function SprintPlanning() {
   const { meta, projects, activeUsers, me } = useApp();
   const [sp, setSp] = useSearchParams();
@@ -165,6 +212,7 @@ export default function SprintPlanning() {
 
   // ?sprint=<id>: only that sprint's tasks (e.g. from the Sprints column in All tasks)
   const sprintFilter = /^\d+$/.test(sp.get('sprint') || '') ? Number(sp.get('sprint')) : null;
+  const view = sp.get('view') === 'teams' ? 'teams' : 'tasks'; // Tasks (the lists) or Teams (each person's load)
   const tab = sprintFilter ? { key: 'sprint', q: { sprint_id: sprintFilter }, status: 'all' } : TABS.find(t => t.key === sp.get('tab')) || TABS[0];
   const f = Object.fromEntries(FILTERS.map(k => [k, sp.get(k) || undefined]));
   // choosing a stage shows its tasks whatever their status (Closed, Rejected), unless a status is chosen too
@@ -257,6 +305,10 @@ export default function SprintPlanning() {
           <p className="small muted" style={{ margin: '4px 0 0' }}>All tasks by sprint. Pick tasks into a sprint: select them and add, or drag them onto a sprint.</p>
         </div>
         <span className="spacer" />
+        <div className="subtabs" role="tablist" aria-label="View">
+          <button type="button" role="tab" aria-selected={view !== 'teams'} className={view !== 'teams' ? 'active' : ''} onClick={() => setParams({ view: '' })}>Tasks</button>
+          <button type="button" role="tab" aria-selected={view === 'teams'} className={view === 'teams' ? 'active' : ''} onClick={() => setParams({ view: 'teams' })}>Teams</button>
+        </div>
         {me?.canUploadTasks !== false && <button type="button" className="btn sm" onClick={() => setModal({ upload: true })} title="Add many tasks at once from a CSV or Excel file"><Icon name="upload" />Upload tasks</button>}
         <a className="btn sm" href={exportUrl} title={filtered ? 'Download the tasks in this list that match the filters' : 'Download the tasks in this list'}><Icon name="download" />Export CSV</a>
         {sl.data?.can_create && <button type="button" className="btn primary" onClick={() => setModal({ taskIds: selected })}><Icon name="plus" />New sprint{selected.length ? ` with ${selected.length} task${selected.length > 1 ? 's' : ''}` : ''}</button>}
@@ -266,6 +318,7 @@ export default function SprintPlanning() {
         <ProjectMultiSelect value={projectIds} onChange={(ids) => setParam('project_id', ids.join(','))} />
         <SprintPicker sprints={sprints} value={sprintFilter} currentId={sl.data?.current_id} noneLabel="Any sprint" withProject={projectIds.length !== 1}
           onChange={(id) => setParams({ sprint: id ? String(id) : '', tab: '' })} />
+        {view !== 'teams' && <>
         <select value={oneProject ? f.version_id || '' : ''} onChange={(e) => setParam('version_id', e.target.value)} aria-label="Version" disabled={!oneProject} title={oneProject ? 'Version' : 'Choose one project to pick one of its versions'}>
           <option value="">{oneProject ? 'Version' : 'Version'}</option>
           {oneProject && <option value="none">No version</option>}
@@ -294,10 +347,15 @@ export default function SprintPlanning() {
         <select value={status} onChange={(e) => setParam('status', e.target.value === (f.stage ? 'all' : tab.status) ? '' : e.target.value)} aria-label="Status">
           <option value="open">Open</option><option value="closed">Closed</option><option value="all">Any status</option>
         </select>
+        </>}
         {filtered && <button type="button" className="btn sm ghost" onClick={() => { setSp(sp.get('tab') ? { tab: sp.get('tab') } : {}, { replace: true }); setSelected([]); }}>Reset</button>}
       </div>
       <ErrorBox error={up.error || sl.error} />
 
+      {view === 'teams' ? (
+        <TeamCapacity sprintId={sprintFilter} projectIds={projectIds}
+          onTasks={(uid) => setParams({ view: '', assignee_id: String(uid), tab: sprintFilter ? '' : 'current' })} />
+      ) : (
       <div className="sp-layout">
         {/* ---------- tasks: not in a sprint / current / future / completed / all ---------- */}
         <section className={`panel sp-upcoming${over === 'upcoming' ? ' drop' : ''}`} aria-label="Tasks"
@@ -410,6 +468,7 @@ export default function SprintPlanning() {
           ))}
         </aside>
       </div>
+      )}
 
       {modal?.upload && <UploadTasksModal defaultProject={oneProject} onClose={() => setModal(null)}
         onDone={() => { reloadAll(); if (sprintFilter || tab.key !== 'none') setParams({ sprint: '', tab: '' }); }} />}
