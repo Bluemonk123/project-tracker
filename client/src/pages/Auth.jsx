@@ -33,30 +33,49 @@ function Art({ appName }) {
   );
 }
 
+// Two-step sign-in: email first; then the password, or — for a new account — choosing one.
 export function Login() {
   const { reload, appName } = useApp();
+  const [step, setStep] = useState('email'); // email | password | set_password
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [password2, setPassword2] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [contact, setContact] = useState(false);
-  const submit = async (e) => {
+  const run = async (fn) => { setBusy(true); setError(null); try { await fn(); } catch (err) { setError(err); } finally { setBusy(false); } };
+  const submit = (e) => {
     e.preventDefault();
-    setBusy(true); setError(null);
-    try { await api.post('/auth/login', { email, password }); await reload(); }
-    catch (err) { setError(err); setBusy(false); }
+    if (step === 'email') return run(async () => { const r = await api.post('/auth/lookup', { email }); setStep(r.next); setPassword(''); setPassword2(''); });
+    if (step === 'password') return run(async () => { await api.post('/auth/login', { email, password }); await reload(); });
+    if (password !== password2) { setError(new Error('The two passwords are not the same.')); return undefined; }
+    return run(async () => { await api.post('/auth/first-password', { email, password }); await reload(); });
   };
+  const back = () => { setStep('email'); setError(null); setPassword(''); setPassword2(''); };
   return (
     <div className="auth">
       <Art appName={appName} />
       <div className="auth-form">
         <form onSubmit={submit}>
-          <h2>Sign in</h2>
+          <h2>{step === 'set_password' ? 'Set your password' : 'Sign in'}</h2>
           <ErrorBox error={error} />
-          <Field label="Email" htmlFor="email"><input id="email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus /></Field>
-          <Field label="Password" htmlFor="password"><input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></Field>
-          <button className="btn primary" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
-          <p className="small muted">Forgot your password? Contact your administrator.</p>
+          {step === 'email' ? (
+            <Field label="Email" htmlFor="email"><input id="email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus /></Field>
+          ) : (
+            <div className="auth-email-chip"><span className="ellipsis">{email}</span><button type="button" className="link-btn small" onClick={back}>Change</button></div>
+          )}
+          {step === 'password' && (
+            <Field label="Password" htmlFor="password"><input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required autoFocus /></Field>
+          )}
+          {step === 'set_password' && <>
+            <p className="small soft" style={{ margin: 0 }}>Welcome! This is your first sign-in. Choose a password for your account.</p>
+            <Field label="New password" htmlFor="npw" hint="At least 8 characters."><input id="npw" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoFocus /></Field>
+            <Field label="Repeat new password" htmlFor="npw2"><input id="npw2" type="password" autoComplete="new-password" value={password2} onChange={(e) => setPassword2(e.target.value)} required minLength={8} /></Field>
+          </>}
+          <button className="btn primary" disabled={busy}>
+            {busy ? 'Please wait…' : step === 'email' ? 'Continue' : step === 'password' ? 'Sign in' : 'Save password and sign in'}
+          </button>
+          {step !== 'set_password' && <p className="small muted">Forgot your password? Contact your administrator.</p>}
           <button type="button" className="btn ghost tk-contact-link" onClick={() => setContact(true)}>Contact admin for access/issues</button>
         </form>
       </div>

@@ -1037,3 +1037,19 @@ test('first sign-in: set your own password without the current one; afterwards t
   assert.equal((await c.post('/auth/password', { password: 'another-pass-2' })).status, 400);
   assert.equal((await c.post('/auth/password', { current: 'my-own-pass-1', password: 'another-pass-2' })).status, 200);
 });
+
+test('two-step sign-in: email first; a new account sets its password, admins are told', async () => {
+  await admin.post('/admin/users', { name: 'Fresh Face', email: 'fresh@office.local' }); // no password
+  const c = client();
+  assert.equal((await c.post('/auth/lookup', { email: 'fresh@office.local' })).data.next, 'set_password');
+  assert.equal((await c.post('/auth/lookup', { email: 'nobody-here@office.local' })).data.next, 'password'); // does not reveal accounts
+  assert.equal((await c.post('/auth/lookup', { email: 'admin@office.local' })).data.next, 'password');
+  assert.equal((await c.post('/auth/first-password', { email: 'fresh@office.local', password: 'short' })).status, 400);
+  assert.equal((await c.post('/auth/first-password', { email: 'fresh@office.local', password: 'fresh-pass-1' })).status, 200);
+  assert.equal((await c.get('/auth/me')).data.user.email, 'fresh@office.local'); // signed in
+  assert.equal((await client().post('/auth/lookup', { email: 'fresh@office.local' })).data.next, 'password'); // now an existing account
+  assert.equal((await client().post('/auth/first-password', { email: 'fresh@office.local', password: 'hijack-pass-1' })).status, 400);
+  assert.equal((await client().post('/auth/first-password', { email: 'admin@office.local', password: 'hijack-pass-1' })).status, 400);
+  const n = (await admin.get('/notifications')).data;
+  assert.ok((Array.isArray(n) ? n : n.items || []).some(x => /Fresh Face .* set a password and signed in for the first time/.test(x.message)));
+});

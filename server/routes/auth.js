@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { get, run, all, hashPassword, verifyPassword, getSetting, DATA_DIR } from '../db.js';
 import { createSession, SESSION_COOKIE, publicUser, requireAuth, fail, permsForClient, can, visibleProjectIds } from '../access.js';
-import { requireText } from '../util.js';
+import { requireText, notify } from '../util.js';
 
 const r = Router();
 
@@ -56,6 +56,39 @@ r.post('/auth/login', (req, res) => {
   if (!user || !verifyPassword(String(req.body.password || ''), user.password_hash)) { noteFailure(ip, email.toLowerCase()); fail(401, 'Email or password is incorrect.'); }
   if (user.status !== 'active') fail(403, 'This account is locked. Ask an administrator to unlock it.');
   const s = createSession(user.id);
+  res.cookie(SESSION_COOKIE, s.token, cookieOpts(s.maxAge, req));
+  res.json({ ok: true });
+});
+
+// Two-step sign-in. Step 1: the email decides what comes next.
+//  - a NEW account (no password of its own yet: none set, or only the administrator's temporary one) → "set password"
+//  - everything else, unknown emails included (so the answer does not reveal who has an account) → "password"
+const isNewAccount = (u) => !!u && u.status === 'active' && (!u.password_hash || !!u.must_change_password);
+r.post('/auth/lookup', (req, res) => {
+  const email = String(req.body.email || '').trim();
+  const ip = req.ip || '';
+  checkLoginLimit(ip, email.toLowerCase());
+  const u = email ? get('SELECT id, status, password_hash, must_change_password FROM users WHERE email = ? COLLATE NOCASE', email) : null;
+  res.json({ next: isNewAccount(u) ? 'set_password' : 'password' });
+});
+
+// Step 2 for a new account: choose a password and sign in. No other check (the administrators' choice); every use is
+// written to the audit log and every administrator is notified, so a wrong person setting it is noticed at once.
+r.post('/auth/first-password', (req, res) => {
+  const email = String(req.body.email || '').trim();
+  const ip = req.ip || '';
+  checkLoginLimit(ip, email.toLowerCase());
+  const u = get('SELECT * FROM users WHERE email = ? COLLATE NOCASE', email);
+  if (!isNewAccount(u)) { noteFailure(ip, email.toLowerCase()); fail(400, 'This account already has a password. Sign in with it, or ask an administrator to reset it.'); }
+  checkPassword(req.body.password);
+  if (u.password_hash && verifyPassword(String(req.body.password), u.password_hash)) fail(400, 'Choose a new password, not the temporary one.');
+  run('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?', hashPassword(req.body.password), u.id);
+  run('DELETE FROM sessions WHERE user_id = ?', u.id);
+  try { run('INSERT INTO audit_log(actor_id, action, entity_type, entity_id, details, ip) VALUES(?,?,?,?,?,?)', u.id, 'PASSWORD_SET_FIRST_SIGNIN', 'user', u.id, JSON.stringify({ email: u.email }), ip); } catch { /* audit table missing: ignore */ }
+  const admins = all("SELECT id FROM users WHERE is_admin = 1 AND status = 'active'").map(x => x.id);
+  notify(admins, { actorId: u.id, link: '/admin', reason: 'account_activated',
+    message: `${u.name} (${u.email}) set a password and signed in for the first time${ip ? ` from ${ip}` : ''}. If this was not them, lock the account in Administration → Users.` });
+  const s = createSession(u.id);
   res.cookie(SESSION_COOKIE, s.token, cookieOpts(s.maxAge, req));
   res.json({ ok: true });
 });
