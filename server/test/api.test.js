@@ -630,7 +630,7 @@ test('teams: member order and current / proposed roles', async () => {
   assert.equal((await admin.put(`/teams/${t}/order`, { user_ids: [99999] })).status, 400, 'only this team');
   assert.equal((await dev.put(`/teams/${t}/order`, { user_ids: [me] })).status, 403);
   // roles
-  assert.deepEqual((await admin.get('/team-roles')).data.slice(0, 11), ['Backend Developer', 'Frontend Developer', 'Functional Testing', 'UAT', 'Product Master', 'DevOps', 'Product Manager', 'Project Manager', 'Business Analyst', 'Client Facing', 'System Admin']);
+  assert.deepEqual((await admin.get('/team-roles')).data.slice(0, 11), ['Product Master', 'Product Manager', 'Project Manager', 'Business Analyst', 'Client Facing', 'Backend Developer', 'Frontend Developer', 'DevOps', 'System Admin', 'Functional Testing', 'UAT']);
   assert.equal((await admin.patch(`/teams/${t}/members/${ids.dev}`, { current_roles: ['DevOps', 'Backend Developer'], proposed_roles: ['Product Master'] })).status, 200);
   assert.equal((await admin.patch(`/teams/${t}/members/${ids.dev}`, { current_roles: ['Astronaut'] })).status, 400);
   let m = (await list()).find(x => x.id === ids.dev);
@@ -1087,4 +1087,18 @@ test('two-step sign-in: email first; a new account sets its password, admins are
   assert.equal((await client().post('/auth/first-password', { email: 'admin@office.local', password: 'hijack-pass-1' })).status, 400);
   const n = (await admin.get('/notifications')).data;
   assert.ok((Array.isArray(n) ? n : n.items || []).some(x => /Fresh Face .* set a password and signed in for the first time/.test(x.message)));
+});
+
+test('role list order: leadership first, client last; reorder with the arrows', async () => {
+  let names = (await admin.get('/team-roles')).data;
+  assert.equal(names[0], 'Product Master');
+  assert.ok(names.indexOf('Backend Developer') < names.indexOf('UAT'));
+  const roles = (await admin.get('/admin/roles')).data;
+  const ids = roles.map(r => r.id);
+  [ids[0], ids[1]] = [ids[1], ids[0]];
+  assert.equal((await admin.put('/admin/roles/order', { ids })).status, 200);
+  names = (await admin.get('/team-roles')).data;
+  assert.equal(names[0], 'Product Manager');
+  assert.equal((await admin.put('/admin/roles/order', { ids: [999999] })).status, 400);
+  assert.equal((await dev.put('/admin/roles/order', { ids })).status, 403);
 });

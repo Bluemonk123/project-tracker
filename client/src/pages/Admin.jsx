@@ -168,14 +168,23 @@ function Roles() {
   if (error) return <ErrorBox error={error} />;
   const [roles, catalogue] = data;
   const refresh = () => { reload(); reloadMeta(); reloadMe(); };
+  const move = async (list, i, d) => {
+    const ids = list.map(x => x.id);
+    [ids[i], ids[i + d]] = [ids[i + d], ids[i]];
+    if (await run(() => api.put('/admin/roles/order', { ids }))) refresh();
+  };
   const section = (scope, title, help) => (
     <section className="panel" style={{ marginBottom: 20 }}>
       <div className="panel-head"><h3>{title}</h3><span className="small muted hide-sm">{help}</span>
         <div className="actions"><button className="btn sm" onClick={() => setModal({ scope })}><Icon name="plus" />New role</button></div>
       </div>
       <ul className="list">
-        {roles.filter(r => r.scope === scope).map(r => (
+        {roles.filter(r => r.scope === scope).map((r, i, list) => (
           <li key={r.id}>
+            <div className="role-move">
+              <button type="button" className="icon-btn sm" aria-label={`Move ${r.name} up`} disabled={i === 0} onClick={() => move(list, i, -1)}>↑</button>
+              <button type="button" className="icon-btn sm" aria-label={`Move ${r.name} down`} disabled={i === list.length - 1} onClick={() => move(list, i, 1)}>↓</button>
+            </div>
             <div className="grow" style={{ minWidth: 0 }}>
               <b>{r.name}</b>{r.builtin ? <span className="tag" style={{ marginLeft: 6 }}>Built in</span> : null}
               <div className="small soft">{r.description || ' '}</div>

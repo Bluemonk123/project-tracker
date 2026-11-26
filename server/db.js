@@ -606,6 +606,35 @@ function migrate() {
       setSetting('migration_single_roles_v1', '1');
     });
   }
+  // Role list order (leadership, planning, build, testing, kept roles, outside people) and plain descriptions
+  if (!getSetting('migration_role_order_v1')) {
+    tx(() => {
+      const order = ['Product Master', 'Product Manager', 'Project Manager', 'Business Analyst', 'Client Facing', 'Backend Developer', 'Frontend Developer',
+        'DevOps', 'System Admin', 'Functional Testing', 'UAT', 'Manager', 'Team lead', 'Client (view only)'];
+      const about = {
+        'Product Master': 'Owns the product direction across projects: priorities, roadmap and final decisions.',
+        'Product Manager': 'Runs a project: members, planning, sprints and delivery.',
+        'Project Manager': 'Owns the client relationship: follows progress, meetings and time.',
+        'Business Analyst': 'Writes and maintains requirements, specs and acceptance criteria.',
+        'Client Facing': 'Talks to customers: shares updates, collects feedback and raises requests.',
+        'Backend Developer': 'Builds server-side features, APIs and databases; works on tasks and logs time.',
+        'Frontend Developer': 'Builds screens and user interfaces; works on tasks and logs time.',
+        DevOps: 'Builds, deploys and keeps the environments and pipelines running.',
+        'System Admin': 'Looks after servers, hosting, access and backups.',
+        'Functional Testing': 'Tests features against the requirements and reports bugs.',
+        UAT: 'Checks finished work with the customer before it goes live.',
+        Manager: 'Kept from the earlier setup: monitors every project (same access as before).',
+        'Team lead': 'Kept from the earlier setup: leads a team inside a project.',
+        'Client (view only)': 'Customers and stakeholders: can see the project and its tasks, nothing else.',
+      };
+      all("SELECT id, name, description FROM roles WHERE scope = 'project' ORDER BY position, id").forEach((r, i) => {
+        const at = order.indexOf(r.name);
+        const desc = about[r.name] && (!r.description || /^Started as a copy|^Created from/.test(r.description) || r.name === 'Product Master' || r.name === 'Client Facing') ? about[r.name] : r.description;
+        run('UPDATE roles SET position = ?, description = ? WHERE id = ?', at >= 0 ? at : order.length + i, desc, r.id);
+      });
+      setSetting('migration_role_order_v1', '1');
+    });
+  }
 }
 migrate();
 

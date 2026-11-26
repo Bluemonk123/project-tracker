@@ -1481,3 +1481,7 @@ a.ov-stage-row:hover { background: var(--sunken); }
 /* New version installed: offer a reload */
 .update-bar { position: sticky; top: 0; z-index: 210; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 6px 16px; background: var(--spruce); color: var(--on-spruce); font-size: var(--fs-sm); font-weight: 600; }
 .update-bar .xs { opacity: .75; font-weight: 400; }
+/* Roles list: move up / down */
+.role-move { display: flex; flex-direction: column; gap: 2px; }
+.role-move .icon-btn { width: 24px; height: 20px; font-size: 13px; line-height: 1; }
+.role-move .icon-btn:disabled { opacity: .3; cursor: default; }

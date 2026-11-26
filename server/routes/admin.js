@@ -157,6 +157,17 @@ r.post('/admin/roles', (req, res) => {
   res.status(201).json({ id });
 });
 
+// New order of the role list (the ↑ ↓ buttons). Roles left out keep their place after the listed ones.
+r.put('/admin/roles/order', (req, res) => {
+  need(req, 'admin.roles');
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number) : fail(400, 'Send the roles in their new order.');
+  const all_ = all("SELECT id FROM roles WHERE scope = 'project' ORDER BY position, id").map(r => r.id);
+  if (ids.some(id => !all_.includes(id))) fail(400, 'Unknown role in the order.');
+  const order = [...ids, ...all_.filter(id => !ids.includes(id))];
+  tx(() => order.forEach((id, i) => run('UPDATE roles SET position = ? WHERE id = ?', i, id)));
+  res.json({ ok: true });
+});
+
 r.patch('/admin/roles/:id', (req, res) => {
   need(req, 'admin.roles');
   const role = get('SELECT * FROM roles WHERE id = ?', req.params.id) || fail(404, 'Role not found.');
