@@ -102,6 +102,7 @@ export default function Overview() {
   const { can } = useApp();
   const [projectIds, setProjectIds] = useState([]);
   const [teamId, setTeamId] = useState('teams');
+  const [tab, setTab] = useState('team'); // Team members | Projects
   const pid = projectIds.join(',');
   const { data, error, loading } = useLoad(() => api.get('/reports/overview' + qs({ project_id: pid || undefined })), [pid]);
   const peopleRows = useMemo(() => {
@@ -199,9 +200,12 @@ export default function Overview() {
         </section>
       </div>
 
-      <section className="panel" style={{ marginBottom: 20 }}>
+      {tab === 'team' && <section className="panel" style={{ marginBottom: 20 }}>
         <div className="panel-head">
-          <h3>Team members</h3>
+          <div className="ov-tabs" role="tablist" aria-label="Team members or projects">
+            <button type="button" role="tab" aria-selected={tab === 'team'} className={tab === 'team' ? 'active' : ''} onClick={() => setTab('team')}>Team members</button>
+            <button type="button" role="tab" aria-selected={tab === 'projects'} className={tab === 'projects' ? 'active' : ''} onClick={() => setTab('projects')}>Projects <span className="xs muted">{data.projects.length}</span></button>
+          </div>
           <div className="actions">
             <select value={teamId} onChange={(e) => setTeamId(e.target.value)} style={{ width: 'auto', height: 30, fontSize: 13 }} aria-label="Team">
               <option value="teams">By team</option><option value="all">Everyone with tasks</option>
@@ -237,11 +241,14 @@ export default function Overview() {
             </tbody>
           </table>
         </div>
-      </section>
+      </section>}
 
-      <section className="panel">
+      {tab === 'projects' && <section className="panel">
         <div className="panel-head">
-          <h3>Projects</h3>
+          <div className="ov-tabs" role="tablist" aria-label="Team members or projects">
+            <button type="button" role="tab" aria-selected={tab === 'team'} className={tab === 'team' ? 'active' : ''} onClick={() => setTab('team')}>Team members</button>
+            <button type="button" role="tab" aria-selected={tab === 'projects'} className={tab === 'projects' ? 'active' : ''} onClick={() => setTab('projects')}>Projects <span className="xs muted">{data.projects.length}</span></button>
+          </div>
           <div className="actions ov-legend">{columns.filter(c => OPEN.includes(c.key)).map(c => <span key={c.key}><i style={{ background: c.color }} />{c.name}</span>)}<KeyPeopleLegend /></div>
         </div>
         {!data.projects.length ? <Empty small>No projects.</Empty> : (
@@ -275,7 +282,7 @@ export default function Overview() {
             </table>
           </div>
         )}
-      </section>
+      </section>}
     </div>
   );
 }

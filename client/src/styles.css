@@ -1540,3 +1540,8 @@ a.ov-stage-row:hover { background: var(--sunken); }
 .tr-open { color: var(--ink); font-weight: 600; }
 .tr-open:hover { color: var(--accent-text); text-decoration: underline; }
 .tr-subject { font-weight: 700; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+/* Manager overview: Team members / Projects tabs in the panel head */
+.ov-tabs { display: flex; gap: 4px; }
+.ov-tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 6px 10px; font: inherit; font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); cursor: pointer; }
+.ov-tabs button.active { color: var(--ink); border-bottom-color: var(--accent); }
+.ov-tabs button:hover { color: var(--ink); }
