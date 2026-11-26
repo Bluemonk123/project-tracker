@@ -59,7 +59,7 @@ export default function MyPage() {
         </div>
       </div>
 
-      <div className="figures">
+      <div className="figures figures-dark">
         <Link className="figure" to="/work-packages?assignee_id=me"><div className="n">{data.counts.open}</div><div className="l">Open and assigned to me</div></Link>
         <Link className={`figure${data.counts.overdue ? ' danger' : ''}`} to="/work-packages?assignee_id=me&overdue=1"><div className="n">{data.counts.overdue}</div><div className="l">Overdue</div></Link>
         <div className={`figure${data.counts.dueToday ? ' signal' : ''}`}><div className="n">{data.counts.dueToday}</div><div className="l">Due today</div></div>
