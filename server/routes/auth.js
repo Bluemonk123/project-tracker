@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { imapConfig } from '../inbound.js';
 import { get, run, all, hashPassword, verifyPassword, getSetting, DATA_DIR } from '../db.js';
 import { createSession, SESSION_COOKIE, publicUser, requireAuth, fail, permsForClient, can, visibleProjectIds, personRoles } from '../access.js';
 import { requireText, notify } from '../util.js';
@@ -30,7 +31,10 @@ function checkPassword(pw) {
 r.get('/setup-status', (_req, res) => {
   const count = get('SELECT COUNT(*) AS n FROM users').n;
   // On a new install (no accounts, so nothing to protect) show where the data lives: a wrong DATA_DIR is easy to spot.
-  res.json({ needsSetup: count === 0, appName: getSetting('app_name', 'Project Tracker'), ...(count === 0 ? { dataDir: DATA_DIR } : {}) });
+  // the support mailbox (Administration → Email Setup → Incoming email), shown on the sign-in page
+  const i = imapConfig();
+  const supportEmail = i.enabled && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(i.user || '') ? i.user : null;
+  res.json({ needsSetup: count === 0, appName: getSetting('app_name', 'Project Tracker'), supportEmail, ...(count === 0 ? { dataDir: DATA_DIR } : {}) });
 });
 
 // First run: create the administrator account.

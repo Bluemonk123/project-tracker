@@ -33,7 +33,7 @@ export function AppProvider({ children }) {
     } catch (e) {
       if (e.status === 401) {
         const s = await api.get('/setup-status').catch(() => ({ needsSetup: false, appName: 'Project Tracker' }));
-        setState({ loading: false, me: null, needsSetup: s.needsSetup, appName: s.appName, dataDir: s.dataDir });
+        setState({ loading: false, me: null, needsSetup: s.needsSetup, appName: s.appName, dataDir: s.dataDir, supportEmail: s.supportEmail || null });
       } else {
         setState(s => ({ ...s, loading: false, error: e.message }));
       }
@@ -42,7 +42,10 @@ export function AppProvider({ children }) {
 
   useEffect(() => { loadMe(); }, [loadMe]);
   useEffect(() => {
-    const onOut = () => setState(s => ({ ...s, me: null }));
+    const onOut = () => {
+      setState(s => ({ ...s, me: null }));
+      api.get('/setup-status').then(st => setState(s => ({ ...s, supportEmail: st.supportEmail || null }))).catch(() => {});
+    };
     window.addEventListener('pt:signed-out', onOut);
     return () => window.removeEventListener('pt:signed-out', onOut);
   }, []);

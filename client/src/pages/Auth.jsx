@@ -5,6 +5,7 @@ import { Field, ErrorBox, Modal } from '../components/ui.jsx';
 import { FilePicker, toForm } from './tickets/common.jsx';
 
 function Art({ appName }) {
+  const { supportEmail } = useApp(); // Administration → Email Setup → Incoming email
   const lanes = [
     { k: 'PROJECTS', c: '#2E9BEA', a: 4, w: 58 },
     { k: 'SPRINTS', c: '#33B014', a: 18, w: 40 },
@@ -27,7 +28,7 @@ function Art({ appName }) {
         <h1>Your projects, sprints and support in one place.</h1>
         <ul className="auth-points">
           <li>Sprint Board and Task Board for delivery</li>
-          <li>Ticket Board with email-to-ticket (support@ditserv.in)</li>
+          <li>Ticket Board with email-to-ticket{supportEmail ? ` (${supportEmail})` : ''}</li>
           <li>Research for requirements and solutions</li>
           <li>Live alerts and team workload</li>
         </ul>

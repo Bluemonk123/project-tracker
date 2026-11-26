@@ -1,4 +1,4 @@
-// Administration -> Ticket Board: SLA hours, groups, saved replies (macros) and the email mailbox.
+// Administration -> Ticket Board: SLA hours, groups and saved replies (macros). Email Setup (mailboxes) is its own tab.
 import { useState } from 'react';
 import { api } from '../../api.js';
 import { useApp, useLoad } from '../../context.jsx';
@@ -7,7 +7,6 @@ import { Loading, ErrorBox, Modal, Field, useAsync, confirmDialog, MoreMenu } fr
 import { STATUS, PRIORITY } from './common.jsx';
 
 export default function AdminTickets() {
-  const { isAdmin } = useApp();
   const { data, error, loading, reload } = useLoad(() => api.get('/admin/ticket-settings'), []);
   if (error) return <ErrorBox error={error} />;
   if (loading && !data) return <Loading />;
@@ -17,7 +16,6 @@ export default function AdminTickets() {
       <Sla sla={data.sla} onSaved={reload} />
       <Groups groups={data.groups} onSaved={reload} />
       <Macros macros={data.macros} groups={data.groups.filter(g => g.active).map(g => g.name)} onSaved={reload} />
-      {isAdmin && <Email />}
     </div>
   );
 }
@@ -132,6 +130,16 @@ function MacroModal({ macro, groups, onClose, onSaved }) {
 }
 
 const BLANK = { host: '', port: 587, secure: false, user: '', pass: '', from: '', from_name: '', reply_to: '' };
+// Administration → Email Setup: outgoing (SMTP) and incoming (tickets by email) mailboxes
+export function EmailSetup() {
+  return (
+    <div className="stack" style={{ gap: 18, maxWidth: 900 }}>
+      <div className="info-box">Outgoing email sends ticket alerts and people's notifications. Incoming email turns messages to the support mailbox into tickets; that address is also shown on the sign-in page.</div>
+      <Email />
+    </div>
+  );
+}
+
 function Email() {
   const { data, error, loading, reload } = useLoad(() => api.get('/admin/email'), []);
   if (error) return <ErrorBox error={error} />;

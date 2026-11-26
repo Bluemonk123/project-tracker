@@ -1,5 +1,5 @@
 // Email intake: reads new emails from the support mailbox over IMAP and turns them into tickets
-// (or adds them to the ticket they reply to). Set up in Administration -> Ticket Board -> Email.
+// (or adds them to the ticket they reply to). Set up in Administration -> Email Setup.
 // Each email is marked as read once handled, so it is never picked up twice.
 import { getSetting, setSetting } from './db.js';
 import { mailConfig, isEmail } from './mailer.js';

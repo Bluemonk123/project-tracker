@@ -5,7 +5,7 @@ import { useApp, useLoad } from '../context.jsx';
 import Icon from '../components/Icon.jsx';
 import { Loading, ErrorBox, Empty, Modal, Field, Person, useAsync, confirmDialog, MoreMenu, ColorPicker, Pill } from '../components/ui.jsx';
 import { timeAgo, fmtSize, fmtDateTime } from '../lib/format.js';
-import AdminTickets from './tickets/AdminTickets.jsx';
+import AdminTickets, { EmailSetup } from './tickets/AdminTickets.jsx';
 
 const BOARD_COLUMN_NAMES = { new: 'New', design: 'In Design', develop: 'In Develop', testing: 'In Testing', closed: 'Closed', rejected: 'Rejected' };
 
@@ -411,6 +411,7 @@ export default function Admin() {
     ['work', 'Types, statuses, priorities', can('admin.settings')],
     ['general', 'General', can('admin.settings')],
     ['tickets', 'Ticket Board', can('admin.settings')],
+    ['email', 'Email Setup', isAdmin],
     ['backups', 'Backups', isAdmin],
   ].filter(t => t[2]);
   if (!tabs.length) return <div className="content"><Empty title="Administrators only">You do not have access to administration.</Empty></div>;
@@ -432,6 +433,7 @@ export default function Admin() {
         </>} />
         <Route path="general" element={<General />} />
         <Route path="tickets" element={<AdminTickets />} />
+        <Route path="email" element={<EmailSetup />} />
         <Route path="backups" element={<div className="stack"><Backups /><BackupCopy /></div>} />
       </Routes>
     </div>
