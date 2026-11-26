@@ -1494,3 +1494,5 @@ a.ov-stage-row:hover { background: var(--sunken); }
 .tk-mail-head dd { margin: 0; word-break: break-word; }
 .tk-mail-frame { width: 100%; height: min(62vh, 640px); border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 .tk-mail-text { white-space: pre-wrap; word-break: break-word; font: 13px/1.5 ui-monospace, Consolas, monospace; max-height: 62vh; overflow: auto; margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2, transparent); }
+.kb-ticket-no { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.kb-ticket-no + .kb-type-pill { margin-left: 6px; }

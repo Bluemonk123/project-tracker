@@ -7,6 +7,7 @@ import { Loading, ErrorBox, Avatar, useAsync, Modal } from '../components/ui.jsx
 import NewWpModal from './NewWpModal.jsx';
 import RaiseTicketModal from './tickets/RaiseTicketModal.jsx';
 import { SlaBadge } from './tickets/common.jsx';
+import TicketScreen from './tickets/TicketScreen.jsx';
 import { LOCATIONS } from './WpDetail.jsx';
 import { sprintWhen, SprintPicker, SprintSchedule, EndModal, useVersions, ProjectMultiSelect, idList } from './SprintPlanning.jsx';
 import { addDays, diffDays, fmtDate, startOfWeek, today, parseDate } from '../lib/format.js';
@@ -188,10 +189,9 @@ function TicketPeek({ t, onClose }) {
   );
 }
 
-function TicketCard({ t, draggable, onDragStart, onDragEnd, dragging, canOpen }) {
-  const nav = useNavigate();
+function TicketCard({ t, draggable, onDragStart, onDragEnd, dragging, canOpen, onOpen }) {
   const [peek, setPeek] = useState(false);
-  const open = () => (canOpen ? nav(`/ticket-board?ticket=${t.ticket_no}`) : setPeek(true));
+  const open = () => (canOpen ? onOpen(t.ticket_no) : setPeek(true)); // the ticket opens in a side panel on this page
   return (
     <>
     <article className={`kb-card${dragging ? ' dragging' : ''}`} style={{ '--tc': '#E5484D' }} tabIndex={0} role="link" aria-label={`Ticket ${t.ticket_no} ${t.subject_display}`}
@@ -207,6 +207,7 @@ function TicketCard({ t, draggable, onDragStart, onDragEnd, dragging, canOpen })
       <div className="kb-line">
         <Who id={t.assignee_id} name={t.assignee_name} />
         <span className="kb-pc" style={{ '--pcol': { urgent: '#C2453B', high: '#C98A1B', normal: '#3B6EA8' }[t.priority] }}><b>{TICKET_P[t.priority] || 'P3'}</b></span>
+        <span className="kb-ticket-no">#{t.ticket_no}</span>
         <span className="kb-type-pill" style={{ '--c': '#E5484D' }}>Ticket</span>
       </div>
     </article>
@@ -247,6 +248,10 @@ export default function KanbanBoard({ project }) {
   const chooseEnd = (k) => { setEndTab(k); try { localStorage.setItem('pt-board-end', k); } catch { /* ignore */ } };
   const [converting, setConverting] = useState(null); // { ticket, col }
   const [dragTicket, setDragTicket] = useState(null);
+  // ticket side panel on the Task Board (?ticket=<no>, so the browser Back button closes it)
+  const ticketOpen = sp.get('ticket');
+  const openTicket = (no) => { const p = new URLSearchParams(sp); p.set('ticket', no); setSp(p); };
+  const closeTicket = () => { const p = new URLSearchParams(sp); p.delete('ticket'); setSp(p); };
   const [, run] = useAsync();
 
   const set = (changes) => {
@@ -423,7 +428,7 @@ export default function KanbanBoard({ project }) {
                 <button type="button" className="kb-add" onClick={() => setRaising(true)} title="Raise a ticket" aria-label="Raise a ticket"><Icon name="plus" /></button>
               </div>
               <div className="kb-cards">
-                {tickets.map(t => <TicketCard key={t.id} t={t} canOpen={data.can_open_tickets !== false} draggable={!!data.can_convert} dragging={dragTicket === t.ticket_no}
+                {tickets.map(t => <TicketCard key={t.id} t={t} canOpen={data.can_open_tickets !== false} onOpen={openTicket} draggable={!!data.can_convert} dragging={dragTicket === t.ticket_no}
                   onDragStart={() => setDragTicket(t.ticket_no)} onDragEnd={() => { setDragTicket(null); setOver(null); }} />)}
                 {!tickets.length && <div className="kb-empty">{needle ? 'No matching tickets' : 'No open tickets'}</div>}
               </div>
@@ -482,6 +487,13 @@ export default function KanbanBoard({ project }) {
       )}
       {ending && sprint && <EndModal s={sprint} open={rows.filter(r => !r.is_closed).length} others={sprints.filter(x => x.id !== sprint.id && x.state !== 'ended' && x.project_id === sprint.project_id)}
         onClose={() => setEnding(false)} onDone={() => { setEnding(false); set({ sprint: '' }); sl.reload(); reload(); }} />}
+      {ticketOpen && (
+        <div className="tk-drawer-wrap" onMouseDown={(e) => { if (e.target === e.currentTarget) closeTicket(); }}>
+          <div className="tk-drawer" role="dialog" aria-label={`Ticket ${ticketOpen}`}>
+            <TicketScreen no={ticketOpen} embedded onChanged={reload} onClose={closeTicket} />
+          </div>
+        </div>
+      )}
       {raising && <RaiseTicketModal onClose={() => setRaising(false)} />}
       {expanded && data && (() => {
         const c = data.columns.find(x => x.key === expanded);
