@@ -1102,3 +1102,26 @@ test('role list order: leadership first, client last; reorder with the arrows', 
   assert.equal((await admin.put('/admin/roles/order', { ids: [999999] })).status, 400);
   assert.equal((await dev.put('/admin/roles/order', { ids })).status, 403);
 });
+
+test('priorities: TAT in working days on the priority; P0 - Not Required has no timeline', async () => {
+  const meta = (await admin.get('/meta')).data;
+  const p0 = meta.priorities.find(p => p.no_timeline);
+  assert.equal(p0?.name, 'P0 - Not Required');
+  const p2 = meta.priorities.find(p => /^P2/.test(p.name));
+  assert.equal(p2.tat_days, 3, 'default TAT from the working calendar');
+  assert.equal((await admin.patch(`/admin/priorities/${p2.id}`, { tat_days: 2 })).status, 200);
+  assert.equal((await admin.get('/meta')).data.priorities.find(p => p.id === p2.id).tat_days, 2);
+  assert.equal((await admin.patch(`/admin/priorities/${p2.id}`, { tat_days: 0 })).status, 400);
+  // a task with P2 gets a due date; switching to P0 clears it; a new P0 task has none
+  let r = await admin.post('/work-packages', { project_id: ids.project, subject: 'TAT check', priority_id: p2.id, start_date: '2026-12-01' });
+  assert.equal(r.status, 201);
+  let wp = (await admin.get(`/work-packages/${r.data.id}`)).data;
+  assert.equal(wp.due_date, '2026-12-02', '2 working days counting the start day');
+  await admin.patch(`/work-packages/${wp.id}`, { priority_id: p0.id, lock_version: wp.lock_version });
+  wp = (await admin.get(`/work-packages/${wp.id}`)).data;
+  assert.equal(wp.due_date, null);
+  r = await admin.post('/work-packages', { project_id: ids.project, subject: 'No timeline', priority_id: p0.id });
+  assert.equal((await admin.get(`/work-packages/${r.data.id}`)).data.due_date, null);
+  // the working calendar page does not offer P0
+  assert.ok(!(await admin.get('/work-calendar')).data.priorities.some(p => p.id === p0.id));
+});

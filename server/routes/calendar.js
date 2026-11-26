@@ -8,7 +8,7 @@ const r = Router();
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 r.get('/work-calendar', (req, res) => {
-  res.json({ ...calendar(), holidays: holidaysList(), priorities: all('SELECT id, name, color, position FROM priorities ORDER BY position DESC') });
+  res.json({ ...calendar(), holidays: holidaysList(), priorities: all('SELECT id, name, color, position FROM priorities WHERE no_timeline = 0 ORDER BY position DESC') });
 });
 
 r.put('/work-calendar', (req, res) => {
@@ -19,7 +19,8 @@ r.put('/work-calendar', (req, res) => {
   const hours = Number(b.hours_per_day);
   if (!(hours > 0 && hours <= 24)) fail(400, 'Daily working hours must be between 0 and 24.');
   const pd = {};
-  for (const p of all('SELECT id, name FROM priorities')) {
+  for (const p of all('SELECT id, name, no_timeline FROM priorities')) {
+    if (p.no_timeline) { pd[p.id] = null; continue; }
     const v = b.priority_days?.[p.id];
     if (v === null || v === '' || v === undefined) { pd[p.id] = null; continue; }
     const n = Number(v);

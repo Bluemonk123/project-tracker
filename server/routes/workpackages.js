@@ -4,7 +4,7 @@ import { need, can, fail, visibleProjectIds, parseList } from '../access.js';
 import { requireText, dateOrNull, intOrNull, numOrNull, notify, mentionedUserIds, todayISO } from '../util.js';
 import { resolveProject } from './projects.js';
 import { boardTickets, solveLinkedTickets } from './tickets.js';
-import { dueFor } from '../calendar.js';
+import { dueFor, noTimeline } from '../calendar.js';
 import { checkSprintMove, sprintState } from '../sprints.js';
 
 const norm = (v) => String(v ?? '').trim();
@@ -672,6 +672,7 @@ export function updateWp(req, wp, body) {
     const start = f.start_date ?? wp.start_date ?? String(wp.created_at).slice(0, 10);
     const due = dueFor(f.priority_id, start);
     if (due) { f.due_date = due; if (!wp.start_date && f.start_date === undefined) f.start_date = start; }
+    else if (noTimeline(f.priority_id)) f.due_date = null; // P0 - Not Required: no timeline
   }
   // Moving into Design / Develop / Testing hands the task to that stage's person (unless the assignee was chosen in the same change).
   // Changing the person of the current stage moves the task to them if it was with the previous person.

@@ -66,7 +66,20 @@ function StageSelect({ w, columns, onMove }) {
   );
 }
 
-function ExpandedCard({ w, columns, onMove }) {
+// Sprint of a task, from the expanded stage view: sprints of the task's project that have not ended
+function SprintSelect({ w, sprints, onSprint }) {
+  const stop = (e) => e.stopPropagation();
+  const choices = sprints.filter(s => (s.project_ids || []).includes(w.project_id) && (s.state !== 'ended' || s.id === w.sprint_id));
+  return (
+    <select className="kbx-sprint" value={w.sprint_id || ''} aria-label={`Sprint of ${w.key}`} title="Move to another sprint"
+      onClick={stop} onMouseDown={stop} onKeyDown={stop} onChange={(e) => onSprint(w, e.target.value ? Number(e.target.value) : null)}>
+      <option value="">No sprint</option>
+      {choices.map(s => <option key={s.id} value={s.id}>{s.code} · {s.name}{s.state === 'current' ? ' (current)' : s.state === 'planned' ? ' (planned)' : ''}</option>)}
+    </select>
+  );
+}
+
+function ExpandedCard({ w, columns, onMove, sprints, onSprint }) {
   const nav = useNavigate();
   const age = ageing(w);
   const overdue = !w.is_closed && w.due_date && w.due_date < today();
@@ -85,15 +98,18 @@ function ExpandedCard({ w, columns, onMove }) {
         <div><dt>Requestor</dt><dd className="ellipsis">{w.requested_by || <span className="muted">—</span>}</dd></div>
         <div><dt>Assignee</dt><dd className="ellipsis">{w.assignee_name ? <><Avatar id={w.assignee_id} name={w.assignee_name} size={18} />{w.assignee_name}</> : <span className="muted">Unassigned</span>}</dd></div>
         <div><dt>Date assigned</dt><dd>{w.assigned_at ? fmtDate(dayOf(w.assigned_at), { year: true }) : <span className="muted">—</span>}</dd></div>
-        <div><dt>Ageing</dt><dd className={age > 14 && !w.is_closed ? 'kbx-old' : ''}>{ageText(age)}</dd></div>
         <div><dt>Priority</dt><dd><span className="kbx-prio" style={{ '--c': w.priority_color }}>{w.priority_name || '—'}</span></dd></div>
-        <div><dt>Due</dt><dd className={overdue ? 'danger-text' : ''}>{w.due_date ? fmtDate(w.due_date, { year: true }) : <span className="muted">—</span>}</dd></div>
+        <div className="span-2"><dt>Due Date</dt><dd>
+          <span className={overdue ? 'danger-text' : ''}>{w.due_date ? fmtDate(w.due_date, { year: true }) : <span className="muted">No due date</span>}</span>
+          {age != null && <span className={age > 14 && !w.is_closed ? 'kbx-old' : 'muted'}>- {ageText(age)}</span>}
+        </dd></div>
+        <div className="span-2"><dt>Sprint</dt><dd><SprintSelect w={w} sprints={sprints} onSprint={onSprint} /></dd></div>
       </dl>
     </article>
   );
 }
 
-function StageModal({ col, items, columns, onMove, onClose }) {
+function StageModal({ col, items, columns, onMove, onClose, sprints = [], onSprint }) {
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('age');
   const [member, setMember] = useState('');   // assignee id, 'none' or ''
@@ -136,7 +152,7 @@ function StageModal({ col, items, columns, onMove, onClose }) {
         <span className="small muted" style={{ marginLeft: 'auto' }}>{list.length === items.length ? '' : `${list.length} of ${items.length}`}</span>
       </div>
       <div className="kbx-grid" style={{ '--cc': col.color }}>
-        {sorted.map(w => <ExpandedCard key={w.id} w={w} columns={columns} onMove={onMove} />)}
+        {sorted.map(w => <ExpandedCard key={w.id} w={w} columns={columns} onMove={onMove} sprints={sprints} onSprint={onSprint} />)}
         {!sorted.length && <div className="kb-empty">No tasks{needle ? ' match' : ''}.</div>}
       </div>
     </Modal>
@@ -253,6 +269,10 @@ export default function KanbanBoard({ project }) {
   const openTicket = (no) => { const p = new URLSearchParams(sp); p.set('ticket', no); setSp(p); };
   const closeTicket = () => { const p = new URLSearchParams(sp); p.delete('ticket'); setSp(p); };
   const [, run] = useAsync();
+  const moveSprint = async (w, id) => {
+    const s = sprints.find(x => x.id === id);
+    if (await run(() => api.patch(`/work-packages/${w.id}`, { sprint_id: id }), id ? `${w.key} moved to ${s ? `${s.code} ${s.name}` : 'the sprint'}` : `${w.key} taken out of its sprint`)) reload();
+  };
 
   const set = (changes) => {
     const next = new URLSearchParams(sp);
@@ -497,7 +517,7 @@ export default function KanbanBoard({ project }) {
       {raising && <RaiseTicketModal onClose={() => setRaising(false)} />}
       {expanded && data && (() => {
         const c = data.columns.find(x => x.key === expanded);
-        return c ? <StageModal col={c} items={byColumn(c)} columns={columns} onMove={drop} onClose={() => setExpanded(null)} /> : null;
+        return c ? <StageModal col={c} items={byColumn(c)} columns={columns} onMove={drop} onClose={() => setExpanded(null)} sprints={sprints} onSprint={moveSprint} /> : null;
       })()}
       {converting && (
         <NewWpModal title={`Turn ticket #${converting.ticket.ticket_no} into a task`} single

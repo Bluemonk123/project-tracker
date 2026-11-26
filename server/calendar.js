@@ -11,7 +11,8 @@ export function calendar() {
   const off = Array.isArray(c.off_days) ? c.off_days.filter(d => Number.isInteger(d) && d >= 0 && d <= 6) : [0, 6];
   const hours = Number(c.hours_per_day) > 0 ? Number(c.hours_per_day) : 8;
   const pd = {};
-  for (const p of all('SELECT id, name FROM priorities')) {
+  for (const p of all('SELECT id, name, no_timeline FROM priorities')) {
+    if (p.no_timeline) { pd[p.id] = null; continue; } // e.g. P0 - Not Required: no due date
     const v = c.priority_days?.[p.id];
     const fallback = DEFAULT_DAYS[String(p.name).split(/[\s-]/)[0].toUpperCase()] ?? null;
     pd[p.id] = v === null ? null : Number.isInteger(Number(v)) && Number(v) > 0 ? Number(v) : fallback;
@@ -42,6 +43,7 @@ export function addWorkingDays(start, n, cal = calendar()) {
 }
 
 // Due date for a priority from a start date, or null when that priority has no duration set.
+export const noTimeline = (priorityId) => !!get('SELECT no_timeline FROM priorities WHERE id = ?', priorityId)?.no_timeline;
 export function dueFor(priorityId, start, cal = calendar()) {
   const n = cal.priority_days[priorityId];
   return n ? addWorkingDays(start, n, cal) : null;

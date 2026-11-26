@@ -613,6 +613,16 @@ function migrate() {
     message_id INTEGER REFERENCES ticket_messages(id) ON DELETE CASCADE,
     stored_name TEXT NOT NULL, from_addr TEXT, subject TEXT, sent_at TEXT, size_bytes INTEGER, created_at TEXT NOT NULL)`);
   db.exec('CREATE INDEX IF NOT EXISTS idx_ticket_emails ON ticket_emails(ticket_id)');
+  // Priorities: "no timeline" (P0 - Not Required: no due date is set or calculated). The TAT of each priority (working
+  // days) is kept in the working calendar (calendar.js) and edited in Administration → Priorities.
+  if (!all('PRAGMA table_info(priorities)').some(c => c.name === 'no_timeline')) db.exec('ALTER TABLE priorities ADD COLUMN no_timeline INTEGER NOT NULL DEFAULT 0');
+  if (!getSetting('migration_p0_v1')) {
+    if (!get("SELECT 1 AS x FROM priorities WHERE no_timeline = 1 OR name LIKE 'P0%'")) {
+      run('UPDATE priorities SET position = position + 1');
+      run("INSERT INTO priorities(name, color, is_default, position, no_timeline) VALUES('P0 - Not Required', '#8A94A6', 0, 0, 1)");
+    }
+    setSetting('migration_p0_v1', '1');
+  }
   // Role list order (leadership, planning, build, testing, kept roles, outside people) and plain descriptions
   if (!getSetting('migration_role_order_v1')) {
     tx(() => {

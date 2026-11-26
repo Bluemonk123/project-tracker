@@ -5,6 +5,7 @@ import { get, all, run, tx, hashPassword, getSetting, setSetting, backupNow, BAC
 import { need, fail, parseList, guardAdminRoles } from '../access.js';
 import { GLOBAL_PERMISSIONS, PROJECT_PERMISSIONS, TICKET_PERMISSIONS, TICKET_BOARD_KEYS, ALL_GLOBAL_KEYS, ALL_PROJECT_KEYS, ALL_TICKET_KEYS } from '../permissions.js';
 import { requireText, updateSet } from '../util.js';
+import { calendar, saveCalendar } from '../calendar.js';
 
 const r = Router();
 
@@ -13,7 +14,7 @@ r.get('/meta', (_req, res) => {
   res.json({
     types: all('SELECT * FROM types ORDER BY position, id'),
     statuses: all('SELECT * FROM statuses ORDER BY position, id'),
-    priorities: all('SELECT * FROM priorities ORDER BY position, id'),
+    priorities: (() => { const pd = calendar().priority_days; return all('SELECT * FROM priorities ORDER BY position, id').map(p => ({ ...p, tat_days: p.no_timeline ? null : pd[p.id] ?? null })); })(),
     criticalities: all('SELECT * FROM criticalities ORDER BY position, id'),
     roles: all("SELECT id, name, scope, description, builtin FROM roles WHERE scope = 'project' ORDER BY position, id"),
     activities: parseList(getSetting('time_activities')),
@@ -196,10 +197,21 @@ r.delete('/admin/roles/:id', (req, res) => {
 });
 
 // ---------- types / statuses / priorities ----------
+// TAT of a priority: whole working days (1–365) or empty; stored in the working calendar
+const checkTat = (v) => {
+  if (v === null || v === '' || v === undefined) return null;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 1 || n > 365) fail(400, 'TAT: enter whole working days from 1 to 365, or leave it empty.');
+  return n;
+};
+function saveTat(priorityId, v) {
+  const c = calendar();
+  saveCalendar({ off_days: c.off_days, hours_per_day: c.hours_per_day, priority_days: { ...c.priority_days, [priorityId]: v } });
+}
 const ENUMS = {
   types: ['name', 'color', 'is_milestone', 'position'],
   statuses: ['name', 'color', 'is_closed', 'is_default', 'done_ratio', 'board_column', 'position'],
-  priorities: ['name', 'color', 'is_default', 'position'],
+  priorities: ['name', 'color', 'is_default', 'position', 'no_timeline'],
   criticalities: ['name', 'color', 'is_default', 'position'],
 };
 const BOARD_COLUMNS = ['new', 'design', 'develop', 'testing', 'closed', 'rejected'];
@@ -213,6 +225,7 @@ for (const [table, cols] of Object.entries(ENUMS)) {
     const pos = get(`SELECT COALESCE(MAX(position), 0) + 1 AS p FROM ${table}`).p;
     const vals = { name, color: req.body.color || '#5B6472', position: pos };
     for (const c of cols) if (!(c in vals) && req.body[c] !== undefined) vals[c] = typeof req.body[c] === 'boolean' ? (req.body[c] ? 1 : 0) : req.body[c];
+
     if (table === 'statuses') {
       if (vals.board_column && !BOARD_COLUMNS.includes(vals.board_column)) fail(400, 'Unknown board column.');
       vals.board_column ||= vals.is_closed ? 'closed' : 'develop';
@@ -221,6 +234,7 @@ for (const [table, cols] of Object.entries(ENUMS)) {
     tx(() => {
       if (vals.is_default) run(`UPDATE ${table} SET is_default = 0`);
       const { id } = run(`INSERT INTO ${table}(${keys.join(',')}) VALUES(${keys.map(() => '?').join(',')})`, ...keys.map(k => vals[k]));
+      if (table === 'priorities' && req.body.tat_days !== undefined) saveTat(id, vals.no_timeline ? null : checkTat(req.body.tat_days));
       res.status(201).json({ id });
     });
   });
@@ -235,6 +249,10 @@ for (const [table, cols] of Object.entries(ENUMS)) {
       if (fields.is_default) run(`UPDATE ${table} SET is_default = 0`);
       const { sql, values } = updateSet(fields);
       if (sql) run(`UPDATE ${table} SET ${sql} WHERE id = ?`, ...values, row.id);
+      if (table === 'priorities' && (req.body.tat_days !== undefined || fields.no_timeline)) {
+        const noTimeline = fields.no_timeline ?? row.no_timeline;
+        saveTat(row.id, noTimeline ? null : checkTat(req.body.tat_days ?? calendar().priority_days[row.id]));
+      }
     });
     res.json({ ok: true });
   });

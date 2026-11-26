@@ -452,7 +452,7 @@ test('email settings: incoming mailbox saved without echoing the password; task 
 
 test('priority levels P1-P4 and criticality C1-C3 on tasks', async () => {
   const meta = (await admin.get('/meta')).data;
-  assert.deepEqual(meta.priorities.map(p => p.name), ['P4 - Low', 'P3 - Normal', 'P2 - High', 'P1 - Immediate']);
+  assert.deepEqual(meta.priorities.map(p => p.name), ['P0 - Not Required', 'P4 - Low', 'P3 - Normal', 'P2 - High', 'P1 - Immediate']);
   assert.deepEqual(meta.criticalities.map(c => c.name), ['C3', 'C2', 'C1']);
   const c1 = meta.criticalities.find(c => c.name === 'C1').id;
   const p1 = meta.priorities.find(p => p.name === 'P1 - Immediate').id;

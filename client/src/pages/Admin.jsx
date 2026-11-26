@@ -245,12 +245,13 @@ function EnumEditor({ table, title, help, extra }) {
 }
 
 function EnumModal({ table, row, onClose, onSaved }) {
-  const [f, setF] = useState({ name: row?.name || '', color: row?.color || '#5B6B85', is_closed: !!row?.is_closed, is_default: !!row?.is_default, is_milestone: !!row?.is_milestone, done_ratio: row?.done_ratio ?? '', board_column: row?.board_column || '' });
+  const [f, setF] = useState({ tat_days: row?.tat_days ?? '', no_timeline: !!row?.no_timeline, name: row?.name || '', color: row?.color || '#5B6B85', is_closed: !!row?.is_closed, is_default: !!row?.is_default, is_milestone: !!row?.is_milestone, done_ratio: row?.done_ratio ?? '', board_column: row?.board_column || '' });
   const [busy, run] = useAsync();
   const save = async () => {
     const body = { name: f.name, color: f.color };
     if (table === 'statuses') Object.assign(body, { is_closed: f.is_closed, is_default: f.is_default, done_ratio: f.done_ratio === '' ? null : Number(f.done_ratio), board_column: f.board_column || undefined });
     if (table === 'priorities' || table === 'criticalities') body.is_default = f.is_default;
+    if (table === 'priorities') Object.assign(body, { no_timeline: f.no_timeline, tat_days: f.no_timeline || f.tat_days === '' ? null : Number(f.tat_days) });
     if (table === 'types') body.is_milestone = f.is_milestone;
     const r = await run(() => (row ? api.patch(`/admin/${table}/${row.id}`, body) : api.post(`/admin/${table}`, body)), 'Saved');
     if (r) { onSaved(); onClose(); }
@@ -268,6 +269,14 @@ function EnumModal({ table, row, onClose, onSaved }) {
           </select>
         </Field>
         <Field label="Set % done to" hint="Optional. When a task moves into this status its % done is set to this value."><input type="number" min="0" max="100" value={f.done_ratio} onChange={(e) => setF({ ...f, done_ratio: e.target.value })} /></Field>
+      </>}
+      {table === 'priorities' && <>
+        <label className="check"><input type="checkbox" checked={f.no_timeline} onChange={(e) => setF({ ...f, no_timeline: e.target.checked })} />No timeline (exception): no TAT and no due date is set</label>
+        {!f.no_timeline && (
+          <Field label="TAT (working days)" hint="The due date is set to this many working days from the start date (weekends and holidays from Time → Working calendar are skipped). Empty: no automatic due date.">
+            <input type="number" min="1" max="365" value={f.tat_days} onChange={(e) => setF({ ...f, tat_days: e.target.value })} placeholder="e.g. 3" style={{ maxWidth: 140 }} />
+          </Field>
+        )}
       </>}
       {(table === 'priorities' || table === 'criticalities') && <label className="check"><input type="checkbox" checked={f.is_default} onChange={(e) => setF({ ...f, is_default: e.target.checked })} />Default for new tasks</label>}
       {table === 'types' && <label className="check"><input type="checkbox" checked={f.is_milestone} onChange={(e) => setF({ ...f, is_milestone: e.target.checked })} />Milestone (a single date, shown as a diamond in Gantt)</label>}
@@ -418,7 +427,8 @@ export default function Admin() {
         <Route path="work" element={<>
           <EnumEditor table="types" title="Task types" help="What kinds of work you track." extra={(r) => (r.is_milestone ? 'Milestone' : '')} />
           <EnumEditor table="statuses" title="Statuses" help="The steps work moves through, and the Kanban column each one appears in." extra={(r) => [BOARD_COLUMN_NAMES[r.board_column] ? `Board: ${BOARD_COLUMN_NAMES[r.board_column]}` : null, r.is_closed ? 'Closed' : 'Open', r.is_default ? 'Default' : null, r.done_ratio != null ? `sets ${r.done_ratio}% done` : null].filter(Boolean).join(', ')} />
-          <EnumEditor table="priorities" title="Priorities" help="How soon the work is needed. Lowest first (P1 is the highest)." extra={(r) => (r.is_default ? 'Default' : '')} />
+          <EnumEditor table="priorities" title="Priorities" help="How soon the work is needed, and its TAT (working days) that sets the due date. Lowest first (P1 is the highest)."
+            extra={(r) => [r.no_timeline ? 'No timeline (no due date)' : r.tat_days ? `TAT ${r.tat_days} working day${r.tat_days === 1 ? '' : 's'}` : 'No TAT', r.is_default ? 'Default' : ''].filter(Boolean).join(' · ')} />
         </>} />
         <Route path="general" element={<General />} />
         <Route path="tickets" element={<AdminTickets />} />
