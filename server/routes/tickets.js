@@ -80,11 +80,15 @@ function decorate(t, now, hours) {
 
 // ---------- people ----------
 function boardUsers() {
-  const roleIds = all("SELECT id, permissions FROM roles WHERE scope = 'ticket'").filter(r => parseList(r.permissions).includes('tickets.view')).map(r => r.id);
-  return all(`SELECT id, name, email FROM users WHERE status = 'active' AND (is_admin = 1 ${roleIds.length ? `OR ticket_role_id IN (${roleIds.join(',')})` : ''}) ORDER BY name`);
+  return usersWith('tickets.view');
 }
-// Engineers: active members and leads of teams whose name contains "Ticket" or "Support";
-// until such a team has members, everyone who can open the Ticket Board.
+// active users whose global role has the permission, plus administrators
+function usersWith(key) {
+  const roleIds = all("SELECT id, permissions FROM roles WHERE scope = 'global'").filter(r => parseList(r.permissions).includes(key)).map(r => r.id);
+  return all(`SELECT id, name, email FROM users WHERE status = 'active' AND (is_admin = 1 ${roleIds.length ? `OR global_role_id IN (${roleIds.join(',')})` : ''}) ORDER BY name`);
+}
+// Engineers (can be assigned tickets): members and leads of the Support Team (teams named "Support" or "Ticket")
+// whose role has "Work on tickets"; until such a team has members, everyone who can work on tickets.
 export function engineers() {
   const teams = all("SELECT id, lead_id FROM teams WHERE lower(name) LIKE '%ticket%' OR lower(name) LIKE '%support%'");
   const ids = new Set();
@@ -92,8 +96,9 @@ export function engineers() {
     if (t.lead_id) ids.add(t.lead_id);
     all('SELECT user_id FROM team_members WHERE team_id = ?', t.id).forEach(m => ids.add(m.user_id));
   }
-  const list = ids.size ? all(`SELECT id, name, email FROM users WHERE status = 'active' AND id IN (${[...ids].join(',')}) ORDER BY name`) : [];
-  return list.length ? list : boardUsers();
+  const workers = usersWith('tickets.edit');
+  if (!ids.size) return workers;
+  return workers.filter(u => ids.has(u.id));
 }
 const agentsToAlert = () => {
   const ids = new Set(all("SELECT id FROM users WHERE status = 'active' AND is_admin = 1").map(u => u.id));

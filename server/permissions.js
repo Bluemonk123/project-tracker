@@ -9,16 +9,14 @@ export const GLOBAL_PERMISSIONS = [
   { key: 'teams.manage',     group: 'Administration', label: 'Manage teams' },
   { key: 'projects.create',  group: 'Projects',       label: 'Create projects' },
   { key: 'reports.view',     group: 'Reports',        label: 'View portfolio and workload reports' },
-];
-
-// Ticket Board (helpdesk): given through a person's TICKET role (Administration → Roles → Ticket roles),
-// separate from their global and project roles. Administrators always have all of them.
-export const TICKET_PERMISSIONS = [
-  { key: 'tickets.view',     group: 'Ticket Board',   label: 'Open the Ticket Board and see tickets' },
+  // Ticket Board (one for the whole company, so in global roles). Who can be ASSIGNED tickets: people with
+  // "Work on tickets" who are also in the Support Team (Teams page). Administrators always have all of them.
+  { key: 'tickets.view',     group: 'Ticket Board',   label: 'Open the Ticket Board and see all tickets' },
   { key: 'tickets.create',   group: 'Ticket Board',   label: 'Create tickets from the board (New ticket)' },
   { key: 'tickets.edit',     group: 'Ticket Board',   label: 'Work on tickets: reply, add notes, change fields, take tickets' },
-  { key: 'tickets.assign',   group: 'Ticket Board',   label: 'Change the assignee: assign tickets to other engineers' },
+  { key: 'tickets.assign',   group: 'Ticket Board',   label: 'Ticket lead: assign tickets to other engineers' },
 ];
+export const TICKET_PERMISSIONS = []; // (ticket roles were merged into global roles)
 
 export const PROJECT_PERMISSIONS = [
   { key: 'project.view',      group: 'Project',        label: 'View project' },
@@ -112,15 +110,5 @@ export const DEFAULT_ROLES = [
     name: 'Viewer', scope: 'project', builtin: 1,
     description: 'Read-only access (clients, stakeholders).',
     permissions: ['project.view', 'wp.view', 'meetings.view', 'wiki.view', 'board.view'],
-  },
-  {
-    name: 'Support agent', scope: 'ticket', builtin: 1,
-    description: 'Works on tickets: sees the Ticket Board, creates, replies and changes tickets.',
-    permissions: ['tickets.view', 'tickets.create', 'tickets.edit', 'tickets.assign'],
-  },
-  {
-    name: 'Support viewer', scope: 'ticket', builtin: 0,
-    description: 'Sees the Ticket Board and tickets, without changing them.',
-    permissions: ['tickets.view'],
   },
 ];

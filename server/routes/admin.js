@@ -61,7 +61,7 @@ r.post('/admin/users', (req, res) => {
   if (req.body.is_admin && !req.user.is_admin) fail(403, 'Only administrators can create administrators.');
   const { id } = run(`INSERT INTO users(name, email, password_hash, is_admin, global_role_id, ticket_role_id, job_title, must_change_password)
                       VALUES(?,?,?,?,?,?,?,1)`,
-    name, email, pw ? hashPassword(pw) : '', req.body.is_admin ? 1 : 0, checkGlobalRole(req.body.global_role_id), checkTicketRole(req.body.ticket_role_id), req.body.job_title || null);
+    name, email, pw ? hashPassword(pw) : '', req.body.is_admin ? 1 : 0, checkGlobalRole(req.body.global_role_id), null, req.body.job_title || null);
   if (Array.isArray(req.body.team_ids)) for (const t of req.body.team_ids) run(`INSERT OR IGNORE INTO team_members(team_id, user_id, position)
     VALUES(?, ?, (SELECT COALESCE(MAX(position), -1) + 1 FROM team_members WHERE team_id = ?))`, t, id, t);
   res.status(201).json({ id });
@@ -80,7 +80,6 @@ r.patch('/admin/users/:id', (req, res) => {
     status: b.status !== undefined ? (['active', 'locked'].includes(b.status) ? b.status : fail(400, 'Invalid status.')) : undefined,
     is_admin: b.is_admin !== undefined ? (b.is_admin ? 1 : 0) : undefined,
     global_role_id: b.global_role_id !== undefined ? checkGlobalRole(b.global_role_id) : undefined,
-    ticket_role_id: b.ticket_role_id !== undefined ? checkTicketRole(b.ticket_role_id) : undefined,
   };
   if (fields.email && get('SELECT id FROM users WHERE email = ? AND id <> ?', fields.email, user.id)) fail(400, 'Another user already has this email.');
   if (b.password) {
@@ -137,7 +136,7 @@ function cleanPerms(scope, perms) {
 
 r.post('/admin/roles', (req, res) => {
   need(req, 'admin.roles');
-  const scope = ['global', 'ticket'].includes(req.body.scope) ? req.body.scope : 'project';
+  const scope = req.body.scope === 'global' ? 'global' : 'project';
   const name = requireText(req.body.name, 'Role name');
   if (get('SELECT id FROM roles WHERE name = ? AND scope = ?', name, scope)) fail(400, 'A role with this name already exists.');
   const pos = get('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM roles').p;

@@ -17,7 +17,6 @@ function UserModal({ user, onClose, onSaved }) {
   const [f, setF] = useState({
     name: user?.name || '', email: user?.email || '', job_title: user?.job_title || '', password: '',
     global_role_id: user?.global_role_id ?? globalRoles.find(r => r.name === 'Employee')?.id ?? '', is_admin: !!user?.is_admin,
-    ticket_role_id: user?.ticket_role_id ?? '',
     team_ids: null,
   });
   const [busy, run] = useAsync();
@@ -25,7 +24,7 @@ function UserModal({ user, onClose, onSaved }) {
   const currentTeams = f.team_ids ?? (teams.data || []).filter(t => user && t.members.some(m => m.id === user.id)).map(t => t.id);
   const gen = () => set('password', Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6).toUpperCase());
   const save = async () => {
-    const body = { ...f, team_ids: f.team_ids ?? undefined, password: f.password || undefined, global_role_id: f.global_role_id || null, ticket_role_id: f.ticket_role_id || null };
+    const body = { ...f, team_ids: f.team_ids ?? undefined, password: f.password || undefined, global_role_id: f.global_role_id || null };
     const r = await run(() => (user ? api.patch(`/admin/users/${user.id}`, body) : api.post('/admin/users', body)), user ? 'User saved' : 'User created');
     if (r) { onSaved(); onClose(); }
   };
@@ -40,11 +39,7 @@ function UserModal({ user, onClose, onSaved }) {
             <option value="">None</option>{globalRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
         </Field>
-        <Field label="Ticket role" hint="Access to the Ticket Board. None: they can still raise tickets and follow their own.">
-          <select value={f.ticket_role_id} onChange={(e) => set('ticket_role_id', e.target.value ? Number(e.target.value) : '')}>
-            <option value="">None</option>{meta.roles.filter(r => r.scope === 'ticket').map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-          </select>
-        </Field>
+
         <Field label={user ? 'Set a new password' : 'Password'} hint={user ? (user.has_password ? 'Leave empty to keep the current password. They will be asked to change it.' : 'No password yet: set one so they can sign in.') : 'At least 8 characters, or leave empty and set it later (they cannot sign in until then).'}>
           <div className="row"><input type="text" value={f.password} onChange={(e) => set('password', e.target.value)} minLength={8} autoComplete="off" /><button type="button" className="btn" onClick={gen}>Generate</button></div>
         </Field>
@@ -90,7 +85,7 @@ function Users() {
               <tr key={u.id}>
                 <td><Person id={u.id} name={u.name} /><div className="xs muted" style={{ paddingLeft: 29 }}>{u.email}</div></td>
                 <td className="hide-sm soft">{u.job_title || '—'}</td>
-                <td>{u.global_role_name || <span className="muted">None</span>}{u.is_admin ? <span className="tag accent" style={{ marginLeft: 6 }}>Admin</span> : null}{u.ticket_role_name && <div className="xs muted">Tickets: {u.ticket_role_name}</div>}</td>
+                <td>{u.global_role_name || <span className="muted">None</span>}{u.is_admin ? <span className="tag accent" style={{ marginLeft: 6 }}>Admin</span> : null}</td>
                 <td className="hide-sm small soft">{u.teams || '—'}</td>
                 <td className="num">{u.project_count}</td>
                 <td className="hide-sm small muted">{u.last_login_at ? timeAgo(u.last_login_at) : 'Never'}</td>
@@ -181,9 +176,9 @@ function Roles() {
   );
   return (
     <>
-      {section('global', 'Global roles', 'Given to each person for the whole system.')}
+      {section('global', 'Global roles', 'Given to each person for the whole system, including the Ticket Board. People who can work on tickets and are in the Support Team (Teams page) can be assigned tickets.')}
       {section('project', 'Project roles', 'Given to each person per project when they become a member.')}
-      {section('ticket', 'Ticket roles', 'Given to each person for the Ticket Board (helpdesk), next to their global role. Who can be assigned tickets comes from the Support team on the Teams page.')}
+
       {modal && <RoleModal role={modal.role} scope={modal.scope} catalogue={catalogue} onClose={() => setModal(null)} onSaved={refresh} />}
     </>
   );

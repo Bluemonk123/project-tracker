@@ -502,6 +502,41 @@ function migrate() {
       setSetting('migration_ticket_assign_v1', '1');
     });
   }
+  // Ticket roles folded back into global roles (simpler: one role per person + project roles). Each person keeps
+  // their access: if everyone with a global role shared the same ticket role, its permissions join that global role;
+  // otherwise those people move to a copy "<global role> + <ticket role>". Then the ticket roles are removed.
+  if (!getSetting('migration_ticket_roles_merge_v1')) {
+    tx(() => {
+      const list = (v) => { try { return JSON.parse(v) || []; } catch { return []; } };
+      const tRoles = new Map(all("SELECT id, name, permissions FROM roles WHERE scope = 'ticket'").map(r => [r.id, r]));
+      if (all('PRAGMA table_info(users)').some(c => c.name === 'ticket_role_id')) {
+        const groups = all('SELECT global_role_id AS g, ticket_role_id AS t, COUNT(*) AS n FROM users WHERE ticket_role_id IS NOT NULL GROUP BY global_role_id, ticket_role_id');
+        for (const { g, t } of groups) {
+          const tr = tRoles.get(t); if (!tr) continue;
+          const tp = list(tr.permissions).filter(k => k.startsWith('tickets.'));
+          const gr = g ? get("SELECT * FROM roles WHERE id = ? AND scope = 'global'", g) : null;
+          const total = g ? get('SELECT COUNT(*) AS n FROM users WHERE global_role_id = ?', g).n : 0;
+          const same = g ? get('SELECT COUNT(*) AS n FROM users WHERE global_role_id = ? AND ticket_role_id = ?', g, t).n : 0;
+          if (gr && total === same) {
+            run('UPDATE roles SET permissions = ? WHERE id = ?', JSON.stringify([...new Set([...list(gr.permissions), ...tp])]), gr.id);
+          } else {
+            const name = `${gr?.name || 'Staff'} + ${tr.name}`;
+            let copy = get("SELECT id FROM roles WHERE scope = 'global' AND name = ?", name);
+            if (!copy) {
+              const pos = get("SELECT COALESCE(MAX(position), 0) + 1 AS p FROM roles WHERE scope = 'global'").p;
+              copy = { id: run("INSERT INTO roles(name, scope, description, permissions, builtin, position) VALUES(?, 'global', ?, ?, 0, ?)",
+                name, `${gr?.description || ''} Also: ${tr.name}.`.trim(), JSON.stringify([...new Set([...list(gr?.permissions), ...tp])]), pos).id };
+            }
+            if (g) run('UPDATE users SET global_role_id = ? WHERE global_role_id = ? AND ticket_role_id = ?', copy.id, g, t);
+            else run('UPDATE users SET global_role_id = ? WHERE global_role_id IS NULL AND ticket_role_id = ?', copy.id, t);
+          }
+        }
+        run('UPDATE users SET ticket_role_id = NULL');
+      }
+      run("DELETE FROM roles WHERE scope = 'ticket'");
+      setSetting('migration_ticket_roles_merge_v1', '1');
+    });
+  }
 }
 migrate();
 

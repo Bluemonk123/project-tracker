@@ -52,9 +52,6 @@ export function globalPerms(req) {
   else {
     const role = u.global_role_id ? get('SELECT permissions FROM roles WHERE id = ?', u.global_role_id) : null;
     set = new Set(parseList(role?.permissions));
-    // Ticket Board permissions come from the person's ticket role
-    const tr = u.ticket_role_id ? get("SELECT permissions FROM roles WHERE id = ? AND scope = 'ticket'", u.ticket_role_id) : null;
-    parseList(tr?.permissions).filter(k => ALL_TICKET_KEYS.includes(k)).forEach(k => set.add(k));
   }
   req._perm.global = set;
   return set;
