@@ -205,10 +205,12 @@ r.get('/board', (req, res) => {
   const projectIds = q.project_id ? projectsParam(req, q.project_id) : visibleProjectIds(req, 'wp.view');
   const statuses = all('SELECT id, name, color, board_column, is_closed, position FROM statuses ORDER BY position, id');
   const columns = BOARD_COLUMNS.map(c => ({ ...c, statuses: statuses.filter(st => st.board_column === c.key) }));
-  // helpdesk tickets in a first "Tickets" column: company-wide board only, for people who can open the Ticket Board
-  const tickets = !q.project_id && can(req, 'tickets.view') ? boardTickets(req, q.assignee_id) : null;
+  // helpdesk tickets in a first "Tickets" column: company-wide board only, for everyone who can open the Task Board.
+  // Opening a ticket (the Ticket Board) still needs "Enable Ticket Board"; others see a read-only summary.
+  const tickets = !q.project_id ? boardTickets(req, q.assignee_id) : null;
   const can_convert = !!tickets && can(req, 'tickets.edit');
-  if (!projectIds.length) return res.json({ columns, rows: [], tickets, can_convert });
+  const can_open_tickets = can(req, 'tickets.view');
+  if (!projectIds.length) return res.json({ columns, rows: [], tickets, can_convert, can_open_tickets });
   const where = [`wp.project_id IN (${projectIds.map(() => '?').join(',')})`];
   const params = [...projectIds];
   const sprintId = /^\d+$/.test(q.sprint_id || '') ? Number(q.sprint_id) : null;
@@ -250,7 +252,7 @@ r.get('/board', (req, res) => {
                                  AND spent_on BETWEEN ? AND ? GROUP BY wp_id`, ...rows.map(w => w.id), q.from, q.to).map(x => [x.wp_id, x.h]));
     for (const w of rows) w.range_hours = inRange.get(w.id) || 0;
   }
-  res.json({ columns, rows, tickets, can_convert });
+  res.json({ columns, rows, tickets, can_convert, can_open_tickets });
 });
 
 // ---------- import (administrators): many tasks at once, keeping their own dates, status, source and remarks ----------

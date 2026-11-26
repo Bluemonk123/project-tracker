@@ -171,10 +171,29 @@ dates && `Dates ${dates}${overdue ? ' (overdue)' : ''}`, `Logged ${hrs(spent)} o
 }
 
 // A helpdesk ticket in the first column: opens it on the Ticket Board.
-function TicketCard({ t, draggable, onDragStart, onDragEnd, dragging }) {
-  const nav = useNavigate();
-  const open = () => nav(`/ticket-board?ticket=${t.ticket_no}`);
+// Read-only summary of a ticket, for Task Board users who cannot open the Ticket Board
+function TicketPeek({ t, onClose }) {
   return (
+    <Modal title={`Ticket #${t.ticket_no}`} onClose={onClose} footer={<button type="button" className="btn primary" onClick={onClose}>Close</button>}>
+      <h3 style={{ margin: 0 }}>{t.subject_display}</h3>
+      <div className="row wrap small" style={{ gap: 10 }}>
+        <span><span className="muted">Raised by</span> {t.requester_display}</span>
+        <span><span className="muted">Assignee</span> {t.assignee_name || 'Unassigned'}</span>
+        <span><span className="muted">Priority</span> {TICKET_P[t.priority] || 'P3'}</span>
+        <SlaBadge sla={t.sla} />
+      </div>
+      <div className="tk-body" style={{ whiteSpace: 'pre-wrap' }}>{t.description || '(no description)'}</div>
+      <p className="xs muted" style={{ margin: 0 }}>Opening and replying to tickets is on the Ticket Board, for people with "Enable Ticket Board".</p>
+    </Modal>
+  );
+}
+
+function TicketCard({ t, draggable, onDragStart, onDragEnd, dragging, canOpen }) {
+  const nav = useNavigate();
+  const [peek, setPeek] = useState(false);
+  const open = () => (canOpen ? nav(`/ticket-board?ticket=${t.ticket_no}`) : setPeek(true));
+  return (
+    <>
     <article className={`kb-card${dragging ? ' dragging' : ''}`} style={{ '--tc': '#E5484D' }} tabIndex={0} role="link" aria-label={`Ticket ${t.ticket_no} ${t.subject_display}`}
       title={`Ticket #${t.ticket_no} · raised by ${t.requester_display}${draggable ? '\nDrag onto a task column to turn it into a task' : ''}`}
       draggable={draggable} onDragStart={(e) => { e.dataTransfer.setData('text/plain', `ticket:${t.ticket_no}`); e.dataTransfer.effectAllowed = 'move'; onDragStart?.(); }}
@@ -191,6 +210,8 @@ function TicketCard({ t, draggable, onDragStart, onDragEnd, dragging }) {
         <span className="kb-type-pill" style={{ '--c': '#E5484D' }}>Ticket</span>
       </div>
     </article>
+    {peek && <TicketPeek t={t} onClose={() => setPeek(false)} />}
+    </>
   );
 }
 
@@ -402,7 +423,7 @@ export default function KanbanBoard({ project }) {
                 <button type="button" className="kb-add" onClick={() => setRaising(true)} title="Raise a ticket" aria-label="Raise a ticket"><Icon name="plus" /></button>
               </div>
               <div className="kb-cards">
-                {tickets.map(t => <TicketCard key={t.id} t={t} draggable={!!data.can_convert} dragging={dragTicket === t.ticket_no}
+                {tickets.map(t => <TicketCard key={t.id} t={t} canOpen={data.can_open_tickets !== false} draggable={!!data.can_convert} dragging={dragTicket === t.ticket_no}
                   onDragStart={() => setDragTicket(t.ticket_no)} onDragEnd={() => { setDragTicket(null); setOver(null); }} />)}
                 {!tickets.length && <div className="kb-empty">{needle ? 'No matching tickets' : 'No open tickets'}</div>}
               </div>

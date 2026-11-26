@@ -353,7 +353,8 @@ test('Task Board: open tickets in a first column for Ticket Board users only', a
   assert.ok(r.data.tickets.length > 0);
   assert.ok(r.data.tickets.every(t => t.status !== 'solved'));
   assert.equal((await agent.get(q + '&assignee_id=none')).data.tickets.every(t => !t.assignee_id), true);
-  assert.equal((await staff.get(q)).data.tickets, null);
+  const sb = (await staff.get(q)).data; // everyone on the Task Board sees the column; only Ticket Board users can open tickets
+  assert.ok(Array.isArray(sb.tickets) && sb.can_open_tickets === false && sb.can_convert === false);
 });
 
 test('convert a ticket into a task: linked, files carried over, solved when the task closes', async () => {
