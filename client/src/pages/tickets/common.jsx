@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import Icon from '../../components/Icon.jsx';
 import { Modal, Loading, ErrorBox } from '../../components/ui.jsx';
 import { api } from '../../api.js';
+import { useApp } from '../../context.jsx';
 import { fmtSize, utc, pad } from '../../lib/format.js';
 
 export const STATUS = {
@@ -117,6 +118,13 @@ export function AttachmentList({ files }) {
             {f.size_bytes ? <span className="xs muted">{fmtSize(f.size_bytes)}</span> : null}</a>))}
     </div>
   );
+}
+
+// Subtitle addition on the ticket pages: the support mailbox from Administration → Email Setup (when it is on)
+export function EmailToTicket() {
+  const { supportEmail } = useApp();
+  if (!supportEmail) return null;
+  return <> Email-to-ticket: send an email to <a href={`mailto:${supportEmail}`}>{supportEmail}</a> to raise a ticket.</>;
 }
 
 // The whole original email (with the earlier messages it quotes), for tickets and replies that came by email.

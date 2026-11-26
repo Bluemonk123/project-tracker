@@ -28,12 +28,17 @@ function checkPassword(pw) {
   if (String(pw || '').length < MIN_PW) fail(400, `Password must be at least ${MIN_PW} characters.`);
 }
 
+// The support mailbox (Administration → Email Setup → Incoming email) when tickets by email are on
+export function supportMailbox() {
+  const i = imapConfig();
+  return i.enabled && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(i.user || '') ? i.user : null;
+}
+
 r.get('/setup-status', (_req, res) => {
   const count = get('SELECT COUNT(*) AS n FROM users').n;
   // On a new install (no accounts, so nothing to protect) show where the data lives: a wrong DATA_DIR is easy to spot.
   // the support mailbox (Administration → Email Setup → Incoming email), shown on the sign-in page
-  const i = imapConfig();
-  const supportEmail = i.enabled && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(i.user || '') ? i.user : null;
+  const supportEmail = supportMailbox();
   res.json({ needsSetup: count === 0, appName: getSetting('app_name', 'Project Tracker'), supportEmail, ...(count === 0 ? { dataDir: DATA_DIR } : {}) });
 });
 
@@ -117,6 +122,7 @@ r.get('/auth/me', requireAuth, (req, res) => {
     canSeeTasks: !!req.user.is_admin || visibleProjectIds(req, 'wp.view').length > 0,
     unread,
     appName: getSetting('app_name', 'Project Tracker'),
+    supportEmail: supportMailbox(),
   });
 });
 

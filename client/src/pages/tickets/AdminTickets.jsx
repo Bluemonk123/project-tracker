@@ -141,12 +141,13 @@ export function EmailSetup() {
 }
 
 function Email() {
+  const { reload: reloadApp } = useApp(); // the support address shown on the ticket pages and the sign-in page
   const { data, error, loading, reload } = useLoad(() => api.get('/admin/email'), []);
   if (error) return <ErrorBox error={error} />;
   if (loading && !data) return <Loading />;
   return <>
     <EmailForm key={JSON.stringify([data.main, data.backup])} data={data} onSaved={reload} />
-    <InboundForm key={JSON.stringify(data.inbound)} data={data} onSaved={reload} />
+    <InboundForm key={JSON.stringify(data.inbound)} data={data} onSaved={() => { reload(); reloadApp(); }} />
   </>;
 }
 

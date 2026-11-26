@@ -5,7 +5,7 @@ import { api, qs } from '../../api.js';
 import { useApp, useLoad } from '../../context.jsx';
 import Icon from '../../components/Icon.jsx';
 import { Loading, ErrorBox, Empty, Popover, Modal, Field, UserSelect } from '../../components/ui.jsx';
-import { STATUS, PRIORITY, TYPE_LABEL, TicketStatus, TicketPriority, SlaBadge, fmtShort, fmtLocal, FilePicker, toForm } from './common.jsx';
+import { STATUS, PRIORITY, TYPE_LABEL, TicketStatus, TicketPriority, SlaBadge, fmtShort, fmtLocal, FilePicker, toForm, EmailToTicket } from './common.jsx';
 import TicketScreen from './TicketScreen.jsx';
 
 const CARDS = [
@@ -46,7 +46,7 @@ export default function TicketBoard() {
   return (
     <div className="content wide">
       <div className="page-head">
-        <div className="grow"><h1>Ticket Board</h1><p>Support tickets from raise to solved: triage, assign, reply and keep within the SLA.</p></div>
+        <div className="grow"><h1>Ticket Board</h1><p>Support tickets from raise to solved: triage, assign, reply and keep within the SLA.<EmailToTicket /></p></div>
         <div className="head-actions">
           {data.can.add && <button type="button" className="btn primary" onClick={() => setNewOpen(true)}><Icon name="plus" />New ticket</button>}
         </div>

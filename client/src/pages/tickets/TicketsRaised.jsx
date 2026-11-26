@@ -5,7 +5,7 @@ import { api } from '../../api.js';
 import { useApp, useLoad } from '../../context.jsx';
 import Icon from '../../components/Icon.jsx';
 import { Loading, ErrorBox, Empty, Modal, Field } from '../../components/ui.jsx';
-import { TicketStatus, TicketPriority, fmtLocal, fmtShort, FilePicker, toForm, AttachmentList, ThreadItem, FullEmailButton } from './common.jsx';
+import { TicketStatus, TicketPriority, fmtLocal, fmtShort, FilePicker, toForm, AttachmentList, ThreadItem, FullEmailButton, EmailToTicket } from './common.jsx';
 import RaiseTicketModal from './RaiseTicketModal.jsx';
 
 const agePill = (days) => (days < 1 ? ['Today', 'ok'] : days <= 7 ? [`${days}d`, 'blue'] : days <= 30 ? [`${days}d`, 'amber'] : [`${days}d`, 'red']);
@@ -28,7 +28,7 @@ export default function TicketsRaised() {
   return (
     <div className="content">
       <div className="page-head">
-        <div className="grow"><h1>Tickets Raised</h1><p>{data.is_admin ? 'Every ticket raised, and where each one stands.' : 'Tickets you raised and where each one stands.'}</p></div>
+        <div className="grow"><h1>Tickets Raised</h1><p>{data.is_admin ? 'Every ticket raised, and where each one stands.' : 'Tickets you raised and where each one stands.'}<EmailToTicket /></p></div>
         <div className="head-actions"><button type="button" className="btn primary" onClick={() => setRaise(true)}><Icon name="plus" />Raise ticket</button></div>
       </div>
       <div className="figures">

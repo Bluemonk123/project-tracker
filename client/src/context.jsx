@@ -28,7 +28,7 @@ export function AppProvider({ children }) {
       const me = await api.get('/auth/me');
       // load reference data before rendering pages that depend on it
       await Promise.all([loadMeta(), loadProjects()]);
-      setState({ loading: false, me, needsSetup: false, appName: me.appName });
+      setState({ loading: false, me, needsSetup: false, appName: me.appName, supportEmail: me.supportEmail || null });
       document.title = me.appName;
     } catch (e) {
       if (e.status === 401) {
