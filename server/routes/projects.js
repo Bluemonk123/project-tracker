@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { get, all, run, tx } from '../db.js';
-import { need, can, fail, visibleProjectIds, projectPerms } from '../access.js';
+import { need, can, fail, visibleProjectIds, projectPerms, guardAdminRoles, parseList } from '../access.js';
 import { requireText, dateOrNull, updateSet, notify, todayISO } from '../util.js';
 import { positionsFor, setPosition, removeUserFromPositions, POSITIONS } from '../positions.js';
 
@@ -90,7 +90,7 @@ r.post('/projects', (req, res) => {
   if (get('SELECT id FROM projects WHERE identifier = ?', identifier)) fail(400, 'Another project already uses this short key.');
   const f = projectFields(b);
   if (!f.name) fail(400, 'Project name is required.');
-  const pmRole = get("SELECT id FROM roles WHERE scope = 'project' AND name = 'Product manager'") || get("SELECT id FROM roles WHERE scope='project' ORDER BY position LIMIT 1");
+  const pmRole = get("SELECT id FROM roles WHERE scope = 'project' AND lower(name) = 'product manager'") || get("SELECT id FROM roles WHERE scope='project' ORDER BY position LIMIT 1");
   const id = tx(() => {
     const { id } = run(`INSERT INTO projects(name, identifier, description, color, status, status_explanation, parent_id, manager_id, start_date, end_date, created_by)
                         VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
@@ -206,7 +206,17 @@ r.get('/projects/:pid/members', (req, res) => {
 r.post('/projects/:pid/members', (req, res) => {
   const p = resolveProject(req.params.pid);
   need(req, 'project.members', p.id);
-  const role = checkProjectRole(req.body.role_id);
+  // role_id 'own' (or empty): each person gets their own first role (Administration → Users / Teams page);
+  // people without a role get Client (view only)
+  const own = req.body.role_id == null || req.body.role_id === '' || req.body.role_id === 'own';
+  const role = own ? null : checkProjectRole(req.body.role_id);
+  const fallback = own ? (get("SELECT id FROM roles WHERE scope = 'project' AND name = 'Client (view only)'") || get("SELECT id FROM roles WHERE scope = 'project' ORDER BY position, id LIMIT 1")) : null;
+  const roleFor = (uid) => {
+    if (role) return role.id;
+    const mine = parseList(get('SELECT role_ids FROM users WHERE id = ?', uid)?.role_ids).map(Number)
+      .filter(id => get("SELECT 1 AS x FROM roles WHERE id = ? AND scope = 'project'", id));
+    return mine[0] || fallback?.id || fail(400, 'Create a role first (Administration → Roles).');
+  };
   const occupancy = checkOccupancy(req.body.occupancy);
   let userIds = [];
   if (req.body.team_id) userIds = all('SELECT user_id FROM team_members WHERE team_id = ?', req.body.team_id).map(x => x.user_id);
@@ -216,7 +226,7 @@ r.post('/projects/:pid/members', (req, res) => {
   let added = 0;
   tx(() => {
     for (const uid of new Set(userIds)) {
-      const r1 = run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id, occupancy) VALUES(?,?,?,?)', p.id, uid, role.id, occupancy);
+      const r1 = run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id, occupancy) VALUES(?,?,?,?)', p.id, uid, roleFor(uid), occupancy);
       added += r1.changes;
     }
   });
@@ -347,15 +357,17 @@ r.delete('/projects/:pid/news/:nid', (req, res) => {
 
 // ---------- teams ----------
 // Roles a team member can have now (current) and be moving to (proposed).
-export const TEAM_ROLES = ['Backend Developer', 'Frontend Developer', 'Functional Testing', 'UAT', 'Product Master', 'DevOps',
-  'Product Manager', 'Project Manager', 'Business Analyst', 'Client Facing', 'System Admin'];
+// The role list (Administration → Roles): "Current role" is the person's own role (it decides their permissions),
+// "Future role" is only a note of where they are heading.
+const roleRows = () => all("SELECT id, name FROM roles WHERE scope = 'project' ORDER BY position, id");
 const roleList = (v) => { try { return JSON.parse(v || '[]'); } catch { return []; } };
 function checkRoles(v, label) {
   if (v === undefined) return undefined;
   if (!Array.isArray(v)) fail(400, `${label} must be a list of roles.`);
-  const bad = v.find(x => !TEAM_ROLES.includes(x));
-  if (bad) fail(400, `${bad} is not one of the roles: ${TEAM_ROLES.join(', ')}.`);
-  return TEAM_ROLES.filter(x => v.includes(x)); // keep the catalogue's order, no duplicates
+  const rows = roleRows();
+  const bad = v.find(x => !rows.some(r => r.name === x));
+  if (bad) fail(400, `${bad} is not one of the roles: ${rows.map(r => r.name).join(', ')}.`);
+  return rows.filter(r => v.includes(r.name)); // keep the list's order, no duplicates
 }
 // Adds new members at the end and removes people no longer listed, keeping everyone else's order and roles.
 function setTeamMembers(teamId, ids) {
@@ -379,17 +391,19 @@ r.get('/teams', (req, res) => {
                                          FROM project_members pm JOIN projects p ON p.id = pm.project_id
                                          WHERE pm.project_id IN (${vis.map(() => '?').join(',')}) AND p.archived = 0
                                          GROUP BY pm.user_id`, ...vis).map(x => [x.user_id, x]) : []);
-  const members = all(`SELECT tm.team_id, tm.current_roles, tm.proposed_roles, u.id, u.name, u.email, u.job_title FROM team_members tm
+  const names = new Map(roleRows().map(r => [r.id, r.name]));
+  const members = all(`SELECT tm.team_id, u.role_ids, tm.proposed_roles, u.id, u.name, u.email, u.job_title FROM team_members tm
                        JOIN users u ON u.id = tm.user_id ORDER BY tm.position IS NULL, tm.position, u.name`)
     .map(m => {
       const l = load.get(m.id);
-      return { ...m, current_roles: roleList(m.current_roles), proposed_roles: roleList(m.proposed_roles),
+      const { role_ids, ...rest } = m;
+      return { ...rest, current_roles: roleList(role_ids).map(id => names.get(Number(id))).filter(Boolean), proposed_roles: roleList(m.proposed_roles),
         project_count: l?.projects || 0, occupancy: l?.occupancy_set ? l.occupancy : null };
     });
   res.json(teams.map(t => ({ ...t, members: members.filter(m => m.team_id === t.id) })));
 });
 
-r.get('/team-roles', (_req, res) => res.json(TEAM_ROLES));
+r.get('/team-roles', (_req, res) => res.json(roleRows().map(r => r.name)));
 
 // The projects a person is in, with their role and occupancy and each project's Product Manager (pm) and Project Manager (am).
 r.get('/users/:id/projects', (req, res) => {
@@ -422,12 +436,20 @@ r.put('/teams/:id/order', (req, res) => {
 
 // A member's current and proposed roles in the team.
 r.patch('/teams/:id/members/:uid', (req, res) => {
-  need(req, 'teams.manage');
   const m = get('SELECT * FROM team_members WHERE team_id = ? AND user_id = ?', req.params.id, req.params.uid) || fail(404, 'This person is not in the team.');
   const cur = checkRoles(req.body?.current_roles, 'Current role');
   const prop = checkRoles(req.body?.proposed_roles, 'Proposed role');
-  if (cur) run('UPDATE team_members SET current_roles = ? WHERE team_id = ? AND user_id = ?', JSON.stringify(cur), m.team_id, m.user_id);
-  if (prop) run('UPDATE team_members SET proposed_roles = ? WHERE team_id = ? AND user_id = ?', JSON.stringify(prop), m.team_id, m.user_id);
+  if (cur) {
+    // the current role is the person's permission role: changing it is managing users
+    need(req, 'admin.users');
+    const json = JSON.stringify(cur.map(r => r.id));
+    guardAdminRoles(req, json, get('SELECT role_ids FROM users WHERE id = ?', m.user_id)?.role_ids);
+    run('UPDATE users SET role_ids = ? WHERE id = ?', json, m.user_id);
+  }
+  if (prop) {
+    need(req, 'teams.manage');
+    run('UPDATE team_members SET proposed_roles = ? WHERE team_id = ? AND user_id = ?', JSON.stringify(prop.map(r => r.name)), m.team_id, m.user_id);
+  }
   res.json({ ok: true });
 });
 

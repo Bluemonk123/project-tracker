@@ -14,7 +14,9 @@ if (get('SELECT COUNT(*) AS n FROM projects').n > 0) {
 
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const day = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return iso(d); };
-const role = (name, scope) => get('SELECT id FROM roles WHERE name = ? AND scope = ?', name, scope).id;
+// (older role names used below map to the one role list)
+const ROLE_NAME = { Developer: 'Backend Developer', 'Team lead': 'Backend Developer', 'QA / Tester': 'Functional Testing', 'Product manager': 'Product Manager' };
+const role = (name) => get("SELECT id FROM roles WHERE name = ? AND scope = 'project'", ROLE_NAME[name] || name)?.id ?? null;
 const status = (name) => get('SELECT id FROM statuses WHERE name = ?', name).id;
 const type = (name) => get('SELECT id FROM types WHERE name = ?', name).id;
 const prio = (name) => get("SELECT id FROM priorities WHERE name = ? OR name LIKE '% - ' || ?", name, name).id;
@@ -23,23 +25,23 @@ const PASSWORD = 'demo12345';
 tx(() => {
   let adminId = get('SELECT id FROM users WHERE is_admin = 1 ORDER BY id LIMIT 1')?.id;
   if (!adminId) {
-    adminId = run('INSERT INTO users(name, email, password_hash, is_admin, global_role_id, job_title) VALUES(?,?,?,?,?,?)',
-      'Office Admin', 'admin@office.local', hashPassword(PASSWORD), 1, role('Manager', 'global'), 'Administrator').id;
+    adminId = run('INSERT INTO users(name, email, password_hash, is_admin, job_title) VALUES(?,?,?,?,?)',
+      'Office Admin', 'admin@office.local', hashPassword(PASSWORD), 1, 'Administrator').id;
   }
   const people = [
-    ['Priya Sharma', 'priya@office.local', 'Manager', 'Delivery manager'],
-    ['Rahul Verma', 'rahul@office.local', 'Employee', 'Senior developer'],
-    ['Anita Desai', 'anita@office.local', 'Employee', 'Frontend developer'],
-    ['Vikram Singh', 'vikram@office.local', 'Employee', 'Backend developer'],
-    ['Meera Iyer', 'meera@office.local', 'Employee', 'QA engineer'],
-    ['Karan Mehta', 'karan@office.local', 'Employee', 'Mobile developer'],
-    ['Sneha Kapoor', 'sneha@office.local', 'Employee', 'Business analyst'],
-    ['Arjun Nair', 'arjun@office.local', 'Employee', 'Project manager'],
+    ['Priya Sharma', 'priya@office.local', 'Product Manager', 'Delivery manager', 1],
+    ['Rahul Verma', 'rahul@office.local', 'Backend Developer', 'Senior developer'],
+    ['Anita Desai', 'anita@office.local', 'Frontend Developer', 'Frontend developer'],
+    ['Vikram Singh', 'vikram@office.local', 'Backend Developer', 'Backend developer'],
+    ['Meera Iyer', 'meera@office.local', 'Functional Testing', 'QA engineer'],
+    ['Karan Mehta', 'karan@office.local', 'Frontend Developer', 'Mobile developer'],
+    ['Sneha Kapoor', 'sneha@office.local', 'Business Analyst', 'Business analyst'],
+    ['Arjun Nair', 'arjun@office.local', 'Project Manager', 'Project manager'],
   ];
   const u = {};
-  for (const [name, email, r, title] of people) {
-    u[name.split(' ')[0]] = run('INSERT INTO users(name, email, password_hash, global_role_id, job_title) VALUES(?,?,?,?,?)',
-      name, email, hashPassword(PASSWORD), role(r, 'global'), title).id;
+  for (const [name, email, r, title, allProjects = 0] of people) {
+    u[name.split(' ')[0]] = run('INSERT INTO users(name, email, password_hash, role_ids, all_projects, job_title) VALUES(?,?,?,?,?,?)',
+      name, email, hashPassword(PASSWORD), JSON.stringify([role(r)].filter(Boolean)), allProjects, title).id;
   }
   const team = (name, lead, members) => {
     const id = run('INSERT INTO teams(name, description, lead_id) VALUES(?,?,?)', name, null, u[lead]).id;
@@ -108,9 +110,9 @@ tx(() => {
              VALUES('project',?,?,?,?,?,?,?,?,datetime('now', ?))`, pid, pid, `CRM-release-notes-${ver}.txt`, stored, 'text/plain', Buffer.byteLength(body), u[p.manager], `rn:${rn}`, `-${days} days`);
       }
     }
-    run('INSERT INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', pid, adminId, role('Product manager', 'project'));
-    run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', pid, u[p.manager], role('Product manager', 'project'));
-    for (const [m, r] of p.members) run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', pid, u[m], role(r, 'project'));
+    run('INSERT INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', pid, adminId, role('Product manager'));
+    run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', pid, u[p.manager], role('Product manager'));
+    for (const [m, r] of p.members) run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', pid, u[m], role(r));
     // Key people: CRM fully mapped, HRMS has a broken AM link and no BA, SALES has a broken BA link
     setPosition(pid, 'PM', [u[p.manager]], adminId);
     setPosition(pid, 'AM', [u.Arjun], adminId);

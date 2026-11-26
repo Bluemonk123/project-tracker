@@ -53,7 +53,7 @@ const ids = {};
 test('setup: admin, an agent role, a member of staff', async () => {
   await admin.post('/setup', { name: 'Asha Admin', email: 'admin@office.local', password: 'secret123' });
   const meta = (await admin.get('/meta')).data;
-  const employee = meta.roles.find(r => r.name === 'Employee').id;
+  const employee = undefined;
   // Ticket Board access comes from the global role
   let r = await admin.post('/admin/roles', { name: 'Helpdesk agent', scope: 'global', permissions: ['tickets.view', 'tickets.create', 'tickets.edit', 'tickets.assign'] });
   ids.agentRole = r.data.id;
@@ -61,9 +61,9 @@ test('setup: admin, an agent role, a member of staff', async () => {
   const agentRole = r.data.id;
   r = await admin.post('/admin/roles', { name: 'Board viewer', scope: 'global', permissions: ['tickets.view'] });
   ids.viewerRole = r.data.id;
-  ids.agent = (await admin.post('/admin/users', { name: 'Ravi Agent', email: 'ravi@office.local', password: 'password1', global_role_id: agentRole })).data.id;
-  ids.staff = (await admin.post('/admin/users', { name: 'Sam Staff', email: 'sam@office.local', password: 'password1', global_role_id: employee })).data.id;
-  ids.other = (await admin.post('/admin/users', { name: 'Olga Other', email: 'olga@office.local', password: 'password1', global_role_id: employee })).data.id;
+  ids.agent = (await admin.post('/admin/users', { name: 'Ravi Agent', email: 'ravi@office.local', password: 'password1', role_ids: [agentRole].filter(Boolean) })).data.id;
+  ids.staff = (await admin.post('/admin/users', { name: 'Sam Staff', email: 'sam@office.local', password: 'password1', role_ids: [employee].filter(Boolean) })).data.id;
+  ids.other = (await admin.post('/admin/users', { name: 'Olga Other', email: 'olga@office.local', password: 'password1', role_ids: [employee].filter(Boolean) })).data.id;
   ids.admin = get("SELECT id FROM users WHERE email = 'admin@office.local'").id;
   for (const [c, e] of [[agent, 'ravi'], [staff, 'sam'], [other, 'olga']]) assert.equal((await c.post('/auth/login', { email: `${e}@office.local`, password: 'password1' })).status, 200);
   const perms = (await agent.get('/auth/me')).data.permissions;
@@ -143,7 +143,7 @@ test('permissions: no Ticket Board permission, no board', async () => {
     assert.equal((await other[m](u, b)).status, 403, `${m} ${u}`);
   }
   // Enable only: can open the board, cannot add or edit
-  await admin.patch(`/admin/users/${ids.other}`, { global_role_id: ids.viewerRole });
+  await admin.patch(`/admin/users/${ids.other}`, { role_ids: [ids.viewerRole].filter(Boolean) });
   assert.equal((await other.get('/ticket-board')).status, 200);
   assert.equal((await other.get('/ticket-board')).data.can.add, false);
   assert.equal((await other.patch(`/tickets/${ids.t1}`, { priority: 'high' })).status, 403);
@@ -552,8 +552,8 @@ test('working calendar: priority days, off days, holidays drive due dates', asyn
 
 test('users can be added without a password and set one later', async () => {
   const meta = (await admin.get('/meta')).data;
-  const emp = meta.roles.find(r => r.name === 'Employee').id;
-  const r = await admin.post('/admin/users', { name: 'Mehak', email: 'mehak@example.com', global_role_id: emp });
+  const emp = undefined;
+  const r = await admin.post('/admin/users', { name: 'Mehak', email: 'mehak@example.com', role_ids: [emp].filter(Boolean) });
   assert.equal(r.status, 201, JSON.stringify(r.data));
   assert.equal((await admin.get('/admin/users')).data.find(u => u.id === r.data.id).has_password, 0);
   const c = client();
@@ -674,8 +674,8 @@ test('assignees: Support Team members who can work on tickets (not other team me
 
 test('Enable Ticket Board on one person (on top of their role)', async () => {
   const roles = (await admin.get('/admin/roles')).data;
-  const employee = roles.find(r => r.name === 'Employee' && r.scope === 'global').id;
-  const u = (await admin.post('/admin/users', { name: 'Dual Role', email: 'dual@office.local', password: 'password1', global_role_id: employee })).data.id;
+  const employee = undefined;
+  const u = (await admin.post('/admin/users', { name: 'Dual Role', email: 'dual@office.local', password: 'password1', role_ids: [employee].filter(Boolean) })).data.id;
   const c = client(); await c.post('/auth/login', { email: 'dual@office.local', password: 'password1' });
   let perms = (await c.get('/auth/me')).data.permissions;
   assert.ok(!perms.includes('tickets.view'));
@@ -693,11 +693,11 @@ test('Enable Ticket Board on one person (on top of their role)', async () => {
 
 test('Ticket Board permissions in a project role give board access', async () => {
   const roles = (await admin.get('/admin/roles')).data;
-  const employee = roles.find(r => r.name === 'Employee' && r.scope === 'global').id;
+  const employee = undefined;
   const role = (await admin.post('/admin/roles', { name: 'Support on project', scope: 'project', permissions: ['project.view', 'tickets.view', 'tickets.edit', 'bogus'] })).data.id;
   const saved = (await admin.get('/admin/roles')).data.find(r => r.id === role);
   assert.deepEqual([...saved.permissions].sort(), ['project.view', 'tickets.edit', 'tickets.view']);
-  const u = (await admin.post('/admin/users', { name: 'Proj Support', email: 'projsup@office.local', password: 'password1', global_role_id: employee })).data.id;
+  const u = (await admin.post('/admin/users', { name: 'Proj Support', email: 'projsup@office.local', password: 'password1', role_ids: [employee].filter(Boolean) })).data.id;
   const c = client(); await c.post('/auth/login', { email: 'projsup@office.local', password: 'password1' });
   assert.ok(!(await c.get('/auth/me')).data.permissions.includes('tickets.view'));
   const pid = get('SELECT id FROM projects ORDER BY id LIMIT 1').id;

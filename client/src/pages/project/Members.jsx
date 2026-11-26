@@ -24,7 +24,7 @@ function AddMembers({ project, onClose, onSaved }) {
   const [mode, setMode] = useState('people');
   const [ids, setIds] = useState([]);
   const [teamId, setTeamId] = useState('');
-  const [roleId, setRoleId] = useState(roles.find(r => r.name === 'Developer')?.id || roles[0]?.id);
+  const [roleId, setRoleId] = useState('own');
   const [occupancy, setOccupancy] = useState(null);
   const [busy, run] = useAsync();
   const existing = new Set(project.members.map(m => m.user_id));
@@ -48,8 +48,11 @@ function AddMembers({ project, onClose, onSaved }) {
           </select>
         </Field>
       )}
-      <Field label="Role in this project" hint="Roles decide what members can do. Administrators can create custom roles.">
-        <select value={roleId} onChange={(e) => setRoleId(Number(e.target.value))}>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
+      <Field label="Role in this project" hint="Decides what they can do in this project. Roles and their permissions are in Administration → Roles.">
+        <select value={roleId} onChange={(e) => setRoleId(e.target.value === 'own' ? 'own' : Number(e.target.value))}>
+          <option value="own">Each person's own role (as on the Teams page)</option>
+          {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+        </select>
       </Field>
       {roles.find(r => r.id === roleId)?.description && <p className="small soft" style={{ margin: 0 }}>{roles.find(r => r.id === roleId).description}</p>}
       <Field label="Occupancy" hint="How much of their time goes to this project. Shown on the Project Board and the Teams page; you can change it per person later.">

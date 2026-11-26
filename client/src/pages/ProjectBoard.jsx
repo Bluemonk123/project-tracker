@@ -336,7 +336,9 @@ function LinksModal({ title, value, onClose, onSave }) {
 }
 
 // Short codes for project roles, shown in the same chip style as PdM / PM / BA / DT.
-const ROLE_CODE = { 'Product manager': 'PdM', 'Project manager': 'PM', 'Team lead': 'TL', 'Business analyst': 'BA', Developer: 'DEV', 'QA / Tester': 'QA', Viewer: 'VW' };
+const ROLE_CODE = { 'Product manager': 'PdM', 'Project manager': 'PM', 'Team lead': 'TL', 'Business analyst': 'BA', Developer: 'DEV', 'QA / Tester': 'QA', Viewer: 'VW',
+  'Product Manager': 'PdM', 'Project Manager': 'PM', 'Business Analyst': 'BA', 'Backend Developer': 'BE', 'Frontend Developer': 'FE', 'Functional Testing': 'QA',
+  UAT: 'UAT', 'Product Master': 'PMS', DevOps: 'OPS', 'Client Facing': 'CF', 'System Admin': 'SA', 'Client (view only)': 'CL' };
 const roleCode = (name) => ROLE_CODE[name] || name.split(/[\s/]+/).filter(Boolean).map(w => w[0]).join('').slice(0, 3).toUpperCase();
 
 function TeamRow({ code, tone, icon, label, title, children }) {

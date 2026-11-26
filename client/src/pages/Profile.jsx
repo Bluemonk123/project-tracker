@@ -18,7 +18,7 @@ export default function Profile() {
     <div className="content" style={{ maxWidth: 820 }}>
       <div className="page-head row">
         <Avatar id={user.id} name={user.name} size="lg" />
-        <div className="grow"><h1>{user.name}</h1><p>{user.email}{me.user.global_role ? `, ${me.user.global_role.name}` : ''}{user.is_admin ? ', administrator' : ''}. Member of {projects.length} projects.</p></div>
+        <div className="grow"><h1>{user.name}</h1><p>{user.email}{me.user.roles?.length ? `, ${me.user.roles.join(', ')}` : ''}{user.is_admin ? ', administrator' : ''}. Member of {projects.length} projects.</p></div>
       </div>
       {user.must_change_password ? <div className="warn-box" style={{ marginBottom: 16 }}>An administrator set your password. Please choose your own below.</div> : null}
       <div className="grid-2">

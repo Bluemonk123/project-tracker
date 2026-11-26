@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { get, all, run, tx } from '../db.js';
-import { need, can, fail, visibleProjectIds } from '../access.js';
+import { need, can, fail, visibleProjectIds, parseList } from '../access.js';
 import { requireText, dateOrNull, intOrNull, numOrNull, notify, mentionedUserIds, todayISO } from '../util.js';
 import { resolveProject } from './projects.js';
 import { boardTickets, solveLinkedTickets } from './tickets.js';
@@ -417,7 +417,11 @@ function checkMemberOrNull(projectId, userId, label) {
 // Someone assigned to a task must be able to see it: add them to the project if needed.
 function ensureMember(projectId, userId) {
   if (!userId || get('SELECT 1 AS x FROM project_members WHERE project_id = ? AND user_id = ?', projectId, userId)) return;
-  const role = get("SELECT id FROM roles WHERE scope = 'project' AND name = 'Developer'") || get("SELECT id FROM roles WHERE scope = 'project' ORDER BY position LIMIT 1");
+  // their own role (Administration → Users / Teams page), else a developer role
+  const own = parseList(get('SELECT role_ids FROM users WHERE id = ?', userId)?.role_ids).map(Number)
+    .find(id => get("SELECT 1 AS x FROM roles WHERE id = ? AND scope = 'project'", id));
+  const role = own ? { id: own } : (get("SELECT id FROM roles WHERE scope = 'project' AND name IN ('Backend Developer', 'Developer') ORDER BY name = 'Backend Developer' DESC")
+    || get("SELECT id FROM roles WHERE scope = 'project' ORDER BY position LIMIT 1"));
   run('INSERT OR IGNORE INTO project_members(project_id, user_id, role_id) VALUES(?,?,?)', projectId, userId, role.id);
 }
 

@@ -43,6 +43,15 @@ export function requireAuth(req, _res, next) {
   next();
 }
 
+// A person's own roles (Administration → Users, or "Current role" on the Teams page), from the one role list.
+export function personRoles(u) {
+  const ids = parseList(u?.role_ids).map(Number).filter(Boolean);
+  return ids.length ? all(`SELECT id, name, permissions FROM roles WHERE id IN (${ids.map(() => '?').join(',')})`, ...ids) : [];
+}
+
+// Company-wide permissions: what the person's roles allow outside projects (Administration, reports, creating
+// projects, Ticket Board), the Ticket Board switch on the person, Ticket Board permissions in project roles they hold,
+// and with "Sees all projects" their roles' project permissions in every project.
 export function globalPerms(req) {
   if (req._perm.global) return req._perm.global;
   const u = req.user;
@@ -50,11 +59,11 @@ export function globalPerms(req) {
   if (!u) set = new Set();
   else if (u.is_admin) set = new Set([...ALL_GLOBAL_KEYS, ...ALL_PROJECT_KEYS, ...ALL_TICKET_KEYS]);
   else {
-    const role = u.global_role_id ? get('SELECT permissions FROM roles WHERE id = ?', u.global_role_id) : null;
-    set = new Set(parseList(role?.permissions));
-    // "Enable Ticket Board" set on the person, on top of their role
+    set = new Set();
+    for (const r of personRoles(u)) {
+      for (const k of parseList(r.permissions)) if (ALL_GLOBAL_KEYS.includes(k) || (u.all_projects && ALL_PROJECT_KEYS.includes(k))) set.add(k);
+    }
     (TICKET_ACCESS[u.ticket_access] || []).forEach(k => set.add(k));
-    // Ticket Board permissions in any of the person's project roles
     all(`SELECT DISTINCT r.permissions FROM project_members pm JOIN roles r ON r.id = pm.role_id JOIN projects p ON p.id = pm.project_id
          WHERE pm.user_id = ?`, u.id)
       .forEach(r => parseList(r.permissions).forEach(k => { if (TICKET_BOARD_KEYS.includes(k)) set.add(k); }));
@@ -105,6 +114,16 @@ export function visibleProjectIds(req, perm = 'project.view', { includeArchived 
 
 export function permsForClient(req) {
   return [...globalPerms(req)];
+}
+
+// Roles with Administration permissions can only be given by administrators.
+export function guardAdminRoles(req, json, before = '[]') {
+  if (req.user.is_admin || json == null) return;
+  const had = parseList(before).map(Number);
+  for (const id of parseList(json).filter(x => !had.includes(Number(x)))) {
+    const r = get('SELECT name, permissions FROM roles WHERE id = ?', id);
+    if (parseList(r?.permissions).some(k => k.startsWith('admin.'))) fail(403, `Only administrators can give the role ${r.name} (it includes Administration permissions).`);
+  }
 }
 
 export { parseList };

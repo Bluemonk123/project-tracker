@@ -54,12 +54,12 @@ test('first-run setup creates the administrator', async () => {
 
 test('admin creates users, roles and a team', async () => {
   const meta = (await admin.get('/meta')).data;
-  ids.devRole = meta.roles.find(r => r.name === 'Developer').id;
-  ids.pmRole = meta.roles.find(r => r.name === 'Product manager').id;
-  ids.employee = meta.roles.find(r => r.name === 'Employee').id;
-  let r = await admin.post('/admin/users', { name: 'Dev One', email: 'dev@office.local', password: 'password1', global_role_id: ids.employee });
+  ids.devRole = meta.roles.find(r => r.name === 'Backend Developer').id;
+  ids.pmRole = meta.roles.find(r => r.name === 'Product Manager').id;
+  ids.employee = undefined;
+  let r = await admin.post('/admin/users', { name: 'Dev One', email: 'dev@office.local', password: 'password1', role_ids: [ids.employee].filter(Boolean) });
   assert.equal(r.status, 201, JSON.stringify(r.data)); ids.dev = r.data.id;
-  r = await admin.post('/admin/users', { name: 'Out Sider', email: 'out@office.local', password: 'password1', global_role_id: ids.employee });
+  r = await admin.post('/admin/users', { name: 'Out Sider', email: 'out@office.local', password: 'password1', role_ids: [ids.employee].filter(Boolean) });
   ids.out = r.data.id;
   r = await admin.post('/admin/roles', { name: 'Designer', scope: 'project', permissions: ['project.view', 'wp.view', 'bogus.perm'] });
   assert.equal(r.status, 201);
@@ -394,7 +394,7 @@ test('stages: designer, developer and tester get the task as it moves', async ()
   const meta = (await admin.get('/meta')).data;
   const st = (n) => meta.statuses.find(s => s.name === n).id;
   const tester = client();
-  const t = (await admin.post('/admin/users', { name: 'Tess Tester', email: 'tess@office.local', password: 'password1', global_role_id: ids.employee })).data;
+  const t = (await admin.post('/admin/users', { name: 'Tess Tester', email: 'tess@office.local', password: 'password1', role_ids: [ids.employee].filter(Boolean) })).data;
   await tester.post('/auth/login', { email: 'tess@office.local', password: 'password1' });
   const p = (await admin.post('/projects', { name: 'Stage Test', identifier: 'STG' })).data;
   await admin.post(`/projects/${p.id}/members`, { user_id: ids.dev, role_id: ids.devRole });
@@ -630,7 +630,7 @@ test('teams: member order and current / proposed roles', async () => {
   assert.equal((await admin.put(`/teams/${t}/order`, { user_ids: [99999] })).status, 400, 'only this team');
   assert.equal((await dev.put(`/teams/${t}/order`, { user_ids: [me] })).status, 403);
   // roles
-  assert.deepEqual((await admin.get('/team-roles')).data, ['Backend Developer', 'Frontend Developer', 'Functional Testing', 'UAT', 'Product Master', 'DevOps', 'Product Manager', 'Project Manager', 'Business Analyst', 'Client Facing', 'System Admin']);
+  assert.deepEqual((await admin.get('/team-roles')).data.slice(0, 11), ['Backend Developer', 'Frontend Developer', 'Functional Testing', 'UAT', 'Product Master', 'DevOps', 'Product Manager', 'Project Manager', 'Business Analyst', 'Client Facing', 'System Admin']);
   assert.equal((await admin.patch(`/teams/${t}/members/${ids.dev}`, { current_roles: ['DevOps', 'Backend Developer'], proposed_roles: ['Product Master'] })).status, 200);
   assert.equal((await admin.patch(`/teams/${t}/members/${ids.dev}`, { current_roles: ['Astronaut'] })).status, 400);
   let m = (await list()).find(x => x.id === ids.dev);
@@ -641,6 +641,41 @@ test('teams: member order and current / proposed roles', async () => {
   const after = await list();
   assert.deepEqual(after.map(x => x.id), [me, ids.dev]);
   assert.deepEqual(after.find(x => x.id === ids.dev).current_roles, ['Backend Developer', 'DevOps']);
+  // the current role is the person's own role: it shows in Administration and needs user management to change
+  const u = (await admin.get('/admin/users')).data.find(x => x.id === ids.dev);
+  assert.deepEqual(u.role_names, ['Backend Developer', 'DevOps']);
+  assert.ok((await admin.get('/team-roles')).data.includes('Client (view only)'));
+});
+
+test('one role list: own roles give company-wide permissions; Sees all projects; only admins give admin roles', async () => {
+  const roles = (await admin.get('/admin/roles')).data;
+  assert.ok(roles.every(r => r.scope === 'project'), 'only the one list is shown');
+  const cat = (await admin.get('/admin/permissions')).data;
+  const helper = (await admin.post('/admin/roles', { name: 'Reports helper', permissions: ['reports.view', 'wp.view', 'project.view', 'tickets.view'] })).data.id;
+  const saved = (await admin.get('/admin/roles')).data.find(r => r.id === helper);
+  assert.deepEqual([...saved.permissions].sort(), ['project.view', 'reports.view', 'tickets.view', 'wp.view'], 'any permission can be in a role');
+  assert.ok(cat.global.some(p => p.key === 'admin.users'));
+  const u = (await admin.post('/admin/users', { name: 'Rita Reports', email: 'rita@office.local', password: 'password1', role_ids: [helper] })).data.id;
+  const c = client(); await c.post('/auth/login', { email: 'rita@office.local', password: 'password1' });
+  let me = (await c.get('/auth/me')).data;
+  assert.ok(me.permissions.includes('reports.view') && me.permissions.includes('tickets.view'));
+  assert.ok(!me.permissions.includes('wp.view'), 'project permissions only in projects (or with Sees all projects)');
+  assert.equal(me.canSeeTasks, false, 'no task pages in the sidebar');
+  assert.deepEqual(me.user.roles, ['Reports helper']);
+  await admin.patch(`/admin/users/${u}`, { all_projects: true });
+  me = (await c.get('/auth/me')).data;
+  assert.ok(me.permissions.includes('wp.view') && me.canSeeTasks);
+  assert.equal((await c.get(`/projects/${ids.project}`)).status, 200);
+  // a role with Administration permissions can only be given by an administrator
+  const adminish = (await admin.post('/admin/roles', { name: 'People admin', permissions: ['admin.users'] })).data.id;
+  await admin.patch(`/admin/users/${u}`, { role_ids: [helper, adminish] });
+  const other = (await admin.post('/admin/users', { name: 'Nina New', email: 'nina@office.local', password: 'password1' })).data.id;
+  assert.equal((await c.patch(`/admin/users/${other}`, { role_ids: [adminish] })).status, 403);
+  assert.equal((await c.patch(`/admin/users/${other}`, { role_ids: [helper] })).status, 200);
+  // adding a member with "own role" uses the person's first role
+  const p = (await admin.post('/projects', { name: 'Own Role', identifier: 'OWNR' })).data.id;
+  assert.equal((await admin.post(`/projects/${p}/members`, { user_id: other, role_id: 'own' })).status, 201);
+  assert.equal((await admin.get(`/projects/${p}/members`)).data.find(m => m.user_id === other).role_id, helper);
 });
 
 test('occupancy per project member, totals on teams and a person\'s projects with PM / AM', async () => {

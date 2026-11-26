@@ -13,10 +13,10 @@ const BOARD_COLUMN_NAMES = { new: 'New', design: 'In Design', develop: 'In Devel
 function UserModal({ user, onClose, onSaved }) {
   const { meta, isAdmin } = useApp();
   const teams = useLoad(() => api.get('/teams'), []);
-  const globalRoles = meta.roles.filter(r => r.scope === 'global');
+  const roleList = meta.roles.filter(r => r.scope === 'project');
   const [f, setF] = useState({
     name: user?.name || '', email: user?.email || '', job_title: user?.job_title || '', password: '',
-    global_role_id: user?.global_role_id ?? globalRoles.find(r => r.name === 'Employee')?.id ?? '', is_admin: !!user?.is_admin,
+    role_ids: user?.role_ids || [], all_projects: !!user?.all_projects, is_admin: !!user?.is_admin,
     ticket_access: user?.ticket_access || '',
     team_ids: null,
   });
@@ -25,7 +25,7 @@ function UserModal({ user, onClose, onSaved }) {
   const currentTeams = f.team_ids ?? (teams.data || []).filter(t => user && t.members.some(m => m.id === user.id)).map(t => t.id);
   const gen = () => set('password', Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6).toUpperCase());
   const save = async () => {
-    const body = { ...f, team_ids: f.team_ids ?? undefined, password: f.password || undefined, global_role_id: f.global_role_id || null, ticket_access: f.ticket_access || null };
+    const body = { ...f, team_ids: f.team_ids ?? undefined, password: f.password || undefined, ticket_access: f.ticket_access || null };
     const r = await run(() => (user ? api.patch(`/admin/users/${user.id}`, body) : api.post('/admin/users', body)), user ? 'User saved' : 'User created');
     if (r) { onSaved(); onClose(); }
   };
@@ -35,10 +35,8 @@ function UserModal({ user, onClose, onSaved }) {
         <Field label="Full name"><input type="text" value={f.name} onChange={(e) => set('name', e.target.value)} required /></Field>
         <Field label="Email" hint="Used to sign in."><input type="email" value={f.email} onChange={(e) => set('email', e.target.value)} required /></Field>
         <Field label="Job title"><input type="text" value={f.job_title} onChange={(e) => set('job_title', e.target.value)} placeholder="e.g. QA engineer" /></Field>
-        <Field label="Global role" hint="Managers see every project. Employees see only projects they are members of.">
-          <select value={f.global_role_id} onChange={(e) => set('global_role_id', e.target.value ? Number(e.target.value) : '')}>
-            <option value="">None</option>{globalRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-          </select>
+        <Field label="Sees all projects" hint="Off: only the projects they are a member of. On: every project, with what their roles allow.">
+          <label className="check"><input type="checkbox" checked={f.all_projects} onChange={(e) => set('all_projects', e.target.checked)} />Sees all projects (for managers)</label>
         </Field>
         <Field label="Enable Ticket Board" hint="For this person only, on top of their role. To be assigned tickets they also need to be in the Support Team (Teams page).">
           <select value={f.ticket_access} onChange={(e) => set('ticket_access', e.target.value)}>
@@ -48,6 +46,15 @@ function UserModal({ user, onClose, onSaved }) {
           </select>
         </Field>
 
+        <Field label="Roles" className="span-2" hint="Their own roles (also the Current role on the Teams page). They decide what this person can do; a project can give them another role. Roles and permissions: Administration → Roles.">
+          <div className="row wrap">
+            {roleList.map(r => (
+              <label key={r.id} className="check small" style={{ padding: '4px 8px', border: '1px solid var(--line)', borderRadius: 6 }}>
+                <input type="checkbox" checked={f.role_ids.includes(r.id)} onChange={(e) => set('role_ids', e.target.checked ? [...f.role_ids, r.id] : f.role_ids.filter(x => x !== r.id))} />{r.name}
+              </label>
+            ))}
+          </div>
+        </Field>
         <Field label={user ? 'Set a new password' : 'Password'} hint={user ? (user.has_password ? 'Leave empty to keep the current password. They will be asked to change it.' : 'No password yet: set one so they can sign in.') : 'At least 8 characters, or leave empty and set it later (they cannot sign in until then).'}>
           <div className="row"><input type="text" value={f.password} onChange={(e) => set('password', e.target.value)} minLength={8} autoComplete="off" /><button type="button" className="btn" onClick={gen}>Generate</button></div>
         </Field>
@@ -87,13 +94,13 @@ function Users() {
       <ErrorBox error={error} />
       <div className="panel table-wrap">
         <table className="table">
-          <thead><tr><th>Name</th><th className="hide-sm">Job title</th><th>Global role</th><th className="hide-sm">Teams</th><th className="num">Projects</th><th className="hide-sm">Last sign-in</th><th>Status</th><th /></tr></thead>
+          <thead><tr><th>Name</th><th className="hide-sm">Job title</th><th>Roles</th><th className="hide-sm">Teams</th><th className="num">Projects</th><th className="hide-sm">Last sign-in</th><th>Status</th><th /></tr></thead>
           <tbody>
             {rows.map(u => (
               <tr key={u.id}>
                 <td><Person id={u.id} name={u.name} /><div className="xs muted" style={{ paddingLeft: 29 }}>{u.email}</div></td>
                 <td className="hide-sm soft">{u.job_title || '—'}</td>
-                <td>{u.global_role_name || <span className="muted">None</span>}{u.is_admin ? <span className="tag accent" style={{ marginLeft: 6 }}>Admin</span> : null}{u.ticket_access ? <span className="tag" style={{ marginLeft: 6 }}>{u.ticket_access === 'lead' ? 'Ticket lead' : 'Tickets'}</span> : null}</td>
+                <td>{u.role_names?.length ? u.role_names.join(', ') : <span className="muted">None</span>}{u.all_projects ? <span className="tag" style={{ marginLeft: 6 }}>All projects</span> : null}{u.is_admin ? <span className="tag accent" style={{ marginLeft: 6 }}>Admin</span> : null}{u.ticket_access ? <span className="tag" style={{ marginLeft: 6 }}>{u.ticket_access === 'lead' ? 'Ticket lead' : 'Tickets'}</span> : null}</td>
                 <td className="hide-sm small soft">{u.teams || '—'}</td>
                 <td className="num">{u.project_count}</td>
                 <td className="hide-sm small muted">{u.last_login_at ? timeAgo(u.last_login_at) : 'Never'}</td>
@@ -122,7 +129,7 @@ function Users() {
 function RoleModal({ role, scope, catalogue, onClose, onSaved }) {
   const [f, setF] = useState({ name: role?.name || '', description: role?.description || '', permissions: role?.permissions || [], scope: role?.scope || scope });
   const [busy, run] = useAsync();
-  const perms = f.scope === 'global' ? [...catalogue.global, ...catalogue.project] : f.scope === 'ticket' ? (catalogue.ticket || []) : [...catalogue.project, ...catalogue.global.filter(p => p.group === 'Ticket Board')];
+  const perms = [...catalogue.project, ...catalogue.global]; // one role list: every permission can be chosen
   const groups = [...new Set(perms.map(p => p.group))];
   const toggle = (k) => setF(s => ({ ...s, permissions: s.permissions.includes(k) ? s.permissions.filter(x => x !== k) : [...s.permissions, k] }));
   const save = async () => {
@@ -130,17 +137,17 @@ function RoleModal({ role, scope, catalogue, onClose, onSaved }) {
     if (r) { onSaved(); onClose(); }
   };
   return (
-    <Modal title={role ? `Edit role: ${role.name}` : `New ${f.scope} role`} wide onClose={onClose} onSubmit={save}
+    <Modal title={role ? `Edit role: ${role.name}` : 'New role'} wide onClose={onClose} onSubmit={save}
       footer={<><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy}>Save role</button></>}>
       <div className="form-grid">
         <Field label="Role name"><input type="text" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required placeholder="e.g. Business analyst" /></Field>
         <Field label="Description"><input type="text" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></Field>
       </div>
-      {f.scope === 'global' && <div className="info-box">Project permissions in a global role apply to <b>every</b> project. Use this for managers who monitor all applications.</div>}
+      <div className="info-box small">Project permissions apply in the projects where the person has this role (or in every project if the person has "Sees all projects"). Administration, Reports, Projects and Ticket Board permissions apply to the whole app for everyone who has this role.</div>
       {groups.map(g => (
         <div key={g} className="perm-group">
           <h4>{g}</h4>
-          {g === 'Ticket Board' && f.scope !== 'global' && <p className="muted xs" style={{ margin: '0 0 6px' }}>There is one Ticket Board for the whole company: ticking these gives everyone with this project role that access to the board.</p>}
+
           <div className="perm-grid">
             {perms.filter(p => p.group === g).map(p => (
               <label key={p.key} className="check small"><input type="checkbox" checked={f.permissions.includes(p.key)} onChange={() => toggle(p.key)} />{p.label}</label>
@@ -172,7 +179,7 @@ function Roles() {
             <div className="grow" style={{ minWidth: 0 }}>
               <b>{r.name}</b>{r.builtin ? <span className="tag" style={{ marginLeft: 6 }}>Built in</span> : null}
               <div className="small soft">{r.description || ' '}</div>
-              <div className="xs muted">{r.permissions.length} permissions, used by {scope === 'project' ? `${r.member_count} memberships` : `${r.user_count} people`}</div>
+              <div className="xs muted">{r.permissions.length} permissions · {r.user_count} {r.user_count === 1 ? 'person' : 'people'} · {r.member_count} project memberships</div>
             </div>
             <button className="btn sm" onClick={() => setModal({ role: r })}>Edit permissions</button>
             {!r.builtin && <button className="icon-btn" aria-label={`Delete ${r.name}`} onClick={async () => {
@@ -185,8 +192,7 @@ function Roles() {
   );
   return (
     <>
-      {section('global', 'Global roles', 'Given to each person for the whole system, including the Ticket Board. People who can work on tickets and are in the Support Team (Teams page) can be assigned tickets.')}
-      {section('project', 'Project roles', 'Given to each person per project when they become a member.')}
+      {section('project', 'Roles', 'The one role list: each person has their own roles (Users, or Current role on the Teams page), and each project member has one of them in that project.')}
 
       {modal && <RoleModal role={modal.role} scope={modal.scope} catalogue={catalogue} onClose={() => setModal(null)} onSaved={refresh} />}
     </>

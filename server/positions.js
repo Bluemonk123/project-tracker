@@ -11,7 +11,7 @@ export const POSITIONS = [
   { code: 'PM', short: 'PdM', label: 'Product Manager', multiple: false, role: 'Product manager' },
   { code: 'AM', short: 'PM', label: 'Project Manager', multiple: false, role: 'Project manager' },
   { code: 'BA', label: 'Business Analyst', multiple: false, role: 'Business analyst' },
-  { code: 'DT', label: 'Development Team', multiple: true, role: 'Developer' },
+  { code: 'DT', label: 'Development Team', multiple: true, role: 'Backend Developer' },
 ];
 export const POSITION_CODES = POSITIONS.map(p => p.code);
 
@@ -47,8 +47,8 @@ export function positionsFor(projectIds) {
   return out;
 }
 
-const roleId = (name) => (get("SELECT id FROM roles WHERE scope = 'project' AND name = ?", name)
-  || get("SELECT id FROM roles WHERE scope = 'project' AND name = 'Developer'")
+const roleId = (name) => (get("SELECT id FROM roles WHERE scope = 'project' AND lower(name) = lower(?)", name)
+  || get("SELECT id FROM roles WHERE scope = 'project' AND name IN ('Backend Developer', 'Developer') ORDER BY name = 'Backend Developer' DESC")
   || get("SELECT id FROM roles WHERE scope = 'project' ORDER BY position LIMIT 1")).id;
 
 // Replace the people mapped to one position. Unlisted people are marked removed (not deleted).

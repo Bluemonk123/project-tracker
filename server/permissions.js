@@ -26,6 +26,11 @@ export const TICKET_ACCESS = {
   lead: ['tickets.view', 'tickets.create', 'tickets.edit', 'tickets.assign'],
 };
 
+// The one role list starts with these (the same names as on the Teams page); more can be added in Administration → Roles.
+export const JOB_ROLES = ['Backend Developer', 'Frontend Developer', 'Functional Testing', 'UAT', 'Product Master', 'DevOps',
+  'Product Manager', 'Project Manager', 'Business Analyst', 'Client Facing', 'System Admin'];
+export const CLIENT_VIEW = ['project.view', 'wp.view', 'board.view'];
+
 export const PROJECT_PERMISSIONS = [
   { key: 'project.view',      group: 'Project',        label: 'View project' },
   { key: 'project.edit',      group: 'Project',        label: 'Edit project details and status' },

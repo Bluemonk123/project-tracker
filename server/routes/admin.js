@@ -2,7 +2,7 @@ import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { get, all, run, tx, hashPassword, getSetting, setSetting, backupNow, BACKUP_DIR, maxUploadMb, UPLOAD_LIMIT_FROM_ENV } from '../db.js';
-import { need, fail, parseList } from '../access.js';
+import { need, fail, parseList, guardAdminRoles } from '../access.js';
 import { GLOBAL_PERMISSIONS, PROJECT_PERMISSIONS, TICKET_PERMISSIONS, TICKET_BOARD_KEYS, ALL_GLOBAL_KEYS, ALL_PROJECT_KEYS, ALL_TICKET_KEYS } from '../permissions.js';
 import { requireText, updateSet } from '../util.js';
 
@@ -15,7 +15,7 @@ r.get('/meta', (_req, res) => {
     statuses: all('SELECT * FROM statuses ORDER BY position, id'),
     priorities: all('SELECT * FROM priorities ORDER BY position, id'),
     criticalities: all('SELECT * FROM criticalities ORDER BY position, id'),
-    roles: all('SELECT id, name, scope, description, builtin FROM roles ORDER BY scope, position, id'),
+    roles: all("SELECT id, name, scope, description, builtin FROM roles WHERE scope = 'project' ORDER BY position, id"),
     activities: parseList(getSetting('time_activities')),
     appName: getSetting('app_name', 'Project Tracker'),
     maxUploadMb: maxUploadMb(),
@@ -26,13 +26,16 @@ r.get('/meta', (_req, res) => {
 // ---------- users ----------
 r.get('/admin/users', (req, res) => {
   need(req, 'admin.users');
+  const names = new Map(all("SELECT id, name FROM roles WHERE scope = 'project'").map(r => [r.id, r.name]));
   res.json(all(`
-    SELECT u.id, u.name, u.email, u.job_title, u.is_admin, u.status, u.global_role_id, u.ticket_access, u.created_at, u.last_login_at, (u.password_hash <> '') AS has_password,
-           r.name AS global_role_name, (SELECT name FROM roles tr WHERE tr.id = u.ticket_role_id) AS ticket_role_name,
+    SELECT u.id, u.name, u.email, u.job_title, u.is_admin, u.status, u.role_ids, u.all_projects, u.ticket_access, u.created_at, u.last_login_at, (u.password_hash <> '') AS has_password,
            (SELECT COUNT(*) FROM project_members pm WHERE pm.user_id = u.id) AS project_count,
            (SELECT GROUP_CONCAT(t.name, ', ') FROM team_members tm JOIN teams t ON t.id = tm.team_id WHERE tm.user_id = u.id) AS teams
-    FROM users u LEFT JOIN roles r ON r.id = u.global_role_id
-    ORDER BY u.status = 'locked', u.name`));
+    FROM users u
+    ORDER BY u.status = 'locked', u.name`).map(u => {
+      const ids = parseList(u.role_ids).map(Number);
+      return { ...u, role_ids: ids, role_names: ids.map(id => names.get(id)).filter(Boolean) };
+    }));
 });
 
 function checkTicketRole(id) {
@@ -44,11 +47,13 @@ function checkTicketRole(id) {
 
 const checkTicketAccess = (v) => (v === '' || v == null ? null : ['work', 'lead'].includes(v) ? v : fail(400, 'Ticket Board access must be off, work or lead.'));
 
-function checkGlobalRole(id) {
-  if (id == null || id === '') return null;
-  const role = get("SELECT id FROM roles WHERE id = ? AND scope = 'global'", id);
-  if (!role) fail(400, 'Choose a valid global role.');
-  return role.id;
+// A person's roles, from the role list (Administration → Roles)
+export function checkRoleIds(v) {
+  if (v === undefined) return undefined;
+  if (!Array.isArray(v)) fail(400, 'Roles must be a list.');
+  const ids = [...new Set(v.map(Number).filter(Boolean))];
+  for (const id of ids) if (!get("SELECT id FROM roles WHERE id = ? AND scope = 'project'", id)) fail(400, 'Choose roles from the list.');
+  return JSON.stringify(ids);
 }
 
 r.post('/admin/users', (req, res) => {
@@ -61,9 +66,11 @@ r.post('/admin/users', (req, res) => {
   const pw = String(req.body.password || '');
   if (pw && pw.length < 8) fail(400, 'Password must be at least 8 characters.');
   if (req.body.is_admin && !req.user.is_admin) fail(403, 'Only administrators can create administrators.');
-  const { id } = run(`INSERT INTO users(name, email, password_hash, is_admin, global_role_id, ticket_access, job_title, must_change_password)
-                      VALUES(?,?,?,?,?,?,?,1)`,
-    name, email, pw ? hashPassword(pw) : '', req.body.is_admin ? 1 : 0, checkGlobalRole(req.body.global_role_id), checkTicketAccess(req.body.ticket_access), req.body.job_title || null);
+  guardAdminRoles(req, checkRoleIds(req.body.role_ids));
+  const { id } = run(`INSERT INTO users(name, email, password_hash, is_admin, role_ids, all_projects, ticket_access, job_title, must_change_password)
+                      VALUES(?,?,?,?,?,?,?,?,1)`,
+    name, email, pw ? hashPassword(pw) : '', req.body.is_admin ? 1 : 0, checkRoleIds(req.body.role_ids) ?? '[]', req.body.all_projects ? 1 : 0,
+    checkTicketAccess(req.body.ticket_access), req.body.job_title || null);
   if (Array.isArray(req.body.team_ids)) for (const t of req.body.team_ids) run(`INSERT OR IGNORE INTO team_members(team_id, user_id, position)
     VALUES(?, ?, (SELECT COALESCE(MAX(position), -1) + 1 FROM team_members WHERE team_id = ?))`, t, id, t);
   res.status(201).json({ id });
@@ -81,9 +88,11 @@ r.patch('/admin/users/:id', (req, res) => {
     job_title: b.job_title,
     status: b.status !== undefined ? (['active', 'locked'].includes(b.status) ? b.status : fail(400, 'Invalid status.')) : undefined,
     is_admin: b.is_admin !== undefined ? (b.is_admin ? 1 : 0) : undefined,
-    global_role_id: b.global_role_id !== undefined ? checkGlobalRole(b.global_role_id) : undefined,
+    role_ids: checkRoleIds(b.role_ids),
+    all_projects: b.all_projects !== undefined ? (b.all_projects ? 1 : 0) : undefined,
     ticket_access: b.ticket_access !== undefined ? checkTicketAccess(b.ticket_access) : undefined,
   };
+  guardAdminRoles(req, fields.role_ids, user.role_ids);
   if (fields.email && get('SELECT id FROM users WHERE email = ? AND id <> ?', fields.email, user.id)) fail(400, 'Another user already has this email.');
   if (b.password) {
     if (String(b.password).length < 8) fail(400, 'Password must be at least 8 characters.');
@@ -126,20 +135,20 @@ r.get('/admin/permissions', (req, res) => {
 
 r.get('/admin/roles', (req, res) => {
   need(req, 'admin.roles');
-  res.json(all(`SELECT r.*,
-      (SELECT COUNT(*) FROM users u WHERE u.global_role_id = r.id OR u.ticket_role_id = r.id) AS user_count,
-      (SELECT COUNT(*) FROM project_members pm WHERE pm.role_id = r.id) AS member_count
-    FROM roles r ORDER BY scope, position, id`).map(x => ({ ...x, permissions: parseList(x.permissions) })));
+  const people = all("SELECT role_ids FROM users WHERE status = 'active'").map(u => parseList(u.role_ids).map(Number));
+  res.json(all(`SELECT r.*, (SELECT COUNT(*) FROM project_members pm WHERE pm.role_id = r.id) AS member_count
+    FROM roles r WHERE r.scope = 'project' ORDER BY position, id`)
+    .map(x => ({ ...x, permissions: parseList(x.permissions), user_count: people.filter(l => l.includes(x.id)).length })));
 });
 
 function cleanPerms(scope, perms) {
-  const allowed = scope === 'global' ? [...ALL_GLOBAL_KEYS, ...ALL_PROJECT_KEYS] : scope === 'ticket' ? ALL_TICKET_KEYS : [...ALL_PROJECT_KEYS, ...TICKET_BOARD_KEYS];
+  const allowed = scope === 'ticket' ? ALL_TICKET_KEYS : [...ALL_GLOBAL_KEYS, ...ALL_PROJECT_KEYS]; // one list: any permission
   return [...new Set((perms || []).filter(p => allowed.includes(p)))];
 }
 
 r.post('/admin/roles', (req, res) => {
   need(req, 'admin.roles');
-  const scope = req.body.scope === 'global' ? 'global' : 'project';
+  const scope = 'project'; // one role list
   const name = requireText(req.body.name, 'Role name');
   if (get('SELECT id FROM roles WHERE name = ? AND scope = ?', name, scope)) fail(400, 'A role with this name already exists.');
   const pos = get('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM roles').p;
@@ -165,7 +174,13 @@ r.delete('/admin/roles/:id', (req, res) => {
   if (role.builtin) fail(400, 'Built-in roles cannot be deleted. You can still change their permissions.');
   const used = get('SELECT COUNT(*) AS n FROM project_members WHERE role_id = ?', role.id).n;
   if (used) fail(400, `This role is used by ${used} project membership(s). Change those members to another role first.`);
-  run('DELETE FROM roles WHERE id = ?', role.id);
+  tx(() => {
+    for (const u of all('SELECT id, role_ids FROM users')) {
+      const l = parseList(u.role_ids).map(Number);
+      if (l.includes(role.id)) run('UPDATE users SET role_ids = ? WHERE id = ?', JSON.stringify(l.filter(x => x !== role.id)), u.id);
+    }
+    run('DELETE FROM roles WHERE id = ?', role.id);
+  });
   res.json({ ok: true });
 });
 

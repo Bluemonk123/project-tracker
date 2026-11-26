@@ -45,7 +45,7 @@ function RolePicker({ value, options, onChange, disabled, label, placeholder = '
 }
 
 // A team's members as a table, one row per person. Drag the handle to move someone above or below others (within this team only).
-function MemberList({ team, roles, canManage, reload, onProjects }) {
+function MemberList({ team, roles, canManage, canSetRoles, reload, onProjects }) {
   const [order, setOrder] = useState(null); // optimistic order while saving
   const [dragId, setDragId] = useState(null);
   const [overAt, setOverAt] = useState(null); // { id, after }
@@ -82,7 +82,7 @@ function MemberList({ team, roles, canManage, reload, onProjects }) {
       <table className="table tm-table" onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOverAt(null); }}>
         <thead><tr>
           {canManage && <th className="tm-hcell" aria-label="Order" />}
-          <th>Name</th><th>Job title</th><th className="tm-rolecol">Current role</th><th aria-hidden="true" /><th className="tm-rolecol">Future role</th>
+          <th>Name</th><th>Job title</th><th className="tm-rolecol" title="Their own role: it decides what they can do (Administration → Roles). Same in every team.">Current role</th><th aria-hidden="true" /><th className="tm-rolecol">Future role</th>
           <th className="num">Occupancy</th><th className="num">Projects</th>
         </tr></thead>
         <tbody>
@@ -120,7 +120,7 @@ function MemberList({ team, roles, canManage, reload, onProjects }) {
                 )}
                 <td className="tm-name"><Person id={m.id} name={m.name} />{m.id === team.lead_id && <span className="tag accent" style={{ marginLeft: 6 }}>Lead</span>}</td>
                 <td className="small soft">{m.job_title || '—'}</td>
-                <td className="tm-rolecol"><RolePicker value={m.current_roles} options={roles} disabled={!canManage} label={`${m.name}: current role`} onChange={(v) => setRoles(m, 'current_roles', v)} /></td>
+                <td className="tm-rolecol"><RolePicker value={m.current_roles} options={roles} disabled={!canSetRoles} label={`${m.name}: current role (decides their permissions)`} onChange={(v) => setRoles(m, 'current_roles', v)} /></td>
                 <td className={`tm-arrow${changed ? ' changed' : ''}`} title={changed ? 'Role change planned' : undefined} aria-hidden="true">→</td>
                 <td className="tm-rolecol"><RolePicker value={m.proposed_roles} options={roles} disabled={!canManage} label={`${m.name}: future role`} onChange={(v) => setRoles(m, 'proposed_roles', v)} /></td>
                 <td className="num">
@@ -209,7 +209,7 @@ export default function Teams() {
                 </div>
               </div>
               {t.description && <div className="panel-body small soft" style={{ paddingBottom: 0 }}>{t.description}</div>}
-              <MemberList team={t} roles={roles || []} canManage={canManage} reload={reload} onProjects={setProjectsOf} />
+              <MemberList team={t} roles={roles || []} canManage={canManage} canSetRoles={can('admin.users')} reload={reload} onProjects={setProjectsOf} />
             </section>
           ))}
         </div>

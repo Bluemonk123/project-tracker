@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_ROLES } from './permissions.js';
+import { DEFAULT_ROLES, JOB_ROLES, CLIENT_VIEW } from './permissions.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -536,6 +536,74 @@ function migrate() {
       }
       run("DELETE FROM roles WHERE scope = 'ticket'");
       setSetting('migration_ticket_roles_merge_v1', '1');
+    });
+  }
+
+  // ONE role list (the job roles: Backend Developer, Frontend Developer, ... plus Client (view only)) replaces
+  // the global roles (Manager / Employee) and the old project roles. Each person has their own roles (users.role_ids,
+  // also shown as "Current role" on the Teams page) and "Sees all projects"; each project membership has one role
+  // from the same list. Nobody loses access:
+  //  - old project roles are renamed (memberships keep them); missing job roles are created from the closest one
+  //  - the Teams page "current roles" become each person's roles
+  //  - people with a global role that had permissions (e.g. Manager) get a role with the same permissions and,
+  //    if it had project permissions, "Sees all projects"
+  if (!all('PRAGMA table_info(users)').some(c => c.name === 'role_ids')) db.exec('ALTER TABLE users ADD COLUMN role_ids TEXT');
+  if (!all('PRAGMA table_info(users)').some(c => c.name === 'all_projects')) db.exec('ALTER TABLE users ADD COLUMN all_projects INTEGER NOT NULL DEFAULT 0');
+  if (!getSetting('migration_single_roles_v1')) {
+    if (get('SELECT 1 AS x FROM users LIMIT 1')) { try { backupNow('before-roles-change'); } catch { /* backup folder not ready */ } }
+    tx(() => {
+      const list = (v) => { try { return JSON.parse(v) || []; } catch { return []; } };
+      const byName = (n) => get("SELECT * FROM roles WHERE scope = 'project' AND name = ?", n);
+      for (const [from, to] of [['Product manager', 'Product Manager'], ['Project manager', 'Project Manager'], ['Business analyst', 'Business Analyst'],
+        ['QA / Tester', 'Functional Testing'], ['Developer', 'Backend Developer'], ['Viewer', 'Client (view only)']]) {
+        const r = byName(from);
+        if (r && !byName(to)) run('UPDATE roles SET name = ? WHERE id = ?', to, r.id);
+      }
+      const client = byName('Client (view only)');
+      if (client) run('UPDATE roles SET permissions = ?, description = ? WHERE id = ?', JSON.stringify(CLIENT_VIEW), 'Customers and stakeholders: can see the project and its tasks, nothing else.', client.id);
+      const copyFrom = { 'Frontend Developer': 'Backend Developer', DevOps: 'Backend Developer', 'System Admin': 'Backend Developer', UAT: 'Functional Testing',
+        'Product Master': 'Product Manager', 'Client Facing': 'Project Manager', 'Backend Developer': null, 'Functional Testing': null,
+        'Product Manager': null, 'Project Manager': null, 'Business Analyst': null, 'Client (view only)': null };
+      for (const name of [...JOB_ROLES, 'Client (view only)']) {
+        if (byName(name)) continue;
+        const src = copyFrom[name] ? byName(copyFrom[name]) : null;
+        run("INSERT INTO roles(name, scope, description, permissions, builtin, position) VALUES(?, 'project', ?, ?, 0, 0)",
+          name, src ? `Started as a copy of ${src.name}.` : null, src ? src.permissions : JSON.stringify(name === 'Client (view only)' ? CLIENT_VIEW : []));
+      }
+      const lead = byName('Team lead');
+      if (lead && !get('SELECT 1 AS x FROM project_members WHERE role_id = ?', lead.id)) run('DELETE FROM roles WHERE id = ?', lead.id);
+      // each person's roles = their current roles on the Teams page
+      const ids = new Map(all("SELECT id, name FROM roles WHERE scope = 'project'").map(r => [r.name.toLowerCase(), r.id]));
+      for (const u of all('SELECT id FROM users')) {
+        const names = new Set(all('SELECT current_roles FROM team_members WHERE user_id = ?', u.id).flatMap(t => list(t.current_roles)));
+        const mine = [...names].map(n => ids.get(String(n).toLowerCase())).filter(Boolean);
+        run('UPDATE users SET role_ids = ? WHERE id = ?', JSON.stringify([...new Set(mine)]), u.id);
+      }
+      // global roles with permissions (e.g. Manager): same permissions as a role in the list
+      for (const g of all("SELECT * FROM roles WHERE scope = 'global'")) {
+        const perms = list(g.permissions);
+        const users = all('SELECT id, role_ids FROM users WHERE global_role_id = ? AND is_admin = 0', g.id);
+        if (!perms.length || !users.length) continue;
+        let r = byName(g.name);
+        if (!r) r = { id: run("INSERT INTO roles(name, scope, description, permissions, builtin, position) VALUES(?, 'project', ?, ?, 0, 0)", g.name, g.description, g.permissions).id };
+        const seesAll = perms.some(k => !/^(admin|teams|projects|reports|tickets)\./.test(k)) ? 1 : 0;
+        for (const u of users) run('UPDATE users SET role_ids = ?, all_projects = MAX(all_projects, ?) WHERE id = ?', JSON.stringify([...new Set([...list(u.role_ids), r.id])]), seesAll, u.id);
+      }
+      // Developer memberships of people who are Frontend (not Backend) developers on the Teams page
+      const be = byName('Backend Developer'); const fe = byName('Frontend Developer');
+      if (be && fe) {
+        for (const m of all('SELECT pm.project_id, pm.user_id, u.role_ids FROM project_members pm JOIN users u ON u.id = pm.user_id WHERE pm.role_id = ?', be.id)) {
+          const mine = list(m.role_ids);
+          if (mine.includes(fe.id) && !mine.includes(be.id)) run('UPDATE project_members SET role_id = ? WHERE project_id = ? AND user_id = ?', fe.id, m.project_id, m.user_id);
+        }
+      }
+      // order: job roles as on the Teams page, then Client (view only), then the rest
+      const order = [...JOB_ROLES, 'Client (view only)'];
+      all("SELECT id, name FROM roles WHERE scope = 'project' ORDER BY position, id").forEach((r, i) => {
+        const at = order.indexOf(r.name);
+        run('UPDATE roles SET position = ?, builtin = 0 WHERE id = ?', at >= 0 ? at : order.length + i, r.id);
+      });
+      setSetting('migration_single_roles_v1', '1');
     });
   }
 }

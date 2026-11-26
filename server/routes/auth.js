@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { get, run, all, hashPassword, verifyPassword, getSetting, DATA_DIR } from '../db.js';
-import { createSession, SESSION_COOKIE, publicUser, requireAuth, fail, permsForClient, can, visibleProjectIds } from '../access.js';
+import { createSession, SESSION_COOKIE, publicUser, requireAuth, fail, permsForClient, can, visibleProjectIds, personRoles } from '../access.js';
 import { requireText, notify } from '../util.js';
 
 const r = Router();
@@ -101,14 +101,16 @@ r.post('/auth/logout', (req, res) => {
 });
 
 r.get('/auth/me', requireAuth, (req, res) => {
-  const role = req.user.global_role_id ? get('SELECT id, name FROM roles WHERE id = ?', req.user.global_role_id) : null;
+  const roles = personRoles(req.user).map(r => r.name);
   const unread = get('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL', req.user.id).n;
   res.json({
-    user: { ...publicUser(req.user), global_role: role },
+    user: { ...publicUser(req.user), roles },
     permissions: permsForClient(req),
     canSeeReports: can(req, 'reports.view'),
     canSeeBoard: !!req.user.is_admin || visibleProjectIds(req, 'board.view').length > 0,
     canUploadTasks: !!req.user.is_admin || visibleProjectIds(req, 'wp.import').length > 0,
+    // sidebar: tasks pages (Sprint Planning, Task Board, All tasks, Teams) need "View tasks" in at least one project
+    canSeeTasks: !!req.user.is_admin || visibleProjectIds(req, 'wp.view').length > 0,
     unread,
     appName: getSetting('app_name', 'Project Tracker'),
   });

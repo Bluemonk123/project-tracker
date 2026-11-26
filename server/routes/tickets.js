@@ -80,17 +80,21 @@ function decorate(t, now, hours) {
 }
 
 // ---------- people ----------
+const personRoleNames = (ids) => {
+  const l = parseList(ids).map(Number).filter(Boolean);
+  return l.length ? all(`SELECT name FROM roles WHERE id IN (${l.join(',')}) ORDER BY position`).map(r => r.name).join(', ') || null : null;
+};
 function boardUsers() {
   return usersWith('tickets.view');
 }
 // active users whose global role has the permission, plus administrators
 function usersWith(key) {
-  const roleIds = all("SELECT id, permissions FROM roles WHERE scope = 'global'").filter(r => parseList(r.permissions).includes(key)).map(r => r.id);
-  const levels = Object.entries(TICKET_ACCESS).filter(([, keys]) => keys.includes(key)).map(([k]) => `'${k}'`);
-  const projRoleIds = all("SELECT id, permissions FROM roles WHERE scope = 'project'").filter(r => parseList(r.permissions).includes(key)).map(r => r.id);
-  return all(`SELECT id, name, email FROM users WHERE status = 'active' AND (is_admin = 1
-    ${roleIds.length ? `OR global_role_id IN (${roleIds.join(',')})` : ''} ${levels.length ? `OR ticket_access IN (${levels.join(',')})` : ''}
-    ${projRoleIds.length ? `OR id IN (SELECT user_id FROM project_members WHERE role_id IN (${projRoleIds.join(',')}))` : ''}) ORDER BY name`);
+  const roleIds = new Set(all("SELECT id, permissions FROM roles WHERE scope = 'project'").filter(r => parseList(r.permissions).includes(key)).map(r => r.id));
+  const levels = Object.entries(TICKET_ACCESS).filter(([, keys]) => keys.includes(key)).map(([k]) => k);
+  const members = new Set(roleIds.size ? all(`SELECT DISTINCT user_id FROM project_members WHERE role_id IN (${[...roleIds].join(',')})`).map(x => x.user_id) : []);
+  return all("SELECT id, name, email, is_admin, ticket_access, role_ids FROM users WHERE status = 'active' ORDER BY name")
+    .filter(u => u.is_admin || levels.includes(u.ticket_access) || members.has(u.id) || parseList(u.role_ids).some(id => roleIds.has(Number(id))))
+    .map(({ id, name, email }) => ({ id, name, email }));
 }
 // Engineers (can be assigned tickets): members and leads of the Support Team (teams named "Support" or "Ticket")
 // whose role has "Work on tickets"; until such a team has members, everyone who can work on tickets.
@@ -574,7 +578,8 @@ r.get('/tickets/:no', (req, res) => {
   const messages = all('SELECT * FROM ticket_messages WHERE ticket_id = ? ORDER BY created_at, id', t.id)
     .map(m => ({ ...m, attachments: files.filter(f => f.message_id === m.id) }));
   const [w, p] = requesterWhere(t);
-  const rq = t.requester_user_id ? get(`SELECT u.name, u.email, u.job_title, r.name AS role FROM users u LEFT JOIN roles r ON r.id = u.global_role_id WHERE u.id = ?`, t.requester_user_id) : null;
+  const rq = t.requester_user_id ? get(`SELECT u.name, u.email, u.job_title, u.role_ids FROM users u WHERE u.id = ?`, t.requester_user_id) : null;
+  if (rq) { rq.role = personRoleNames(rq.role_ids); delete rq.role_ids; }
   const stats = get(`SELECT COUNT(*) AS total, SUM(status <> 'solved') AS unsolved FROM tickets WHERE ${w}`, ...p);
   const history = all(`SELECT ticket_no, subject, feedback, status, raised_on FROM tickets WHERE ${w} AND id <> ? ORDER BY raised_on DESC LIMIT 200`, ...p, t.id)
     .map(h => ({ ticket_no: h.ticket_no, subject_display: displaySubject(h), status: h.status, raised_on: h.raised_on }));
