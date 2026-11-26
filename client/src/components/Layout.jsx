@@ -112,7 +112,7 @@ export default function Layout() {
   return (
     <div className={`shell${collapsed ? ' collapsed' : ''}`}>
       <aside className={`sidebar${navOpen ? ' open' : ''}`} aria-label="Main navigation">
-        <Link to="/" className="brand" style={{ textDecoration: 'none' }} title={appName}><BrandMark /><span className="nav-text">{appName}</span></Link>
+        <Link to="/" className="brand" style={{ textDecoration: 'none' }} title={appName}><BrandMark /><span className="nav-text brand-text">{appName}</span></Link>
         <nav className="nav-group">
           <NavLink to="/" end className="nav-link" title="My page"><Icon name="home" /><span className="nav-text">My page</span></NavLink>
           {showReports && <NavLink to="/overview" className="nav-link" title="Manager overview"><Icon name="chart" /><span className="nav-text">Manager overview</span></NavLink>}
