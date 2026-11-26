@@ -21,11 +21,11 @@
   --spruce-3: #1E3E73;
   --on-spruce: #E6ECF5;
   --on-spruce-2: #9AAAC4;
-  --accent: #F39219;          /* buttons, selected items: brand orange */
+  --accent: #e47f00;          /* buttons, selected items: brand orange */
   --accent-ink: #0B3A7A;      /* navy text on orange keeps 4.7:1 contrast */
   --accent-text: #B25F00;     /* orange darkened for links and text on white */
   --accent-soft: #FDEFD9;
-  --brand-orange: #F39219;    /* Deshwal orange, for fills and markers */
+  --brand-orange: #e47f00;    /* brand orange, for fills and markers */
   --brand-green: #33B014;     /* Deshwal green */
   --signal: #B25F00;          /* orange darkened so text stays readable */
   --signal-soft: #FDF0DD;
@@ -33,7 +33,7 @@
   --danger-soft: #FBE4E2;
   --ok: #2D7F14;              /* green darkened for text */
   --ok-soft: #E5F4DE;
-  --focus: #F39219;
+  --focus: #e47f00;
 
   --r-sm: 5px;
   --r: 8px;
@@ -56,9 +56,9 @@
     --paper: #10151C; --surface: #171D26; --surface-2: #1B222C; --sunken: #131921;
     --ink: #E8ECF1; --ink-2: #B7BEC8; --ink-3: #8A929C; --line: #2B333F; --line-2: #232A35;
     --spruce: #07152F; --spruce-2: #10264B; --spruce-3: #1A355F;
-    --accent: #F5A33A; --accent-ink: #071F42; --accent-text: #F5A33A; --accent-soft: #3A2A12;
+    --accent: #e47f00; --accent-ink: #071F42; --accent-text: #F5A33A; --accent-soft: #3A2A12;
     --signal: #F5A53D; --signal-soft: #3A2A12; --danger: #EB6B61; --danger-soft: #3D2120;
-    --ok: #62C847; --ok-soft: #1A3317; --focus: #F5A33A;
+    --ok: #62C847; --ok-soft: #1A3317; --focus: #e47f00;
     --shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.5);
     color-scheme: dark;
   }
@@ -67,9 +67,9 @@
   --paper: #10151C; --surface: #171D26; --surface-2: #1B222C; --sunken: #131921;
   --ink: #E8ECF1; --ink-2: #B7BEC8; --ink-3: #8A929C; --line: #2B333F; --line-2: #232A35;
   --spruce: #07152F; --spruce-2: #10264B; --spruce-3: #1A355F;
-  --accent: #F5A33A; --accent-ink: #071F42; --accent-text: #F5A33A; --accent-soft: #3A2A12;
+  --accent: #e47f00; --accent-ink: #071F42; --accent-text: #F5A33A; --accent-soft: #3A2A12;
   --signal: #F5A53D; --signal-soft: #3A2A12; --danger: #EB6B61; --danger-soft: #3D2120;
-  --ok: #62C847; --ok-soft: #1A3317; --focus: #F5A33A;
+  --ok: #62C847; --ok-soft: #1A3317; --focus: #e47f00;
   --shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
 }

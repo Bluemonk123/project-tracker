@@ -9,7 +9,7 @@ function Art({ appName }) {
   const lanes = [
     { k: 'PROJECTS', c: '#2E9BEA', a: 4, w: 58 },
     { k: 'SPRINTS', c: '#33B014', a: 18, w: 40 },
-    { k: 'TASKS', c: '#F39219', a: 30, w: 52 },
+    { k: 'TASKS', c: '#e47f00', a: 30, w: 52 },
     { k: 'TICKETS', c: '#E5484D', a: 12, w: 36 },
     { k: 'TEAMS', c: '#A3B9D8', a: 22, w: 46 },
   ];
