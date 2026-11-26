@@ -18,6 +18,11 @@ r.put('/work-calendar', (req, res) => {
   if (off.length >= 7) fail(400, 'At least one day of the week must be a working day.');
   const hours = Number(b.hours_per_day);
   if (!(hours > 0 && hours <= 24)) fail(400, 'Daily working hours must be between 0 and 24.');
+  // priority TATs are edited in Administration → Priorities; kept as they are unless sent
+  if (b.priority_days === undefined) {
+    saveCalendar({ off_days: off, hours_per_day: Math.round(hours * 100) / 100, priority_days: calendar().priority_days });
+    return res.json({ ok: true });
+  }
   const pd = {};
   for (const p of all('SELECT id, name, no_timeline FROM priorities')) {
     if (p.no_timeline) { pd[p.id] = null; continue; }

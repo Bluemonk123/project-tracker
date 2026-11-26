@@ -20,10 +20,9 @@ function CalendarForm({ data, onSaved }) {
   const canEdit = can('admin.settings');
   const [off, setOff] = useState(data.off_days);
   const [hours, setHours] = useState(data.hours_per_day);
-  const [pd, setPd] = useState(data.priority_days);
   const [hol, setHol] = useState({ day: '', name: '' });
   const [busy, run] = useAsync();
-  const save = async (e) => { e.preventDefault(); if (await run(() => api.put('/work-calendar', { off_days: off, hours_per_day: Number(hours), priority_days: pd }), 'Working calendar saved')) onSaved(); };
+  const save = async (e) => { e.preventDefault(); if (await run(() => api.put('/work-calendar', { off_days: off, hours_per_day: Number(hours) }), 'Working calendar saved')) onSaved(); };
   const addHoliday = async (e) => { e.preventDefault(); if (await run(() => api.post('/holidays', hol), 'Holiday added')) { setHol({ day: '', name: '' }); onSaved(); } };
   const delHoliday = async (h) => {
     if (await confirmDialog({ message: `Remove the holiday “${h.name}” on ${fmtDate(h.day)}?`, confirmLabel: 'Remove', danger: true }) && await run(() => api.del(`/holidays/${h.id}`), 'Holiday removed')) onSaved();
@@ -32,21 +31,9 @@ function CalendarForm({ data, onSaved }) {
   const past = data.holidays.length - upcoming.length;
   return (
     <div className="stack" style={{ gap: 18, maxWidth: 860 }}>
-      <div className="info-box">A new task starts the day it is created and is due after its priority's number of <b>working days</b> (counting the start day, skipping weekly off days and holidays). Changing a task's priority sets its due date again; the due date can always be changed by hand, which never changes the priority.{!canEdit && ' Only administrators can change these settings.'}</div>
+      <div className="info-box">A new task starts the day it is created and is due after its priority's TAT in <b>working days</b> (counting the start day, skipping the weekly off days and holidays below). Each priority's TAT is set in Administration → Types, statuses, priorities. Changing a task's priority sets its due date again; the due date can always be changed by hand, which never changes the priority.{!canEdit && ' Only administrators can change these settings.'}</div>
       <form className="panel" onSubmit={save}>
-        <div className="panel-head"><h3>Priority durations</h3><span className="xs muted">Working days to finish a task of each priority. Leave empty for no automatic due date.</span></div>
-        <div className="panel-body row wrap" style={{ gap: 16 }}>
-          {data.priorities.map(p => (
-            <Field key={p.id} label={p.name}>
-              <div className="row" style={{ gap: 6 }}>
-                <input type="number" min={1} max={365} step={1} value={pd[p.id] ?? ''} disabled={!canEdit} style={{ width: 90 }}
-                  onChange={(e) => setPd({ ...pd, [p.id]: e.target.value === '' ? null : Number(e.target.value) })} />
-                <span className="small muted">days</span>
-              </div>
-            </Field>
-          ))}
-        </div>
-        <div className="panel-head" style={{ borderTop: '1px solid var(--line-2)' }}><h3>Working week</h3></div>
+        <div className="panel-head"><h3>Working week</h3></div>
         <div className="panel-body stack">
           <Field label="Weekly off days">
             <div className="row wrap" style={{ gap: 6 }}>
