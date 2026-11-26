@@ -7,6 +7,7 @@ import { AppProvider, useApp } from './context.jsx';
 import { ConfirmHost, Loading, Toasts } from './components/ui.jsx';
 import Layout from './components/Layout.jsx';
 import { Login, Setup, FirstPassword } from './pages/Auth.jsx';
+import UpdateBar from './components/UpdateBar.jsx';
 import MyPage from './pages/MyPage.jsx';
 import Overview from './pages/Overview.jsx';
 import Projects from './pages/Projects.jsx';
@@ -124,6 +125,7 @@ createRoot(document.getElementById('root')).render(
     <AppProvider>
       <BrowserRouter>
         <StagingBar />
+        <UpdateBar />
         <Root />
         <ConfirmHost />
         <Toasts />

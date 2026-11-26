@@ -1478,3 +1478,6 @@ a.ov-stage-row:hover { background: var(--sunken); }
 .kbx-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* Sign-in step 2: the email chosen in step 1 */
 .auth-email-chip { display: flex; align-items: center; gap: 10px; justify-content: space-between; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); font-size: var(--fs-sm); }
+/* New version installed: offer a reload */
+.update-bar { position: sticky; top: 0; z-index: 210; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 6px 16px; background: var(--spruce); color: var(--on-spruce); font-size: var(--fs-sm); font-weight: 600; }
+.update-bar .xs { opacity: .75; font-weight: 400; }
