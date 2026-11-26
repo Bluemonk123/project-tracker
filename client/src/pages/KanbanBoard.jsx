@@ -9,6 +9,7 @@ import NewWpModal from './NewWpModal.jsx';
 import RaiseTicketModal from './tickets/RaiseTicketModal.jsx';
 import { SlaBadge } from './tickets/common.jsx';
 import TicketScreen from './tickets/TicketScreen.jsx';
+import ConvertTicketModal from './tickets/ConvertTicketModal.jsx';
 import { LOCATIONS } from './WpDetail.jsx';
 import { sprintWhen, SprintPicker, SprintSchedule, EndModal, useVersions, ProjectMultiSelect, idList } from './SprintPlanning.jsx';
 import { addDays, diffDays, fmtDate, startOfWeek, today, parseDate } from '../lib/format.js';
@@ -558,16 +559,8 @@ export default function KanbanBoard({ project }) {
         return c ? <StageModal col={c} items={byColumn(c)} columns={columns} onMove={drop} onClose={() => setExpanded(null)} sprints={sprints} onSprint={moveSprint} /> : null;
       })()}
       {converting && (
-        <NewWpModal title={`Turn ticket #${converting.ticket.ticket_no} into a task`} single
-          createUrl={`/tickets/${converting.ticket.ticket_no}/convert`}
-          intro={<div className="info-box small" style={{ marginBottom: 10 }}>The task starts in <b>{converting.col.name}</b> with the ticket's description and files, and stays linked to ticket #{converting.ticket.ticket_no}. When the task is closed, the ticket is solved and {converting.ticket.raised_by} is told.</div>}
-          defaults={{
-            subject: converting.ticket.subject_display,
-            description: `${converting.ticket.description}\n\n_From ticket #${converting.ticket.ticket_no}, raised by ${converting.ticket.raised_by}._`,
-            status_id: converting.col.statuses[0].id,
-            ...(sprint?.can_add ? { sprint_id: sprint.id } : {}),
-            ...(oneProject ? { project_id: oneProject } : {}),
-          }}
+        <ConvertTicketModal ticket={converting.ticket} column={converting.col} sprints={sprints}
+          defaultSprint={sprint && sprint.state !== 'ended' ? sprint.id : null} defaultProject={oneProject || null}
           onClose={() => setConverting(null)} onCreated={() => { setConverting(null); reload(); }} />
       )}
       {adding && (
