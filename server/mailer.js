@@ -44,13 +44,13 @@ export async function sendMail({ to, subject, text, ticketNo, autoReply }) {
       // replies: the mailbox's own reply-to address, else the ticket intake mailbox (so replies become ticket comments)
       const replyTo = (isEmail(m.reply_to) && m.reply_to) || (inbound?.enabled && isEmail(inbound.address) ? inbound.address : undefined);
       const domain = String(m.from).split('@')[1] || 'project-tracker.local';
-      await t.sendMail({
+      const info = await t.sendMail({
         from: m.from_name ? `"${String(m.from_name).replace(/"/g, '')}" <${m.from}>` : m.from, to, replyTo,
         subject: `[${appName}] ${subject}`, text,
         messageId: ticketNo ? `<ticket-${ticketNo}-${crypto.randomBytes(6).toString('hex')}@${domain}>` : undefined,
         headers: { 'Auto-Submitted': autoReply ? 'auto-replied' : 'auto-generated', 'X-Auto-Response-Suppress': 'All' },
       });
-      return { ok: true, via };
+      return { ok: true, via, server: String(info?.response || '').slice(0, 200), message_id: info?.messageId || null };
     } catch (e) {
       lastError = explainMailError(e.message, m) + (explainMailError(e.message, m) !== e.message ? ` (Server said: ${String(e.message).slice(0, 160)})` : '');
       console.error(`Email through the ${via} mailbox failed:`, e.message);

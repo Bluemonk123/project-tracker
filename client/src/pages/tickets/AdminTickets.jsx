@@ -206,7 +206,7 @@ function EmailForm({ data, onSaved }) {
     e.preventDefault();
     if (await run(() => api.put('/admin/email', { main: main.host ? main : null, backup: showBackup && backup.host ? backup : null, notify_email: notifyAll }), 'Email settings saved')) onSaved();
   };
-  const test = async () => { const r = await run(() => api.post('/admin/email/test')); if (r) window.alert(`Test email sent to ${r.to} through the ${r.via} mailbox.`); };
+  const test = async () => { const r = await run(() => api.post('/admin/email/test')); if (r) window.alert(`Test email handed to the mail server for ${r.to} (${r.via} mailbox).${r.server ? `\n\nMail server answered: ${r.server}` : ''}${r.message_id ? `\nMessage ID: ${r.message_id}` : ''}\n\nIf it does not arrive, give the Message ID to your email admin for a message trace.`); };
   return (
     <form className="panel" onSubmit={save}>
       <div className="panel-head"><h3>Outgoing email (SMTP)</h3><span className="xs muted">The company mailbox that sends emails from the app: ticket alerts and people's notifications. Leave empty and nothing is emailed.</span></div>

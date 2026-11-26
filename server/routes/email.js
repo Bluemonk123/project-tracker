@@ -55,7 +55,8 @@ r.post('/admin/email/test', async (req, res) => {
   adminOnly(req);
   const out = await sendMail({ to: req.user.email, subject: 'Test email', text: 'This test email shows that ticket alerts can be sent from Project Tracker.' });
   if (!out.ok) fail(400, `The test email could not be sent: ${out.error}`);
-  res.json({ ok: true, via: out.via, to: req.user.email });
+  // the mail server's own answer (e.g. "250 OK id=1abc") helps trace the email at the receiving side
+  res.json({ ok: true, via: out.via, to: req.user.email, server: out.server, message_id: out.message_id });
 });
 
 // Incoming mail (IMAP): emails to the support mailbox become tickets.
