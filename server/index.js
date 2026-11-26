@@ -24,6 +24,7 @@ import calendarRoutes from './routes/calendar.js';
 import sprintRoutes from './routes/sprints.js';
 import securityRoutes from './routes/security.js';
 import researchRoutes from './routes/research.js';
+import { syncPublicRoutes, syncLocalRoutes, syncAdminRoutes, writeLocalSyncToken } from './routes/sync.js';
 import { startTimers, cronHandler } from './cron.js';
 import { rememberOrigin } from './notifymail.js';
 import { fullBackupRoutes, restoreRoutes } from './routes/transfer.js';
@@ -80,6 +81,8 @@ export function createApp() {
   api.use(authRoutes); // setup, login, logout, me (individual routes guard themselves)
   api.use(restoreRoutes); // new install only: load a full backup instead of creating the first administrator
   api.use(publicTicketRoutes); // login-page "Contact admin" form (no sign-in)
+  api.use(syncPublicRoutes); // production: full backup with the sync key (no sign-in)
+  api.use(syncLocalRoutes); // staging: load it, from this computer only
   api.use(requireAuth);
   api.use(adminRoutes);
   api.use(backupCopyRoutes);
@@ -99,6 +102,7 @@ export function createApp() {
   api.use(sprintRoutes);
   api.use(securityRoutes);
   api.use(researchRoutes);
+  api.use(syncAdminRoutes);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found.')));
   app.use('/api', api);
 
@@ -122,6 +126,7 @@ export function createApp() {
 }
 
 export function startServer() {
+  writeLocalSyncToken(); // staging: the sync script reads it to load the live data
   const app = createApp();
   app.listen(PORT, HOST, () => {
     const lan = Object.values(os.networkInterfaces()).flat().filter(i => i && i.family === 'IPv4' && !i.internal).map(i => i.address);

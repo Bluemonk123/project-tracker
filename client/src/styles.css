@@ -1545,21 +1545,21 @@ a.ov-stage-row:hover { background: var(--sunken); }
 .ov-tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 6px 10px; font: inherit; font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); cursor: pointer; }
 .ov-tabs button.active { color: var(--ink); border-bottom-color: var(--accent); }
 .ov-tabs button:hover { color: var(--ink); }
-/* My page / Manager overview: dark tint count tiles */
-.figures-dark { border: 0; background: none; gap: 10px; overflow: visible; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
-.figures-dark .figure { min-width: 0; }
-.figures-dark .figure { border: 0; border-radius: var(--r-lg); color: #fff; background: var(--t, #0B3A7A); box-shadow: 0 1px 2px rgba(0,0,0,.12); transition: filter .12s, transform .12s; }
-.figures-dark .figure .l { color: rgba(255,255,255,.82); }
-.figures-dark .figure .ov-sub { color: rgba(255,255,255,.75); }
-.figures-dark a.figure:hover { background: var(--t, #0B3A7A); filter: brightness(1.15); transform: translateY(-1px); }
-.figures-dark .figure:nth-child(8n+1) { --t: #0B3A7A; }
-.figures-dark .figure:nth-child(8n+2) { --t: #1F5F8B; }
-.figures-dark .figure:nth-child(8n+3) { --t: #1F6F66; }
-.figures-dark .figure:nth-child(8n+4) { --t: #4B3B8F; }
-.figures-dark .figure:nth-child(8n+5) { --t: #145A6E; }
-.figures-dark .figure:nth-child(8n+6) { --t: #2B6E1F; }
-.figures-dark .figure:nth-child(8n+7) { --t: #3A4A60; }
-.figures-dark .figure:nth-child(8n+8) { --t: #6B2E5F; }
-.figures-dark .figure.danger { --t: #8E2A22; }
-.figures-dark .figure.signal { --t: #8A5A00; }
-.figures-dark .figure.danger .n, .figures-dark .figure.signal .n { color: #fff; }
+
+/* Count tiles (My page, Manager overview): separate tiles, each with a light tint of its own colour */
+.figures-tint { border: 0; background: none; gap: 10px; overflow: visible; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+.figures-tint .figure { min-width: 0; border: 1px solid color-mix(in srgb, var(--t) 22%, transparent); border-radius: var(--r-lg); background: color-mix(in srgb, var(--t) 9%, var(--surface)); transition: background .12s, transform .12s; }
+.figures-tint .figure:last-child { border-right: 1px solid color-mix(in srgb, var(--t) 22%, transparent); }
+.figures-tint .figure .n { color: color-mix(in srgb, var(--t) 80%, var(--ink)); }
+.figures-tint a.figure:hover { background: color-mix(in srgb, var(--t) 16%, var(--surface)); transform: translateY(-1px); }
+.figures-tint .figure:nth-child(8n+1) { --t: #0070C0; }
+.figures-tint .figure:nth-child(8n+2) { --t: #7A4FA3; }
+.figures-tint .figure:nth-child(8n+3) { --t: #2E8A9A; }
+.figures-tint .figure:nth-child(8n+4) { --t: #33B014; }
+.figures-tint .figure:nth-child(8n+5) { --t: #e47f00; }
+.figures-tint .figure:nth-child(8n+6) { --t: #3B6EA8; }
+.figures-tint .figure:nth-child(8n+7) { --t: #6E7A2E; }
+.figures-tint .figure:nth-child(8n+8) { --t: #9C4F6E; }
+.figures-tint .figure.danger { --t: #C2453B; }
+.figures-tint .figure.signal { --t: #C98A1B; }
+.ov-figures.figures-tint { grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); }

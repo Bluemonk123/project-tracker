@@ -136,7 +136,7 @@ export default function Overview() {
         <div className="ov-filter"><ProjectMultiSelect value={projectIds} onChange={setProjectIds} /></div>
       </div>
 
-      <div className="figures ov-figures figures-dark">
+      <div className="figures ov-figures figures-tint">
         <Link className="figure" to="/projects"><div className="n">{t.projects}</div><div className="l">Active projects</div></Link>
         <div className={`figure${t.at_risk || t.off_track ? ' signal' : ''}`}><div className="n">{t.at_risk}<span className="ov-sub"> / {t.off_track}</span></div><div className="l">At risk / off track</div></div>
         <Link className="figure" to={`/work-packages?${projQ}`}><div className="n">{t.open}</div><div className="l">Open tasks</div></Link>

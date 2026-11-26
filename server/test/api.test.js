@@ -1197,3 +1197,19 @@ test('moving a task into a sprint without its project adds the project to the sp
   assert.equal((await admin.patch(`/work-packages/${t.id}`, { sprint_id: sid })).status, 200);
   assert.ok((await admin.get('/sprints')).data.sprints.find(x => x.id === sid).project_ids.includes(p.id));
 });
+
+test('sync key: off by default; administrators create it; it downloads the full backup', async () => {
+  assert.equal((await fetch(`${base}/sync/full-backup.zip`)).status, 403);
+  assert.equal((await dev.post('/admin/sync-key')).status, 403);
+  const { key } = (await admin.post('/admin/sync-key')).data;
+  assert.match(key, /^ptsync_[a-f0-9]{48}$/);
+  assert.equal((await fetch(`${base}/sync/full-backup.zip`, { headers: { 'X-Sync-Key': key.replace(/.$/, 'x') } })).status, 403);
+  const ok = await fetch(`${base}/sync/full-backup.zip`, { headers: { 'X-Sync-Key': key } });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.headers.get('content-type'), 'application/zip');
+  assert.equal((await admin.get('/admin/sync-key')).data.on, true);
+  await admin.del('/admin/sync-key');
+  assert.equal((await fetch(`${base}/sync/full-backup.zip`, { headers: { 'X-Sync-Key': key } })).status, 403);
+  // loading is only for the staging copy
+  assert.equal((await admin.post('/sync/restore', {})).status, 404);
+});

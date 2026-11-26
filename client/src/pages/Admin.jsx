@@ -316,6 +316,40 @@ const HOURS = [1, 2, 4, 6, 12, 24];
 const KEEP = [7, 14, 30, 60, 90, 365];
 
 // Copies into a folder on this computer: a OneDrive / Google Drive / Dropbox folder syncs them to other computers.
+// Copy live data to staging: a key for sync-from-production.bat on the office computer
+function SyncKey() {
+  const { data, reload } = useLoad(() => api.get('/admin/sync-key'), []);
+  const env = useLoad(() => api.get('/health'), []).data?.env;
+  const [key, setKey] = useState(null);
+  const [busy, run] = useAsync();
+  if (!data) return null;
+  const create = async () => {
+    if (data.on && !await confirmDialog({ message: 'Create a new sync key? The old one stops working, so the office computer will ask for the new one.', confirmLabel: 'Create new key' })) return;
+    const r = await run(() => api.post('/admin/sync-key'), 'Sync key created');
+    if (r) { setKey(r.key); reload(); }
+  };
+  const off = async () => { if (await confirmDialog({ message: 'Switch off copying the live data? The key stops working.', confirmLabel: 'Switch off', danger: true }) && await run(() => api.del('/admin/sync-key'), 'Switched off')) { setKey(null); reload(); } };
+  return (
+    <section className="panel">
+      <div className="panel-head"><h3>Copy live data to staging</h3><span className="xs muted">Lets sync-from-production.bat on the office computer copy this site's data (database and files) into the staging copy.</span></div>
+      <div className="panel-body stack">
+        {env === 'staging' && <div className="info-box">This is the staging copy: create the key on the <b>live site</b>, then run <code>sync-from-production.bat</code> on this computer.</div>}
+        <p className="small" style={{ margin: 0 }}>{data.on ? <>On, key created {fmtDateTime(data.created_at)}{data.last_used ? `, last used ${fmtDateTime(data.last_used)}` : ', not used yet'}.</> : 'Off: no key yet.'}</p>
+        {key && (
+          <div className="info-box">
+            <div className="small" style={{ marginBottom: 6 }}>Copy this key now: it is shown only once. Paste it when sync-from-production.bat asks for it. Keep it private: it can download all the data.</div>
+            <div className="row" style={{ gap: 8 }}><code style={{ wordBreak: 'break-all' }}>{key}</code><button type="button" className="btn sm" onClick={() => navigator.clipboard?.writeText(key)}>Copy</button></div>
+          </div>
+        )}
+        <div className="row" style={{ gap: 8 }}>
+          <button type="button" className="btn" disabled={busy} onClick={create}>{data.on ? 'Create new sync key' : 'Create sync key'}</button>
+          {data.on && <button type="button" className="btn ghost" disabled={busy} onClick={off}>Switch off</button>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function BackupCopy() {
   const { data, error, loading, reload } = useLoad(() => api.get('/admin/backup-copy'), []);
   const [f, setF] = useState(null);
@@ -434,7 +468,7 @@ export default function Admin() {
         <Route path="general" element={<General />} />
         <Route path="tickets" element={<AdminTickets />} />
         <Route path="email" element={<EmailSetup />} />
-        <Route path="backups" element={<div className="stack"><Backups /><BackupCopy /></div>} />
+        <Route path="backups" element={<div className="stack"><Backups /><BackupCopy /><SyncKey /></div>} />
       </Routes>
     </div>
   );
