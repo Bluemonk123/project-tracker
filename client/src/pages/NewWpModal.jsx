@@ -161,7 +161,6 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
   });
   const [files, setFiles] = useState([]);
   const [links, setLinks] = useState([]);
-  const [more, setMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const set = (k, v) => setF(s => ({ ...s, [k]: v }));
@@ -227,7 +226,7 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
     </>}>
       {intro}
       <ErrorBox error={error} />
-      <div className="form-grid three">
+      <div className="grid-2">
         <Field label={multiAllowed ? 'Project(s)' : 'Project'} hint={many ? `One task is created in each of the ${projectIds.length} projects.` : multiAllowed ? 'Pick more than one to create the same task in each.' : undefined}>
           {multiAllowed
             ? <ProjectMultiSelect value={projectIds} allLabel="Choose project(s)" label="Projects" onChange={(ids) => { setProjectIds(ids.filter(id => writable.some(p => p.id === id))); set('version_id', ''); set('parent_id', null); }} />
@@ -237,6 +236,11 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
               </select>
             )}
         </Field>
+        <Field label="Assign to" hint={!canAssign && info ? 'You can assign tasks to yourself only.' : others.length && canAssign ? 'People outside the project are added to it when assigned.' : undefined}>
+          {personSelect('assignee_id')}
+        </Field>
+      </div>
+      <div className="form-grid three">
         <Field label="Type">
           <select value={f.type_id} onChange={(e) => set('type_id', Number(e.target.value))}>
             {meta.types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -247,6 +251,7 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
             {[...meta.priorities].reverse().map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </Field>
+        <Field label={isMilestone ? 'Date' : 'Due date'} hint={!isMilestone && cal?.priority_days?.[f.priority_id] ? `Leave empty: ${cal.priority_days[f.priority_id]} working day(s) from the start, by priority` : undefined}><input type="date" value={f.due_date || ''} min={f.start_date || undefined} onChange={(e) => set('due_date', e.target.value)} /></Field>
       </div>
       <Field label="Task headline">
         <input type="text" value={f.subject} onChange={(e) => set('subject', e.target.value)} placeholder="Short summary, e.g. Add OTP login to the customer app" required
@@ -258,9 +263,6 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
       <Field label="Problem">
         <MarkdownEditor value={f.description} onChange={(v) => set('description', v)} rows={5} placeholder="What is wrong or what is needed: details, steps to reproduce, acceptance criteria…" onSubmitShortcut={() => submit(false)} />
       </Field>
-      <Field label="Solution" hint="Optional. How it was or will be solved; can be filled in later.">
-        <MarkdownEditor value={f.solution || ''} onChange={(v) => set('solution', v)} rows={3} placeholder="The fix or answer…" onSubmitShortcut={() => submit(false)} />
-      </Field>
       {canUpload && (
         <Field label={`Attach photos, PDF or ZIP (max ${MAX_FILES})`}>
           <FilePicker files={files} onChange={setFiles} onError={(m) => toast(m, 'error')} />
@@ -269,57 +271,14 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
       <Field label="Links">
         <LinkEditor links={links} onChange={setLinks} />
       </Field>
-      <div className="form-grid three">
-        <Field label="Assign employee" hint={!canAssign && info ? 'You can assign tasks to yourself only.' : others.length && canAssign ? 'People outside the project are added to it when assigned.' : undefined}>
-          {personSelect('assignee_id')}
-        </Field>
-        {!isMilestone && <Field label="Start date"><input type="date" value={f.start_date || ''} onChange={(e) => set('start_date', e.target.value)} /></Field>}
-        <Field label={isMilestone ? 'Date' : 'Due date'} hint={!isMilestone && cal?.priority_days?.[f.priority_id] ? `Leave empty: ${cal.priority_days[f.priority_id]} working day(s) from the start, by priority` : undefined}><input type="date" value={f.due_date || ''} min={f.start_date || undefined} onChange={(e) => set('due_date', e.target.value)} /></Field>
-      </div>
       {!isMilestone && (
         <div className="form-grid three">
+          <Field label="Start date"><input type="date" value={f.start_date || ''} onChange={(e) => set('start_date', e.target.value)} /></Field>
           <Field label="Estimated hours" hint="How long the task should take in total.">
             <input type="number" min="0" step="0.5" value={f.estimated_hours} placeholder="e.g. 8" onChange={(e) => set('estimated_hours', e.target.value)} />
           </Field>
           <Field label="Hours spent so far" hint="Optional. Logged as your time for today.">
             <input type="number" min="0" max="24" step="0.25" value={f.log_hours} placeholder="0" onChange={(e) => set('log_hours', e.target.value)} />
-          </Field>
-        </div>
-      )}
-      {!isMilestone && (
-        <fieldset className="stage-people">
-          <legend>Design, develop and test</legend>
-          <div className="form-grid three">
-            <Field label="Designer">{personSelect('designer_id', 'Nobody')}</Field>
-            <Field label="Developer">{personSelect('developer_id', 'Nobody')}</Field>
-            <Field label="Tester">{personSelect('tester_id', 'Nobody')}</Field>
-          </div>
-          <p className="xs muted">When the task moves to In Design, In Develop or In Testing, it is assigned to that person automatically and they are notified.</p>
-        </fieldset>
-      )}
-      <button type="button" className="btn ghost sm" style={{ alignSelf: 'flex-start' }} onClick={() => setMore(m => !m)} aria-expanded={more}>
-        <Icon name="chevronDown" />{more ? 'Fewer options' : 'More options (status, accountable, version, parent)'}
-      </button>
-      {more && (
-        <div className="form-grid three">
-          <Field label="Status">
-            <select value={f.status_id} onChange={(e) => set('status_id', Number(e.target.value))}>
-              {meta.statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Accountable">
-            {canAssign ? <UserSelect value={f.responsible_id} onChange={(v) => set('responsible_id', v)} placeholder="Nobody" />
-              : <select disabled><option>Nobody</option></select>}
-          </Field>
-          {many && <p className="xs muted" style={{ margin: 0, gridColumn: "1 / -1" }}>Version and parent are set on the first project's task only (they belong to one project).</p>}
-          <Field label="Version">
-            <select value={f.version_id || ''} onChange={(e) => set('version_id', e.target.value ? Number(e.target.value) : '')}>
-              <option value="">None</option>
-              {(info?.versions || []).filter(v => v.status === 'open').map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Parent" className="span-2">
-            <WpSearchSelect projectId={projectId} value={f.parent_id} onChange={(v) => set('parent_id', v)} placeholder="Optional: put this under a requirement or epic" />
           </Field>
         </div>
       )}
