@@ -8,6 +8,7 @@ import crypto from 'node:crypto';
 import multer from 'multer';
 import { get, all, run, tx, UPLOAD_DIR, getSetting, setSetting } from '../db.js';
 import { can, need, fail, HttpError, parseList } from '../access.js';
+import { TICKET_ACCESS } from '../permissions.js';
 import { resolveProject } from './projects.js';
 import { createWp } from './workpackages.js';
 import { notify } from '../util.js';
@@ -85,7 +86,9 @@ function boardUsers() {
 // active users whose global role has the permission, plus administrators
 function usersWith(key) {
   const roleIds = all("SELECT id, permissions FROM roles WHERE scope = 'global'").filter(r => parseList(r.permissions).includes(key)).map(r => r.id);
-  return all(`SELECT id, name, email FROM users WHERE status = 'active' AND (is_admin = 1 ${roleIds.length ? `OR global_role_id IN (${roleIds.join(',')})` : ''}) ORDER BY name`);
+  const levels = Object.entries(TICKET_ACCESS).filter(([, keys]) => keys.includes(key)).map(([k]) => `'${k}'`);
+  return all(`SELECT id, name, email FROM users WHERE status = 'active' AND (is_admin = 1
+    ${roleIds.length ? `OR global_role_id IN (${roleIds.join(',')})` : ''} ${levels.length ? `OR ticket_access IN (${levels.join(',')})` : ''}) ORDER BY name`);
 }
 // Engineers (can be assigned tickets): members and leads of the Support Team (teams named "Support" or "Ticket")
 // whose role has "Work on tickets"; until such a team has members, everyone who can work on tickets.

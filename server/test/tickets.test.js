@@ -671,3 +671,22 @@ test('assignees: Support Team members who can work on tickets (not other team me
   assert.ok(!engs.includes(ids.other), 'cannot work on tickets, so not assignable');
   assert.ok(engs.includes(ids.agent));
 });
+
+test('Enable Ticket Board on one person (on top of their role)', async () => {
+  const roles = (await admin.get('/admin/roles')).data;
+  const employee = roles.find(r => r.name === 'Employee' && r.scope === 'global').id;
+  const u = (await admin.post('/admin/users', { name: 'Dual Role', email: 'dual@office.local', password: 'password1', global_role_id: employee })).data.id;
+  const c = client(); await c.post('/auth/login', { email: 'dual@office.local', password: 'password1' });
+  let perms = (await c.get('/auth/me')).data.permissions;
+  assert.ok(!perms.includes('tickets.view'));
+  assert.equal((await admin.patch(`/admin/users/${u}`, { ticket_access: 'nonsense' })).status, 400);
+  assert.equal((await admin.patch(`/admin/users/${u}`, { ticket_access: 'work' })).status, 200);
+  perms = (await c.get('/auth/me')).data.permissions;
+  assert.ok(perms.includes('tickets.view') && perms.includes('tickets.edit') && !perms.includes('tickets.assign'));
+  await admin.patch(`/admin/users/${u}`, { ticket_access: 'lead' });
+  assert.ok((await c.get('/auth/me')).data.permissions.includes('tickets.assign'));
+  // other employees are not affected
+  assert.ok(!(await staff.get('/auth/me')).data.permissions.includes('tickets.view'));
+  await admin.patch(`/admin/users/${u}`, { ticket_access: null });
+  assert.ok(!(await c.get('/auth/me')).data.permissions.includes('tickets.view'));
+});

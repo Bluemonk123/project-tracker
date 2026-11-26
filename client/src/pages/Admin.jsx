@@ -17,6 +17,7 @@ function UserModal({ user, onClose, onSaved }) {
   const [f, setF] = useState({
     name: user?.name || '', email: user?.email || '', job_title: user?.job_title || '', password: '',
     global_role_id: user?.global_role_id ?? globalRoles.find(r => r.name === 'Employee')?.id ?? '', is_admin: !!user?.is_admin,
+    ticket_access: user?.ticket_access || '',
     team_ids: null,
   });
   const [busy, run] = useAsync();
@@ -24,7 +25,7 @@ function UserModal({ user, onClose, onSaved }) {
   const currentTeams = f.team_ids ?? (teams.data || []).filter(t => user && t.members.some(m => m.id === user.id)).map(t => t.id);
   const gen = () => set('password', Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6).toUpperCase());
   const save = async () => {
-    const body = { ...f, team_ids: f.team_ids ?? undefined, password: f.password || undefined, global_role_id: f.global_role_id || null };
+    const body = { ...f, team_ids: f.team_ids ?? undefined, password: f.password || undefined, global_role_id: f.global_role_id || null, ticket_access: f.ticket_access || null };
     const r = await run(() => (user ? api.patch(`/admin/users/${user.id}`, body) : api.post('/admin/users', body)), user ? 'User saved' : 'User created');
     if (r) { onSaved(); onClose(); }
   };
@@ -37,6 +38,13 @@ function UserModal({ user, onClose, onSaved }) {
         <Field label="Global role" hint="Managers see every project. Employees see only projects they are members of.">
           <select value={f.global_role_id} onChange={(e) => set('global_role_id', e.target.value ? Number(e.target.value) : '')}>
             <option value="">None</option>{globalRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Enable Ticket Board" hint="For this person only, on top of their role. To be assigned tickets they also need to be in the Support Team (Teams page).">
+          <select value={f.ticket_access} onChange={(e) => set('ticket_access', e.target.value)}>
+            <option value="">Off (as their role allows)</option>
+            <option value="work">On: work on tickets</option>
+            <option value="lead">On: Ticket lead (can also assign tickets)</option>
           </select>
         </Field>
 
@@ -85,7 +93,7 @@ function Users() {
               <tr key={u.id}>
                 <td><Person id={u.id} name={u.name} /><div className="xs muted" style={{ paddingLeft: 29 }}>{u.email}</div></td>
                 <td className="hide-sm soft">{u.job_title || '—'}</td>
-                <td>{u.global_role_name || <span className="muted">None</span>}{u.is_admin ? <span className="tag accent" style={{ marginLeft: 6 }}>Admin</span> : null}</td>
+                <td>{u.global_role_name || <span className="muted">None</span>}{u.is_admin ? <span className="tag accent" style={{ marginLeft: 6 }}>Admin</span> : null}{u.ticket_access ? <span className="tag" style={{ marginLeft: 6 }}>{u.ticket_access === 'lead' ? 'Ticket lead' : 'Tickets'}</span> : null}</td>
                 <td className="hide-sm small soft">{u.teams || '—'}</td>
                 <td className="num">{u.project_count}</td>
                 <td className="hide-sm small muted">{u.last_login_at ? timeAgo(u.last_login_at) : 'Never'}</td>

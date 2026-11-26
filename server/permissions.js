@@ -11,12 +11,17 @@ export const GLOBAL_PERMISSIONS = [
   { key: 'reports.view',     group: 'Reports',        label: 'View portfolio and workload reports' },
   // Ticket Board (one for the whole company, so in global roles). Who can be ASSIGNED tickets: people with
   // "Work on tickets" who are also in the Support Team (Teams page). Administrators always have all of them.
-  { key: 'tickets.view',     group: 'Ticket Board',   label: 'Open the Ticket Board and see all tickets' },
+  { key: 'tickets.view',     group: 'Ticket Board',   label: 'Enable Ticket Board: open it and see all tickets' },
   { key: 'tickets.create',   group: 'Ticket Board',   label: 'Create tickets from the board (New ticket)' },
   { key: 'tickets.edit',     group: 'Ticket Board',   label: 'Work on tickets: reply, add notes, change fields, take tickets' },
   { key: 'tickets.assign',   group: 'Ticket Board',   label: 'Ticket lead: assign tickets to other engineers' },
 ];
 export const TICKET_PERMISSIONS = []; // (ticket roles were merged into global roles)
+// Per person (Administration → Users): "Enable Ticket Board" for one employee without changing their role.
+export const TICKET_ACCESS = {
+  work: ['tickets.view', 'tickets.create', 'tickets.edit'],
+  lead: ['tickets.view', 'tickets.create', 'tickets.edit', 'tickets.assign'],
+};
 
 export const PROJECT_PERMISSIONS = [
   { key: 'project.view',      group: 'Project',        label: 'View project' },

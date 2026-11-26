@@ -502,6 +502,7 @@ function migrate() {
       setSetting('migration_ticket_assign_v1', '1');
     });
   }
+  if (!all('PRAGMA table_info(users)').some(c => c.name === 'ticket_access')) db.exec("ALTER TABLE users ADD COLUMN ticket_access TEXT");
   // Ticket roles folded back into global roles (simpler: one role per person + project roles). Each person keeps
   // their access: if everyone with a global role shared the same ticket role, its permissions join that global role;
   // otherwise those people move to a copy "<global role> + <ticket role>". Then the ticket roles are removed.

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { get, all, run } from './db.js';
-import { ALL_GLOBAL_KEYS, ALL_PROJECT_KEYS, ALL_TICKET_KEYS } from './permissions.js';
+import { ALL_GLOBAL_KEYS, ALL_PROJECT_KEYS, ALL_TICKET_KEYS, TICKET_ACCESS } from './permissions.js';
 
 export class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -52,6 +52,8 @@ export function globalPerms(req) {
   else {
     const role = u.global_role_id ? get('SELECT permissions FROM roles WHERE id = ?', u.global_role_id) : null;
     set = new Set(parseList(role?.permissions));
+    // "Enable Ticket Board" set on the person, on top of their role
+    (TICKET_ACCESS[u.ticket_access] || []).forEach(k => set.add(k));
   }
   req._perm.global = set;
   return set;
