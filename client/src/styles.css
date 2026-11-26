@@ -480,7 +480,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .auth { min-height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); }
 .auth-art { background: var(--spruce); color: var(--on-spruce); padding: 48px; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; }
 .auth-art .lanes { display: flex; flex-direction: column; gap: 14px; margin: 40px 0; }
-.auth-art .lane { display: grid; grid-template-columns: 56px 1fr; align-items: center; gap: 12px; }
+.auth-art .lane { display: grid; grid-template-columns: 76px 1fr; align-items: center; gap: 12px; }
 .auth-art .lane .k { font-weight: 650; font-size: 13px; color: var(--on-spruce-2); }
 .auth-art .lane .track { height: 14px; border-radius: 7px; background: var(--spruce-2); position: relative; }
 .auth-art .lane .track span { position: absolute; top: 0; bottom: 0; border-radius: 7px; }
@@ -1531,3 +1531,6 @@ a.ov-stage-row:hover { background: var(--sunken); }
 .nav-viewall { font-size: var(--fs-xs); color: var(--brand-orange); font-weight: 600; text-decoration: none; }
 .nav-viewall:hover { color: #fff; text-decoration: underline; }
 .shell.collapsed .nav-viewall { display: none; }
+.auth-points { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; color: var(--on-spruce-2); max-width: 440px; }
+.auth-points li { display: flex; gap: 10px; align-items: baseline; }
+.auth-points li::before { content: '✓'; color: var(--brand-orange); font-weight: 700; }

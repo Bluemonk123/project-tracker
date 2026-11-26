@@ -6,10 +6,11 @@ import { FilePicker, toForm } from './tickets/common.jsx';
 
 function Art({ appName }) {
   const lanes = [
-    { k: 'CRM', c: '#2E9BEA', a: 4, w: 58 },
-    { k: 'HRMS', c: '#33B014', a: 18, w: 40 },
-    { k: 'SALES', c: '#F39219', a: 30, w: 52 },
-    { k: 'OPS', c: '#A3B9D8', a: 10, w: 34 },
+    { k: 'PROJECTS', c: '#2E9BEA', a: 4, w: 58 },
+    { k: 'SPRINTS', c: '#33B014', a: 18, w: 40 },
+    { k: 'TASKS', c: '#F39219', a: 30, w: 52 },
+    { k: 'TICKETS', c: '#E5484D', a: 12, w: 36 },
+    { k: 'TEAMS', c: '#A3B9D8', a: 22, w: 46 },
   ];
   return (
     <div className="auth-art">
@@ -23,12 +24,15 @@ function Art({ appName }) {
             </div>
           ))}
         </div>
-        <h1>Every application, every task and every meeting in one place.</h1>
-        <p style={{ color: 'var(--on-spruce-2)', marginTop: 12, maxWidth: 420 }}>
-          Runs on your office network. Your data stays on your own computer.
-        </p>
+        <h1>Your projects, sprints and support in one place.</h1>
+        <ul className="auth-points">
+          <li>Sprint Board and Task Board for delivery</li>
+          <li>Ticket Board with email-to-ticket (support@ditserv.in)</li>
+          <li>Research for requirements and solutions</li>
+          <li>Live alerts and team workload</li>
+        </ul>
       </div>
-      <div className="xs" style={{ color: 'var(--on-spruce-2)' }}>Projects, tasks, boards, timelines, meetings and timesheets.</div>
+      <div className="xs" style={{ color: 'var(--on-spruce-2)' }}>Bluemonk · DevIT · OxyPC · RenewCircuits</div>
     </div>
   );
 }
