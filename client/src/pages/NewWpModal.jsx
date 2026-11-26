@@ -6,6 +6,7 @@ import { Modal, Field, MarkdownEditor, UserSelect, ErrorBox } from '../component
 import Icon from '../components/Icon.jsx';
 import ModuleInput from './ModuleInput.jsx';
 import { fmtSize } from '../lib/format.js';
+import { ProjectMultiSelect } from './SprintPlanning.jsx';
 
 // Loads members / versions / categories for a project (used by forms)
 export function useProjectInfo(projectId) {
@@ -141,7 +142,12 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
   const { meta, projects, user, activeUsers, toast } = useApp();
   const nav = useNavigate();
   const writable = projects.filter(p => !p.archived);
-  const [projectId, setProjectId] = useState(fixedProject || defaults.project_id || writable[0]?.id || '');
+  // Several projects can be picked (normal "New task" only): one task is created in each, with the same details.
+  const multiAllowed = !fixedProject && createUrl === '/work-packages';
+  const [projectIds, setProjectIds] = useState(() => { const first = fixedProject || defaults.project_id || writable[0]?.id; return first ? [Number(first)] : []; });
+  const projectId = projectIds[0] || '';
+  const setProjectId = (id) => setProjectIds(id ? [Number(id)] : []);
+  const many = projectIds.length > 1;
   const info = useProjectInfo(projectId);
   const [cal, setCal] = useState(null);
   useEffect(() => { api.get('/work-calendar').then(setCal).catch(() => {}); }, []);
@@ -184,25 +190,32 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
     const logHours = Number(f.log_hours) || 0;
     if (logHours < 0 || logHours > 24) { setError(new Error('Hours spent so far must be between 0 and 24 (log more days from the task afterwards).')); return; }
     const { log_hours: _ignored, ...rest } = f;
-    const body = { ...rest, project_id: projectId, version_id: f.version_id || null, estimated_hours: f.estimated_hours || null, links };
-    if (isMilestone) body.start_date = body.due_date;
+    if (!projectIds.length) { setError(new Error('Choose at least one project.')); return; }
+    const base = { ...rest, version_id: f.version_id || null, estimated_hours: f.estimated_hours || null, links };
+    if (isMilestone) base.start_date = base.due_date;
     setBusy(true);
-    let wp;
-    try { wp = await api.post(createUrl, body); }
-    catch (e) { setError(e); setBusy(false); return; }
-    const failed = [];
-    if (logHours > 0) {
-      try { await api.post('/time-entries', { wp_id: wp.id, hours: logHours }); } catch (e) { failed.push(`Hours not logged: ${e.message}`); }
-    }
-    for (const file of files) {
-      try { await api.upload(file, 'wp', wp.id); } catch (e) { failed.push(`${file.name}: ${e.message}`); }
+    const created = []; const failed = [];
+    for (const [i, pid] of projectIds.entries()) {
+      // version and parent belong to one project: only for the first one
+      const body = { ...base, project_id: pid, ...(i > 0 ? { version_id: null, parent_id: null } : {}) };
+      let wp;
+      try { wp = await api.post(createUrl, body); }
+      catch (e) { const pn = writable.find(p => p.id === pid)?.name || 'a project'; failed.push(`${pn}: ${e.message}`); continue; }
+      created.push(wp);
+      if (logHours > 0 && i === 0) { // hours are logged once, on the first task
+        try { await api.post('/time-entries', { wp_id: wp.id, hours: logHours }); } catch (e) { failed.push(`Hours not logged: ${e.message}`); }
+      }
+      for (const file of files) {
+        try { await api.upload(file, 'wp', wp.id); } catch (e) { failed.push(`${wp.key} – ${file.name}: ${e.message}`); }
+      }
     }
     setBusy(false);
-    toast(`${wp.key} created${files.length ? ` with ${files.length - failed.length} file(s)` : ''}`);
+    if (!created.length) { setError(new Error(failed.join(' '))); return; }
+    toast(created.length === 1 ? `${created[0].key} created${files.length ? ' with files' : ''}` : `${created.length} tasks created: ${created.map(w => w.key).join(', ')}`);
     if (failed.length) toast(failed.join(' '), 'error');
-    onCreated?.(wp);
+    created.forEach(wp => onCreated?.(wp));
     if (another) { setF(s => ({ ...s, subject: '', description: '', log_hours: '' })); setFiles([]); setLinks([]); }
-    else { onClose(); if (!onCreated) nav(`/wp/${wp.id}`); }
+    else { onClose(); if (!onCreated) nav(created.length === 1 ? `/wp/${created[0].id}` : '/work-packages'); }
   };
 
   return (
@@ -210,15 +223,19 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
       <span className="xs muted" style={{ marginRight: 'auto' }}>Ctrl + Enter saves</span>
       <button type="button" className="btn" onClick={onClose}>Cancel</button>
       {!single && <button type="button" className="btn" disabled={busy} onClick={() => submit(true)}>Create and add another</button>}
-      <button className="btn primary" disabled={busy}>{busy ? 'Saving…' : 'Create task'}</button>
+      <button className="btn primary" disabled={busy}>{busy ? 'Saving…' : many ? `Create ${projectIds.length} tasks` : 'Create task'}</button>
     </>}>
       {intro}
       <ErrorBox error={error} />
       <div className="form-grid three">
-        <Field label="Project">
-          <select value={projectId} disabled={!!fixedProject} onChange={(e) => { setProjectId(Number(e.target.value)); set('version_id', ''); set('parent_id', null); }}>
-            {writable.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+        <Field label={multiAllowed ? 'Project(s)' : 'Project'} hint={many ? `One task is created in each of the ${projectIds.length} projects.` : multiAllowed ? 'Pick more than one to create the same task in each.' : undefined}>
+          {multiAllowed
+            ? <ProjectMultiSelect value={projectIds} allLabel="Choose project(s)" label="Projects" onChange={(ids) => { setProjectIds(ids.filter(id => writable.some(p => p.id === id))); set('version_id', ''); set('parent_id', null); }} />
+            : (
+              <select value={projectId} disabled={!!fixedProject} onChange={(e) => { setProjectId(Number(e.target.value)); set('version_id', ''); set('parent_id', null); }}>
+                {writable.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            )}
         </Field>
         <Field label="Type">
           <select value={f.type_id} onChange={(e) => set('type_id', Number(e.target.value))}>
@@ -294,6 +311,7 @@ export default function NewWpModal({ projectId: fixedProject, defaults = {}, onC
             {canAssign ? <UserSelect value={f.responsible_id} onChange={(v) => set('responsible_id', v)} placeholder="Nobody" />
               : <select disabled><option>Nobody</option></select>}
           </Field>
+          {many && <p className="xs muted" style={{ margin: 0, gridColumn: "1 / -1" }}>Version and parent are set on the first project's task only (they belong to one project).</p>}
           <Field label="Version">
             <select value={f.version_id || ''} onChange={(e) => set('version_id', e.target.value ? Number(e.target.value) : '')}>
               <option value="">None</option>
