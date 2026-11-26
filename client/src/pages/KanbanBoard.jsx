@@ -98,12 +98,12 @@ function ExpandedCard({ w, columns, onMove, sprints, onSprint }) {
         <div><dt>Requestor</dt><dd className="ellipsis">{w.requested_by || <span className="muted">—</span>}</dd></div>
         <div><dt>Assignee</dt><dd className="ellipsis">{w.assignee_name ? <><Avatar id={w.assignee_id} name={w.assignee_name} size={18} />{w.assignee_name}</> : <span className="muted">Unassigned</span>}</dd></div>
         <div><dt>Date assigned</dt><dd>{w.assigned_at ? fmtDate(dayOf(w.assigned_at), { year: true }) : <span className="muted">—</span>}</dd></div>
-        <div><dt>Priority</dt><dd><span className="kbx-prio" style={{ '--c': w.priority_color }}>{w.priority_name || '—'}</span></dd></div>
-        <div className="span-2"><dt>Due Date</dt><dd>
+        <div><dt>Due Date</dt><dd>
           <span className={overdue ? 'danger-text' : ''}>{w.due_date ? fmtDate(w.due_date, { year: true }) : <span className="muted">No due date</span>}</span>
           {age != null && <span className={age > 14 && !w.is_closed ? 'kbx-old' : 'muted'}>- {ageText(age)}</span>}
         </dd></div>
-        <div className="span-2"><dt>Sprint</dt><dd><SprintSelect w={w} sprints={sprints} onSprint={onSprint} /></dd></div>
+        <div><dt>Priority</dt><dd><span className="kbx-prio" style={{ '--c': w.priority_color }}>{w.priority_name || '—'}</span></dd></div>
+        <div><dt>Sprint</dt><dd><SprintSelect w={w} sprints={sprints} onSprint={onSprint} /></dd></div>
       </dl>
     </article>
   );
