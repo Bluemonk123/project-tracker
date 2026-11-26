@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import multer from 'multer';
 import { get, all, run, tx, UPLOAD_DIR, maxUploadMb } from '../db.js';
 import { need, can, fail, visibleProjectIds } from '../access.js';
-import { requireText, intOrNull, notify, mentionedUserIds, todayISO } from '../util.js';
+import { requireText, intOrNull, notify, mentionedUserIds, todayISO, subscribe } from '../util.js';
 import { resolveProject, projectStats } from './projects.js';
 import { positionsFor } from '../positions.js';
 
@@ -155,11 +155,25 @@ r.delete('/attachments/:id', (req, res) => {
 });
 
 // ---------- notifications ----------
+// Each person sees only their own alerts. Administrators can also look at everyone's (?scope=all, read only).
 r.get('/notifications', (req, res) => {
-  const where = req.query.unread === '1' ? 'AND n.read_at IS NULL' : '';
-  res.json(all(`SELECT n.*, u.name AS actor_name, p.identifier AS project_identifier, p.name AS project_name
-                FROM notifications n LEFT JOIN users u ON u.id = n.actor_id LEFT JOIN projects p ON p.id = n.project_id
-                WHERE n.user_id = ? ${where} ORDER BY n.created_at DESC, n.id DESC LIMIT 200`, req.user.id));
+  const everyone = req.query.scope === 'all';
+  if (everyone && !req.user.is_admin) fail(403, 'Only administrators can see everyone\'s alerts.');
+  const where = [everyone ? '1 = 1' : 'n.user_id = ?'];
+  if (req.query.unread === '1') where.push('n.read_at IS NULL');
+  res.json(all(`SELECT n.*, u.name AS actor_name, to_u.name AS recipient_name, p.identifier AS project_identifier, p.name AS project_name
+                FROM notifications n LEFT JOIN users u ON u.id = n.actor_id LEFT JOIN users to_u ON to_u.id = n.user_id
+                LEFT JOIN projects p ON p.id = n.project_id
+                WHERE ${where.join(' AND ')} ORDER BY n.created_at DESC, n.id DESC LIMIT ${everyone ? 500 : 200}`, ...(everyone ? [] : [req.user.id])));
+});
+
+// Live updates: the browser keeps this open; "notify" events tell it to fetch new alerts at once.
+r.get('/notifications/stream', (req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+  res.write('retry: 10000\n\n');
+  const off = subscribe(req.user.id, (data) => res.write(`event: notify\ndata: ${JSON.stringify(data)}\n\n`));
+  const ping = setInterval(() => res.write(': ping\n\n'), 25_000);
+  req.on('close', () => { clearInterval(ping); off(); });
 });
 
 // Pop-ups (top right): notifications newer than ?after=<id>; without it only the newest id, so old ones never pop up.

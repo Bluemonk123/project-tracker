@@ -2,14 +2,26 @@ import { run, get } from './db.js';
 import { fail } from './access.js';
 import { wantsEmail, scheduleFlush } from './notifymail.js';
 
-export function notify(userIds, { actorId = null, projectId = null, wpId = null, meetingId = null, ticketId = null, link = null, reason, message }) {
+// Open browser tabs per person (live alerts). Each listener gets { id } of a new notification.
+const listeners = new Map();
+export function subscribe(userId, fn) {
+  if (!listeners.has(userId)) listeners.set(userId, new Set());
+  listeners.get(userId).add(fn);
+  return () => { const s = listeners.get(userId); s?.delete(fn); if (s && !s.size) listeners.delete(userId); };
+}
+function push(userId, data) {
+  for (const fn of listeners.get(userId) || []) { try { fn(data); } catch { /* tab gone */ } }
+}
+
+export function notify(userIds, { actorId = null, projectId = null, wpId = null, meetingId = null, ticketId = null, link = null, reason, message, email: sendEmail = true }) {
   const uniq = [...new Set(userIds.filter(Boolean).map(Number))].filter(id => id !== Number(actorId));
   for (const uid of uniq) {
     const active = get("SELECT id FROM users WHERE id = ? AND status = 'active'", uid);
     if (!active) continue;
-    const email = wantsEmail(uid, reason);
-    run(`INSERT INTO notifications(user_id, actor_id, project_id, wp_id, meeting_id, ticket_id, link, reason, message, email_state)
+    const email = sendEmail && wantsEmail(uid, reason);
+    const { id } = run(`INSERT INTO notifications(user_id, actor_id, project_id, wp_id, meeting_id, ticket_id, link, reason, message, email_state)
          VALUES(?,?,?,?,?,?,?,?,?,?)`, uid, actorId, projectId, wpId, meetingId, ticketId, link, reason, message, email ? 'pending' : null);
+    setImmediate(() => push(uid, { id })); // after the change that caused it is saved
     if (email) scheduleFlush();
   }
 }

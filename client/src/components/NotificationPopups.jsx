@@ -1,13 +1,15 @@
 // New notifications pop up at the top right (task assigned, mention, comment, stage change, meeting, ticket...),
-// wherever the person is in the app. Checks every 20 seconds while the tab is visible; each card closes by
-// itself after 8 seconds (hovering keeps it), or with ×. Clicking opens the item and marks it read.
+// wherever the person is in the app. The server tells the page the moment a new alert is created (live
+// connection); as a fallback it also checks every 15 seconds. Each card closes by itself after 8 seconds
+// (hovering keeps it), or with ×. Clicking opens the item and marks it read. Other parts of the page (the
+// Alerts page, the bell) are told through the "pt:notifications" window event.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useApp } from '../context.jsx';
 import Icon from './Icon.jsx';
 
-const POLL_MS = 20_000;
+const POLL_MS = 15_000;
 const SHOW_MS = 8_000;
 const linkOf = (n) => (n.link && n.link.startsWith('/') ? n.link : n.wp_id ? `/wp/${n.wp_id}` : n.meeting_id ? `/meetings/${n.meeting_id}`
   : n.project_identifier ? `/projects/${n.project_identifier}` : '/notifications');
@@ -25,8 +27,8 @@ export default function NotificationPopups() {
   }, []);
   const arm = useCallback((id) => { clearTimeout(timers.current.get(id)); timers.current.set(id, setTimeout(() => close(id), SHOW_MS)); }, [close]);
 
-  const poll = useCallback(async () => {
-    if (document.hidden) return;
+  const poll = useCallback(async (live = false) => {
+    if (document.hidden && !live) return;
     try {
       const r = await api.get(`/notifications/latest${lastId.current != null ? `?after=${lastId.current}` : ''}`);
       setUnread?.(r.unread);
@@ -34,6 +36,7 @@ export default function NotificationPopups() {
         const fresh = r.items.slice(0, 3).reverse();
         setCards(c => [...c.filter(x => !fresh.some(f => f.id === x.id)), ...fresh].slice(-4));
         fresh.forEach(n => arm(n.id));
+        window.dispatchEvent(new CustomEvent('pt:notifications'));
       }
       lastId.current = Math.max(lastId.current ?? 0, r.max_id);
     } catch { /* offline or signed out: try again next time */ }
@@ -45,7 +48,12 @@ export default function NotificationPopups() {
     const t = setInterval(poll, POLL_MS);
     const onVisible = () => { if (!document.hidden) poll(); };
     document.addEventListener('visibilitychange', onVisible);
-    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVisible); };
+    let es = null;
+    try {
+      es = new EventSource('/api/notifications/stream');
+      es.addEventListener('notify', () => poll(true));
+    } catch { /* polling still works */ }
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVisible); es?.close(); };
   }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 

@@ -172,10 +172,17 @@ function alertAssignee(t, assigneeId, actor) {
       message: `Ticket ${t.ticket_no} assigned to you — ${actor?.name || 'Someone'} assigned you: ${displaySubject(t)}` });
   });
 }
-function alertNewTicket(t, actor) {
+// New tickets alert the ticket team; a ticket that came in by email (support mailbox) alerts everyone.
+function alertNewTicket(t, actor, everyone = false) {
   safely(() => {
-    notify(agentsToAlert(), { actorId: actor?.id ?? null, ticketId: t.id, link: `/ticket-board/${t.ticket_no}`, reason: 'ticket_new',
-      message: `New Ticket ${t.ticket_no}: ${cut(stripFrom(t.subject || t.feedback).replace(/\s+/g, ' '), 120)}` });
+    const team = agentsToAlert();
+    const message = `New Ticket ${t.ticket_no}: ${cut(stripFrom(t.subject || t.feedback).replace(/\s+/g, ' '), 120)}`;
+    notify(team, { actorId: actor?.id ?? null, ticketId: t.id, link: `/ticket-board/${t.ticket_no}`, reason: 'ticket_new', message });
+    // the rest of the company: in the app only (no email copy), opening the Task Board where the Tickets column is
+    if (everyone) {
+      const rest = all("SELECT id FROM users WHERE status = 'active'").map(u => u.id).filter(id => !team.includes(id));
+      notify(rest, { actorId: actor?.id ?? null, ticketId: t.id, link: '/board', reason: 'ticket_new', message, email: false });
+    }
   });
 }
 function replyHint(t) {
@@ -311,7 +318,7 @@ function createTicket(req, f, files) {
   let result = { saved: [], warnings: [] };
   try { result = saveFiles(t, files, null, req.user?.id ?? null); } catch (e) { console.error('Saving ticket files failed:', e.message); result.warnings.push('The files could not be saved.'); }
   audit(req, 'TICKET_CREATED', t, { source: f.source, channel: t.channel, files: result.saved.length });
-  alertNewTicket(t, req.user);
+  alertNewTicket(t, req.user, req === EMAIL_SYS);
   return { ticket_no: t.ticket_no, id: t.id, warnings: result.warnings };
 }
 

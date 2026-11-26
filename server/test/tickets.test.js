@@ -725,3 +725,32 @@ test('email tickets keep the whole original email (with the quoted trail) to vie
   assert.equal(dl.status, 200);
   assert.equal((await staff.get(`/ticket-emails/${d.ticket.email.id}`)).status, 404, 'not for other staff');
 });
+
+test('alerts: own only; administrators can see everyone; email tickets alert everyone; live stream', async () => {
+  const staffId = get("SELECT id FROM users WHERE email = 'staff@office.local'")?.id ?? (await staff.get('/auth/me')).data.user.id;
+  // live connection for staff: wait for a "notify" event
+  const ctrl = new AbortController();
+  const res = await fetch(base + '/notifications/stream', { headers: { cookie: Object.entries(staff.jar).map(([k, v]) => `${k}=${v}`).join('; ') }, signal: ctrl.signal });
+  assert.equal(res.status, 200);
+  const reader = res.body.getReader();
+  const gotEvent = (async () => { let txt = ''; while (!txt.includes('event: notify')) { const { value, done } = await reader.read(); if (done) break; txt += new TextDecoder().decode(value); } return txt; })();
+
+  const { simpleParser } = await import('mailparser');
+  const { handleParsed } = await import('../inbound.js');
+  const src = Buffer.from(['From: "Mail Person" <everyone-alert@client.com>', 'To: support@office.local', 'Subject: Everyone sees this', 'Message-ID: <alert-all@client.com>',
+    'Content-Type: text/plain; charset=utf-8', '', 'Hello support.'].join('\r\n'));
+  const out = handleParsed(await simpleParser(src), src);
+  assert.equal(out.action, 'created');
+  const txt = await Promise.race([gotEvent, new Promise((_, rej) => setTimeout(() => rej(new Error('no live event')), 3000))]);
+  assert.match(txt, /event: notify/);
+  ctrl.abort();
+  // every active person got the new-ticket alert, also people without Ticket Board access
+  const active = all("SELECT id FROM users WHERE status = 'active'").map(u => u.id);
+  for (const uid of active) assert.ok(notes(uid).some(n => n.reason === 'ticket_new' && n.message.includes(out.ticket_no)), `user ${uid} alerted`);
+  // each person sees only their own; administrators can see everyone's
+  const mine = (await staff.get('/notifications')).data;
+  assert.ok(mine.length && mine.every(n => n.user_id === staffId));
+  assert.equal((await staff.get('/notifications?scope=all')).status, 403);
+  const everyone = (await admin.get('/notifications?scope=all')).data;
+  assert.ok(new Set(everyone.map(n => n.user_id)).size > 1 && everyone[0].recipient_name);
+});
