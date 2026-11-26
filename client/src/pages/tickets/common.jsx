@@ -168,7 +168,7 @@ export function FullEmailButton({ email }) {
   if (!email) return null;
   return (
     <>
-      <button type="button" className="tk-file link tk-mail-btn" onClick={() => setOpen(true)} title="The whole email as received, including the earlier messages in the trail">
+      <button type="button" className="btn sm tk-mail-btn" onClick={() => setOpen(true)} title="The whole email as received, including the earlier messages in the trail">
         <Icon name="mail" size={13} /><span>View full email</span>{email.size_bytes ? <span className="xs muted">{fmtSize(email.size_bytes)}</span> : null}
       </button>
       {open && <FullEmailModal id={email.id} onClose={() => setOpen(false)} />}

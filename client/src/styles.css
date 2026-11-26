@@ -1487,7 +1487,9 @@ a.ov-stage-row:hover { background: var(--sunken); }
 .role-move .icon-btn { width: 24px; height: 20px; font-size: 13px; line-height: 1; }
 .role-move .icon-btn:disabled { opacity: .3; cursor: default; }
 /* Ticket: the whole original email */
-.tk-mail-btn { border: 0; background: none; cursor: pointer; font: inherit; padding: 0; margin-top: 6px; display: inline-flex; align-items: center; gap: 6px; }
+.tk-mail-btn { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; background: var(--blue, #0070C0); border-color: var(--blue, #0070C0); color: #fff; font-weight: 600; }
+.tk-mail-btn:hover { background: #005A9C; border-color: #005A9C; color: #fff; }
+.tk-mail-btn .muted { color: rgba(255,255,255,.8); }
 .tk-mail { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 .tk-mail-head { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; font-size: var(--fs-sm); }
 .tk-mail-head dt { color: var(--muted); }
@@ -1534,3 +1536,7 @@ a.ov-stage-row:hover { background: var(--sunken); }
 .auth-points { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; color: var(--on-spruce-2); max-width: 440px; }
 .auth-points li { display: flex; gap: 10px; align-items: baseline; }
 .auth-points li::before { content: '✓'; color: var(--brand-orange); font-weight: 700; }
+
+.tr-open { color: var(--ink); font-weight: 600; }
+.tr-open:hover { color: var(--accent-text); text-decoration: underline; }
+.tr-subject { font-weight: 700; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }

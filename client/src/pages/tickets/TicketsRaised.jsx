@@ -47,10 +47,10 @@ export default function TicketsRaised() {
                   const [ageLabel, tone] = agePill(t.age_days);
                   return (
                     <tr key={t.ticket_no}>
-                      <td className="small num" style={{ textAlign: 'left' }}>#{t.ticket_no}</td>
+                      <td className="small num" style={{ textAlign: 'left' }}><button type="button" className="link-btn tr-open" onClick={() => setOpen(t.ticket_no)} title="Open the ticket">#{t.ticket_no}</button></td>
                       <td className="small" title={fmtLocal(t.raised_on)}>{fmtShort(t.raised_on)}</td>
                       <td className="small">{t.raised_by}</td>
-                      <td className="subject"><div className="ellipsis"><b>{t.subject_display}</b></div><div className="xs muted ellipsis">{t.description}</div></td>
+                      <td className="subject"><div className="ellipsis"><button type="button" className="link-btn tr-open tr-subject" onClick={() => setOpen(t.ticket_no)} title="Open the ticket">{t.subject_display}</button></div><div className="xs muted ellipsis">{t.description}</div></td>
                       <td className="small">{t.attachments.length ? <span title={t.attachments.map(a => a.file_name).join(', ')}><Icon name="paperclip" size={13} /> {t.attachments.length}</span> : <span className="muted">—</span>}</td>
                       <td><span className={`tk-age ${t.status === 'solved' ? 'done' : tone}`}>{ageLabel}</span></td>
                       <td><span className={`tk-simple ${t.simple_status.toLowerCase()}`}>{t.simple_status}</span></td>
