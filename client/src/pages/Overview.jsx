@@ -136,15 +136,15 @@ export default function Overview() {
         <div className="ov-filter"><ProjectMultiSelect value={projectIds} onChange={setProjectIds} /></div>
       </div>
 
-      <div className="figures ov-figures figures-tint">
-        <Link className="figure" to="/projects"><div className="n">{t.projects}</div><div className="l">Active projects</div></Link>
-        <div className={`figure${t.at_risk || t.off_track ? ' signal' : ''}`}><div className="n">{t.at_risk}<span className="ov-sub"> / {t.off_track}</span></div><div className="l">At risk / off track</div></div>
-        <Link className="figure" to={`/work-packages?${projQ}`}><div className="n">{t.open}</div><div className="l">Open tasks</div></Link>
-        <Link className={`figure${t.overdue ? ' danger' : ''}`} to={`/work-packages?overdue=1${projQ ? `&${projQ}` : ''}`}><div className="n">{t.overdue}</div><div className="l">Overdue</div></Link>
-        <Link className="figure" to={`/sprint-planning${pid ? `?project_id=${pid}` : ''}`}><div className="n">{t.unpicked}</div><div className="l">Not in a sprint</div></Link>
-        <Link className="figure" to="/board"><div className="n">{t.sprints_running}<span className="ov-sub"> · {sprintPct}% done</span></div><div className="l">Running sprints</div></Link>
-        <div className="figure"><div className="n">{t.closed_30}</div><div className="l">Closed in 30 days</div></div>
-        <Link className="figure" to="/time"><div className="n">{fmtHours(t.hours_month)}</div><div className="l">Logged this month</div></Link>
+      <div className="figures ov-figures figures-grad">
+        <Link className="figure" to="/projects"><div className="n">{t.projects}</div><div className="l">Active projects</div><Icon name="folder" className="fig-ico" /></Link>
+        <div className={`figure${t.at_risk || t.off_track ? ' signal' : ''}`}><div className="n">{t.at_risk}<span className="ov-sub"> / {t.off_track}</span></div><div className="l">At risk / off track</div><Icon name="alert" className="fig-ico" /></div>
+        <Link className="figure" to={`/work-packages?${projQ}`}><div className="n">{t.open}</div><div className="l">Open tasks</div><Icon name="list" className="fig-ico" /></Link>
+        <Link className={`figure${t.overdue ? ' danger' : ''}`} to={`/work-packages?overdue=1${projQ ? `&${projQ}` : ''}`}><div className="n">{t.overdue}</div><div className="l">Overdue</div><Icon name="clock" className="fig-ico" /></Link>
+        <Link className="figure" to={`/sprint-planning${pid ? `?project_id=${pid}` : ''}`}><div className="n">{t.unpicked}</div><div className="l">Not in a sprint</div><Icon name="inbox" className="fig-ico" /></Link>
+        <Link className="figure" to="/board"><div className="n">{t.sprints_running}<span className="ov-sub"> · {sprintPct}% done</span></div><div className="l">Running sprints</div><Icon name="flag" className="fig-ico" /></Link>
+        <div className="figure"><div className="n">{t.closed_30}</div><div className="l">Closed in 30 days</div><Icon name="checkSquare" className="fig-ico" /></div>
+        <Link className="figure" to="/time"><div className="n">{fmtHours(t.hours_month)}</div><div className="l">Logged this month</div><Icon name="activity" className="fig-ico" /></Link>
       </div>
 
       <div className="ov-grid">

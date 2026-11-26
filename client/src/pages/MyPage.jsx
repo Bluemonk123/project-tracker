@@ -59,12 +59,12 @@ export default function MyPage() {
         </div>
       </div>
 
-      <div className="figures figures-tint">
-        <Link className="figure" to="/work-packages?assignee_id=me"><div className="n">{data.counts.open}</div><div className="l">Open and assigned to me</div></Link>
-        <Link className={`figure${data.counts.overdue ? ' danger' : ''}`} to="/work-packages?assignee_id=me&overdue=1"><div className="n">{data.counts.overdue}</div><div className="l">Overdue</div></Link>
-        <div className={`figure${data.counts.dueToday ? ' signal' : ''}`}><div className="n">{data.counts.dueToday}</div><div className="l">Due today</div></div>
-        <div className="figure"><div className="n">{data.counts.dueWeek}</div><div className="l">Due in the next 7 days</div></div>
-        <Link className="figure" to="/time"><div className="n">{fmtHours(weekTotal)}</div><div className="l">Logged this week</div></Link>
+      <div className="figures figures-grad">
+        <Link className="figure" to="/work-packages?assignee_id=me"><div className="n">{data.counts.open}</div><div className="l">Open and assigned to me</div><Icon name="list" className="fig-ico" /></Link>
+        <Link className={`figure${data.counts.overdue ? ' danger' : ''}`} to="/work-packages?assignee_id=me&overdue=1"><div className="n">{data.counts.overdue}</div><div className="l">Overdue</div><Icon name="alert" className="fig-ico" /></Link>
+        <div className={`figure${data.counts.dueToday ? ' signal' : ''}`}><div className="n">{data.counts.dueToday}</div><div className="l">Due today</div><Icon name="calendar" className="fig-ico" /></div>
+        <div className="figure"><div className="n">{data.counts.dueWeek}</div><div className="l">Due in the next 7 days</div><Icon name="clock" className="fig-ico" /></div>
+        <Link className="figure" to="/time"><div className="n">{fmtHours(weekTotal)}</div><div className="l">Logged this week</div><Icon name="activity" className="fig-ico" /></Link>
       </div>
 
       <div className="split">
