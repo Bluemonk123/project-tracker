@@ -319,7 +319,7 @@ export default function WpDetail() {
             {(() => {
               // a running or ended sprint is locked: only an administrator can move the task out of it, or into one
               const locked = !isAdmin && wp.sprint_state && wp.sprint_state !== 'planned';
-              const tip = locked ? `${wp.sprint_name} ${wp.sprint_state === 'current' ? 'has started' : 'has ended'}; only an administrator can change the sprint` : 'Sprint (Sprint Planning)';
+              const tip = locked ? `${wp.sprint_name} ${wp.sprint_state === 'current' ? 'has started' : 'has ended'}; only an administrator can change the sprint` : 'Sprint (Sprint Board)';
               return (
                 <select className={`wp-head-select wp-sprint-select${wp.sprint_id ? ` ${wp.sprint_state}` : ''}`} value={wp.sprint_id || ''} disabled={!can.edit || locked || !sprintData}
                   aria-label="Sprint" title={tip} onChange={(e) => update({ sprint_id: e.target.value ? Number(e.target.value) : null })}>

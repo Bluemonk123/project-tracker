@@ -623,6 +623,21 @@ function migrate() {
     }
     setSetting('migration_p0_v1', '1');
   }
+  // Research: requirements and research with solution / reference files and notes
+  db.exec(`CREATE TABLE IF NOT EXISTS research_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, description TEXT, stage TEXT NOT NULL DEFAULT 'new',
+    assignee_id INTEGER REFERENCES users(id) ON DELETE SET NULL, requestor_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    reviewer_id INTEGER REFERENCES users(id) ON DELETE SET NULL, created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`);
+  db.exec(`CREATE TABLE IF NOT EXISTS research_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL REFERENCES research_items(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK (kind IN ('solution', 'reference')), filename TEXT NOT NULL, stored_name TEXT NOT NULL,
+    content_type TEXT, size INTEGER, uploaded_by INTEGER REFERENCES users(id) ON DELETE SET NULL, created_at TEXT NOT NULL)`);
+  db.exec(`CREATE TABLE IF NOT EXISTS research_notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL REFERENCES research_items(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL, body TEXT NOT NULL, created_at TEXT NOT NULL)`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_research_files ON research_files(item_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_research_notes ON research_notes(item_id)');
   // Role list order (leadership, planning, build, testing, kept roles, outside people) and plain descriptions
   if (!getSetting('migration_role_order_v1')) {
     tx(() => {

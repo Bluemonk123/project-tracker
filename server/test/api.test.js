@@ -1155,3 +1155,36 @@ test('Sprint Planning Teams: people in the Teams page order', async () => {
   const teamOrder = [...new Set(list.flatMap(t => t.members.map(m => m.id)))].filter(id => order.includes(id));
   assert.deepEqual(order.slice(0, teamOrder.length), teamOrder);
 });
+
+test('Research: add a requirement with files, people and notes; who may change it', async () => {
+  const r = await admin.post('/research', { title: 'Barcode scanning on GRN', description: 'Scan items when goods arrive.', stage: 'design', assignee_id: ids.dev, reviewer_id: null });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const id = r.data.id;
+  assert.equal(r.data.code, `R-${id}`);
+  // files: solution + reference; wrong type refused
+  const fd = new FormData(); fd.append('kind', 'solution'); fd.append('files', new Blob(['%PDF-1.4 test']), 'design.pdf');
+  assert.equal((await admin.post(`/research/${id}/files`, fd)).status, 201);
+  const fd2 = new FormData(); fd2.append('kind', 'reference'); fd2.append('files', new Blob(['a,b']), 'sample.csv');
+  assert.equal((await admin.post(`/research/${id}/files`, fd2)).status, 201);
+  const bad = new FormData(); bad.append('kind', 'reference'); bad.append('files', new Blob(['MZ']), 'tool.exe');
+  assert.equal((await admin.post(`/research/${id}/files`, bad)).status, 400);
+  const someone = client();
+  await admin.post('/admin/users', { name: 'Riya Research', email: 'riya@office.local', password: 'password1' });
+  assert.equal((await someone.post('/auth/login', { email: 'riya@office.local', password: 'password1' })).status, 200);
+  // the assignee was alerted; anyone can add a note; others cannot change it
+  assert.ok((await dev.get('/notifications')).data.some(n => n.reason === 'research' && n.link === `/research?item=${id}`));
+  assert.equal((await someone.post(`/research/${id}/notes`, { body: 'Looks useful' })).status, 201);
+  assert.equal((await someone.patch(`/research/${id}`, { stage: 'closed' })).status, 403);
+  assert.equal((await dev.patch(`/research/${id}`, { stage: 'develop' })).status, 200, 'the assignee can change it');
+  const d = (await admin.get(`/research/${id}`)).data;
+  assert.equal(d.stage, 'develop');
+  assert.deepEqual(d.files.map(f => f.kind).sort(), ['reference', 'solution']);
+  assert.equal(d.notes_list.length, 1);
+  // list with filters
+  assert.ok((await admin.get(`/research?assignee_id=${ids.dev}&stage=develop`)).data.items.some(x => x.id === id));
+  assert.ok(!(await admin.get('/research?stage=closed')).data.items.some(x => x.id === id));
+  const file = d.files[0];
+  assert.equal((await someone.get(`/research-files/${file.id}/download`)).status, 200);
+  assert.equal((await someone.del(`/research/${id}`)).status, 403);
+  assert.equal((await admin.del(`/research/${id}`)).status, 200);
+});

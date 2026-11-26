@@ -23,6 +23,7 @@ import emailRoutes from './routes/email.js';
 import calendarRoutes from './routes/calendar.js';
 import sprintRoutes from './routes/sprints.js';
 import securityRoutes from './routes/security.js';
+import researchRoutes from './routes/research.js';
 import { startTimers, cronHandler } from './cron.js';
 import { rememberOrigin } from './notifymail.js';
 import { fullBackupRoutes, restoreRoutes } from './routes/transfer.js';
@@ -97,6 +98,7 @@ export function createApp() {
   api.use(calendarRoutes);
   api.use(sprintRoutes);
   api.use(securityRoutes);
+  api.use(researchRoutes);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found.')));
   app.use('/api', api);
 

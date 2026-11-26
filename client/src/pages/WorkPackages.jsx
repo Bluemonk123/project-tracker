@@ -230,8 +230,8 @@ function GroupRows({ label, rows, colSpan, project, selected, onToggle, onOpen }
           <td className="hide-sm"><Priority name={r.priority_name} color={r.priority_color} position={r.priority_position} /></td>
           <td className="hide-sm"><SourceTag source={r.source} /></td>
           <td className="hide-sm">{r.sprint_id
-            ? <Link to={`/sprint-planning?sprint=${r.sprint_id}`} className="sp-code link" title={`${r.sprint_name}: open it in Sprint Planning`}>SPR-{r.sprint_id}</Link>
-            : <Link to="/sprint-planning" className="xs muted wl-nosprint" title="Open the tasks not in a sprint in Sprint Planning">No Sprint</Link>}</td>
+            ? <Link to={`/sprint-planning?sprint=${r.sprint_id}`} className="sp-code link" title={`${r.sprint_name}: open it in Sprint Board`}>SPR-{r.sprint_id}</Link>
+            : <Link to="/sprint-planning" className="xs muted wl-nosprint" title="Open the tasks not in a sprint in Sprint Board">No Sprint</Link>}</td>
           <td><Due date={r.due_date} closed={r.is_closed} /></td>
           {!project && <td className="hide-sm small soft ellipsis" style={{ maxWidth: 160 }}>{r.project_name}</td>}
           <td className="hide-sm"><Progress value={r.is_closed ? 100 : r.done_ratio} color={r.status_color} /></td>

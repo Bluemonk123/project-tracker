@@ -367,7 +367,7 @@ export default function KanbanBoard({ project }) {
           {sprint?.state === 'planned' && sprint.can_manage && <SprintSchedule s={sprint} onChanged={() => { sl.reload(); reload(); }} />}
           {sprint?.state === 'current' && sprint.can_end && <button type="button" className="btn sm" onClick={() => setEnding(true)} title="End the sprint today"><Icon name="stop" size={13} />End now</button>}
           <span className="spacer" />
-          <Link to="/sprint-planning" className="btn icon sm ghost" title="Open Sprint Planning" aria-label="Open Sprint Planning"><Icon name="flag" size={16} /></Link>
+          <Link to="/sprint-planning" className="btn icon sm ghost" title="Open Sprint Board" aria-label="Open Sprint Board"><Icon name="flag" size={16} /></Link>
         </div>
         </div>
         <div className="kb-filters" role="group" aria-label="Board filters">
@@ -543,7 +543,7 @@ export default function KanbanBoard({ project }) {
           onClose={() => setAdding(null)} onCreated={() => reload()} />
       )}
       <p className="xs muted" style={{ marginTop: 10 }}>
-        {sprintId ? `Shows the tasks in ${sprint?.name || 'the sprint'}. New tasks added here ${sprint?.can_add ? 'go into this sprint' : 'go to "Not in a sprint" in Sprint Planning'}.` : 'Shows work whose dates fall in the selected period.'} Drag a card to another column to change its status. <Link to={project ? `/projects/${project.identifier}/work-packages` : '/work-packages'}>Open the full list</Link>
+        {sprintId ? `Shows the tasks in ${sprint?.name || 'the sprint'}. New tasks added here ${sprint?.can_add ? 'go into this sprint' : 'go to "Not in a sprint" in Sprint Board'}.` : 'Shows work whose dates fall in the selected period.'} Drag a card to another column to change its status. <Link to={project ? `/projects/${project.identifier}/work-packages` : '/work-packages'}>Open the full list</Link>
       </p>
     </div>
   );

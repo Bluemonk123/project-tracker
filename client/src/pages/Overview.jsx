@@ -148,7 +148,7 @@ export default function Overview() {
 
       <div className="ov-grid">
         <section className="panel">
-          <div className="panel-head"><h3>Running sprints</h3><div className="actions"><Link className="btn sm ghost" to="/sprint-planning"><Icon name="flag" size={14} />Sprint Planning</Link></div></div>
+          <div className="panel-head"><h3>Running sprints</h3><div className="actions"><Link className="btn sm ghost" to="/sprint-planning"><Icon name="flag" size={14} />Sprint Board</Link></div></div>
           <div className="panel-body ov-sprints">
             {!sprints.current.length && <Empty small>No sprint is running{pid ? ' for these projects' : ''}.</Empty>}
             {sprints.current.map(s => <SprintCard key={s.id} s={s} columns={columns} current />)}

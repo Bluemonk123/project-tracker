@@ -301,7 +301,7 @@ export default function SprintPlanning() {
     <div className="content wide sp-page">
       <div className="page-head row wrap" style={{ marginBottom: 12 }}>
         <div>
-          <h1 style={{ margin: 0 }}>Sprint Planning</h1>
+          <h1 style={{ margin: 0 }}>Sprint Board</h1>
           <p className="small muted" style={{ margin: '4px 0 0' }}>All tasks by sprint. Pick tasks into a sprint: select them and add, or drag them onto a sprint.</p>
         </div>
         <span className="spacer" />

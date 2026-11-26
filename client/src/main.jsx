@@ -34,6 +34,7 @@ import ProjectSettings from './pages/project/ProjectSettings.jsx';
 import Activity from './pages/project/Activity.jsx';
 import Teams from './pages/Teams.jsx';
 import Notifications from './pages/Notifications.jsx';
+import Research from './pages/Research.jsx';
 import Profile from './pages/Profile.jsx';
 import Admin from './pages/Admin.jsx';
 import TicketBoard from './pages/tickets/TicketBoard.jsx';
@@ -98,6 +99,7 @@ function Root() {
         <Route path="meetings/:id" element={<MeetingDetail />} />
         <Route path="time" element={<Time />} />
         <Route path="teams" element={<Teams />} />
+        <Route path="research" element={<Research />} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="profile" element={<Profile />} />
         <Route path="admin/*" element={<Admin />} />
