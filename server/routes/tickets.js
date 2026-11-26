@@ -331,6 +331,20 @@ export function requestorInBody(text) {
   return m ? m[1].toLowerCase() : null;
 }
 
+// Keeps the whole original email (with the earlier messages it quotes) as an .eml file, shown by "View full email".
+const MAX_EML = 20 * 1024 * 1024;
+function saveOriginalEmail(ticketId, messageRowId, o) {
+  if (!o?.source?.length) return;
+  if (o.source.length > MAX_EML) { systemLine(ticketId, 'The full email was too large to keep (over 20 MB); its text is above.', 'Email', nowIso()); return; }
+  try {
+    const t = get('SELECT ticket_no FROM tickets WHERE id = ?', ticketId);
+    const stored = `tkt_${t.ticket_no}_mail_${Date.now()}${crypto.randomBytes(3).toString('hex')}.eml`;
+    fs.writeFileSync(path.join(UPLOAD_DIR, stored), o.source, { flag: 'wx' });
+    run('INSERT INTO ticket_emails(ticket_id, message_id, stored_name, from_addr, subject, sent_at, size_bytes, created_at) VALUES(?,?,?,?,?,?,?,?)',
+      ticketId, messageRowId, stored, String(o.from || '').slice(0, 200), String(o.subject || '').slice(0, 300), o.date, o.source.length, nowIso());
+  } catch (e) { console.error('The original email could not be kept:', e.message); }
+}
+
 export function ingestEmail(m) {
   const from = String(m.fromEmail || '').trim().toLowerCase();
   if (!isEmail(from)) return { action: 'skipped', reason: 'no sender address' };
@@ -366,6 +380,7 @@ export function ingestEmail(m) {
     });
     let warnings = [];
     if (files.length) { try { warnings = saveFiles(saved, files, msgRow, t.requester_user_id).warnings; } catch { warnings = ['The files could not be saved.']; } }
+    saveOriginalEmail(t.id, msgRow, m.original);
     warnings.forEach(w => systemLine(t.id, w, 'Email', at));
     audit(EMAIL_SYS, 'TICKET_UPDATED', saved, { requester_reply: true, via: 'email', reopened: saved.status !== t.status });
     safely(() => notify(t.assignee_id ? [t.assignee_id] : agentsToAlert(), {
@@ -405,6 +420,7 @@ export function ingestEmail(m) {
     requester_email: reqEmail, channel: 'email', source: 'email', firstLine: `Received by email from ${from}`,
   }, files);
   run('UPDATE tickets SET email_message_id = ? WHERE id = ?', msgId, out.id);
+  saveOriginalEmail(out.id, null, m.original);
   out.warnings.forEach(w => systemLine(out.id, w, 'Email', nowIso()));
   notes.forEach(n => systemLine(out.id, n, 'Email', nowIso()));
   // acknowledgement, so the requester has the ticket number and can reply to it (replies are accepted from the
@@ -567,6 +583,7 @@ function requesterWhere(t) {
   if (t.requester_email) return ['lower(requester_email) = lower(?) AND requester_user_id IS NULL', [t.requester_email]];
   return ['raised_by = ? AND requester_user_id IS NULL', [t.raised_by]];
 }
+const emailsFor = (ticketId) => all('SELECT id, message_id, from_addr, subject, sent_at, size_bytes FROM ticket_emails WHERE ticket_id = ? ORDER BY id', ticketId);
 const attachmentsFor = (ticketId) => all('SELECT id, message_id, file_name, mime_type, size_bytes, created_at FROM ticket_attachments WHERE ticket_id = ? ORDER BY id', ticketId);
 
 r.get('/tickets/:no', (req, res) => {
@@ -575,8 +592,9 @@ r.get('/tickets/:no', (req, res) => {
   const now = Date.now(), hours = slaHours();
   const t = decorate({ ...raw, assignee_name: userById(raw.assignee_id)?.name || null, requester_name: userById(raw.requester_user_id)?.name || null }, now, hours);
   const files = attachmentsFor(t.id);
+  const mails = emailsFor(t.id);
   const messages = all('SELECT * FROM ticket_messages WHERE ticket_id = ? ORDER BY created_at, id', t.id)
-    .map(m => ({ ...m, attachments: files.filter(f => f.message_id === m.id) }));
+    .map(m => ({ ...m, attachments: files.filter(f => f.message_id === m.id), email: mails.find(e => e.message_id === m.id) || null }));
   const [w, p] = requesterWhere(t);
   const rq = t.requester_user_id ? get(`SELECT u.name, u.email, u.job_title, u.role_ids FROM users u WHERE u.id = ?`, t.requester_user_id) : null;
   if (rq) { rq.role = personRoleNames(rq.role_ids); delete rq.role_ids; }
@@ -587,7 +605,7 @@ r.get('/tickets/:no', (req, res) => {
   const engs = engineers().map(u => ({ id: u.id, name: u.name, open_count: open[u.id] || 0, is_me: u.id === req.user.id }));
   if (t.assignee_id && !engs.some(e => e.id === t.assignee_id) && t.assignee_name) engs.push({ id: t.assignee_id, name: t.assignee_name, open_count: open[t.assignee_id] || 0, is_me: t.assignee_id === req.user.id, former: true });
   res.json({
-    ticket: { ...t, attachments: files.filter(f => !f.message_id) },
+    ticket: { ...t, attachments: files.filter(f => !f.message_id), email: mails.find(e => !e.message_id) || null },
     messages,
     requester: {
       name: rq?.name || t.raised_by, kind: t.requester_kind, kind_label: KIND_LABEL[t.requester_kind],
@@ -827,12 +845,44 @@ r.get('/ticket-attachments/:id', (req, res) => {
   fs.createReadStream(file).pipe(res);
 });
 
+// --- The whole original email of an email ticket or reply: read it (parsed) or download the .eml
+function emailFor(req) {
+  const e = get('SELECT * FROM ticket_emails WHERE id = ?', Number(req.params.id)) || fail(404, 'Email not found.');
+  const t = get('SELECT * FROM tickets WHERE id = ?', e.ticket_id) || fail(404, 'Email not found.');
+  if (!(can(req, 'tickets.view') || t.requester_user_id === req.user.id || req.user.is_admin)) fail(404, 'Email not found.');
+  const file = path.join(UPLOAD_DIR, path.basename(e.stored_name));
+  if (!fs.existsSync(file)) fail(404, 'The email file is missing from the server.');
+  return { e, t, file };
+}
+const addrText = (a) => (a?.value || []).map(x => (x.name ? `${x.name} <${x.address}>` : x.address)).join(', ');
+r.get('/ticket-emails/:id', async (req, res) => {
+  const { e, t, file } = emailFor(req);
+  const { simpleParser } = await import('mailparser');
+  const p = await simpleParser(fs.readFileSync(file)); // inline images become data: links
+  res.json({
+    id: e.id, ticket_no: t.ticket_no, subject: p.subject || e.subject || '', date: p.date ? new Date(p.date).toISOString() : e.sent_at,
+    from: addrText(p.from), to: addrText(p.to), cc: addrText(p.cc),
+    text: String(p.text || '').slice(0, 2_000_000), html: p.html ? String(p.html).slice(0, 5_000_000) : null,
+    attachments: (p.attachments || []).filter(a => !a.related).map(a => ({ name: a.filename || '(no name)', size: a.size })),
+  });
+});
+r.get('/ticket-emails/:id/download', (req, res) => {
+  const { e, t, file } = emailFor(req);
+  const name = `Ticket ${t.ticket_no} - ${(e.subject || 'email').replace(/[\\/:*?"<>|\r\n]+/g, ' ').slice(0, 80)}.eml`;
+  res.setHeader('Content-Type', 'message/rfc822');
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  fs.createReadStream(file).pipe(res);
+});
+
 // Delete (administrators only): e.g. spam from the login page form. Removes the files too.
 r.delete('/tickets/:no', (req, res) => {
   if (!req.user.is_admin) fail(403, 'Only administrators can delete tickets.');
   const t = findTicket(req.params.no);
   const files = all('SELECT stored_name FROM ticket_attachments WHERE ticket_id = ?', t.id);
+  const mails = all('SELECT stored_name FROM ticket_emails WHERE ticket_id = ?', t.id);
   run('DELETE FROM tickets WHERE id = ?', t.id);
+  for (const f of mails) fs.rmSync(path.join(UPLOAD_DIR, path.basename(f.stored_name)), { force: true });
   for (const f of files) {
     if (!get('SELECT 1 AS x FROM attachments WHERE stored_name = ?', f.stored_name)) fs.rmSync(path.join(UPLOAD_DIR, path.basename(f.stored_name)), { force: true });
   }
@@ -872,13 +922,14 @@ function requesterTicket(req) {
 r.get('/tickets/:no/thread', (req, res) => {
   const t = requesterTicket(req);
   const files = attachmentsFor(t.id);
+  const mails = emailsFor(t.id);
   const messages = all('SELECT id, author_type, author_name, body, created_at FROM ticket_messages WHERE ticket_id = ? AND is_internal = 0 ORDER BY created_at, id', t.id)
-    .map(m => ({ ...m, attachments: files.filter(f => f.message_id === m.id) }));
+    .map(m => ({ ...m, attachments: files.filter(f => f.message_id === m.id), email: mails.find(e => e.message_id === m.id) || null }));
   res.json({
     ticket: {
       ticket_no: t.ticket_no, subject_display: displaySubject(t), description: t.feedback, status: t.status, simple_status: t.status === 'solved' ? 'Closed' : 'Open',
       priority: t.priority, group_name: t.group_name, handled_by: userById(t.assignee_id)?.name || null, raised_on: t.raised_on,
-      raised_by: userById(t.requester_user_id)?.name || t.raised_by, attachments: files.filter(f => !f.message_id),
+      raised_by: userById(t.requester_user_id)?.name || t.raised_by, attachments: files.filter(f => !f.message_id), email: mails.find(e => !e.message_id) || null,
     },
     messages,
     can: { reply: t.requester_user_id === req.user.id, close: !!req.user.is_admin && t.status !== 'solved' },

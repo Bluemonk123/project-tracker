@@ -8,7 +8,7 @@ import Icon from '../../components/Icon.jsx';
 import { Loading, ErrorBox, Popover, MoreMenu, confirmDialog } from '../../components/ui.jsx';
 import {
   STATUS, PRIORITY, TYPE_LABEL, TicketStatus, TicketPriority, SlaBadge, ChannelIcon, fmtLocal,
-  FilePicker, toForm, AttachmentList, ThreadItem,
+  FilePicker, toForm, AttachmentList, ThreadItem, FullEmailButton,
 } from './common.jsx';
 
 const firstName = (n) => String(n || '').trim().split(/\s+/)[0] || '';
@@ -90,6 +90,7 @@ function TicketView({ d, embedded, onChanged, onClose, onDeleted }) {
               <div className="tk-msg-head"><b>{d.requester.name}</b><span className="tag">Original request</span><span className="xs muted">{fmtLocal(t.raised_on)}</span></div>
               <div className="tk-body">{t.feedback}</div>
               <AttachmentList files={t.attachments} />
+              <FullEmailButton email={t.email} />
             </div>
           </div>
           {d.messages.map(m => <ThreadItem key={m.id} m={m} />)}

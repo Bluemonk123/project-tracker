@@ -5,7 +5,7 @@ import { api } from '../../api.js';
 import { useApp, useLoad } from '../../context.jsx';
 import Icon from '../../components/Icon.jsx';
 import { Loading, ErrorBox, Empty, Modal, Field } from '../../components/ui.jsx';
-import { TicketStatus, TicketPriority, fmtLocal, fmtShort, FilePicker, toForm, AttachmentList, ThreadItem } from './common.jsx';
+import { TicketStatus, TicketPriority, fmtLocal, fmtShort, FilePicker, toForm, AttachmentList, ThreadItem, FullEmailButton } from './common.jsx';
 import RaiseTicketModal from './RaiseTicketModal.jsx';
 
 const agePill = (days) => (days < 1 ? ['Today', 'ok'] : days <= 7 ? [`${days}d`, 'blue'] : days <= 30 ? [`${days}d`, 'amber'] : [`${days}d`, 'red']);
@@ -113,6 +113,7 @@ function ConversationModal({ no, onClose, onChanged, onCloseTicket }) {
                 <div className="tk-msg-head"><b>{t.raised_by}</b><span className="tag">Original request</span><span className="xs muted">{fmtLocal(t.raised_on)}</span></div>
                 <div className="tk-body">{t.description}</div>
                 <AttachmentList files={t.attachments} />
+                <FullEmailButton email={t.email} />
               </div>
             </div>
             {data.messages.map(m => <ThreadItem key={m.id} m={m} />)}

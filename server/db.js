@@ -606,6 +606,13 @@ function migrate() {
       setSetting('migration_single_roles_v1', '1');
     });
   }
+  // Tickets by email: the whole original email (.eml file in the uploads folder), to read the full mail trail
+  db.exec(`CREATE TABLE IF NOT EXISTS ticket_emails (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    message_id INTEGER REFERENCES ticket_messages(id) ON DELETE CASCADE,
+    stored_name TEXT NOT NULL, from_addr TEXT, subject TEXT, sent_at TEXT, size_bytes INTEGER, created_at TEXT NOT NULL)`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_ticket_emails ON ticket_emails(ticket_id)');
   // Role list order (leadership, planning, build, testing, kept roles, outside people) and plain descriptions
   if (!getSetting('migration_role_order_v1')) {
     tx(() => {

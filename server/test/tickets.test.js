@@ -706,3 +706,21 @@ test('Ticket Board permissions in a project role give board access', async () =>
   assert.ok(perms.includes('tickets.view') && perms.includes('tickets.edit') && !perms.includes('tickets.assign'));
   assert.equal((await c.get('/ticket-board')).status, 200);
 });
+
+test('email tickets keep the whole original email (with the quoted trail) to view and download', async () => {
+  const { simpleParser } = await import('mailparser');
+  const { handleParsed } = await import('../inbound.js');
+  const src = Buffer.from(['From: "Trail Person" <trail@client.com>', 'To: support@office.local', 'Subject: Printer down', 'Message-ID: <trail1@client.com>',
+    'Content-Type: text/plain; charset=utf-8', '', 'Still broken, see below.', '', 'On Mon, Nov 23, 2026 at 10:00 AM IT <it@client.com> wrote:', '> Please restart the printer.'].join('\r\n'));
+  const out = handleParsed(await simpleParser(src), src);
+  assert.equal(out.action, 'created');
+  const d = (await admin.get(`/tickets/${out.ticket_no}`)).data;
+  assert.ok(!d.ticket.feedback.includes('restart the printer'), 'the ticket text keeps only the new part');
+  assert.ok(d.ticket.email?.id, 'the original email is kept');
+  const full = (await admin.get(`/ticket-emails/${d.ticket.email.id}`)).data;
+  assert.ok(full.text.includes('Please restart the printer.'), 'the full email has the trail');
+  assert.match(full.from, /trail@client\.com/);
+  const dl = await admin.get(`/ticket-emails/${d.ticket.email.id}/download`);
+  assert.equal(dl.status, 200);
+  assert.equal((await staff.get(`/ticket-emails/${d.ticket.email.id}`)).status, 404, 'not for other staff');
+});

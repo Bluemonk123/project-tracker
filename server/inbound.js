@@ -48,7 +48,7 @@ const htmlToText = (html) => String(html || '')
   .replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
 
 // Turns one parsed email (mailparser output) into a ticket or a reply.
-export function handleParsed(parsed) {
+export function handleParsed(parsed, source = null) {
   const from = parsed.from?.value?.[0] || {};
   const fromEmail = String(from.address || '').toLowerCase();
   const why = isAutomatic(parsed.headers || new Map(), fromEmail);
@@ -59,6 +59,7 @@ export function handleParsed(parsed) {
     fromEmail, fromName: from.name, subject: parsed.subject, text, attachments,
     rawText: parsed.text || htmlToText(parsed.html), // the whole body, for a "Requestor - email" line anywhere
     messageId: parsed.messageId, inReplyTo: parsed.inReplyTo,
+    original: source ? { source, from: fromEmail, subject: parsed.subject || null, date: parsed.date ? new Date(parsed.date).toISOString() : null } : null,
     references: Array.isArray(parsed.references) ? parsed.references : parsed.references ? [parsed.references] : [],
   });
 }
@@ -93,7 +94,7 @@ export async function checkMailbox({ cfg = imapConfig() } = {}) {
           const parsed = await simpleParser(msg.source);
           note.from = String(parsed.from?.value?.[0]?.address || '').slice(0, 120);
           note.subject = String(parsed.subject || '').slice(0, 120);
-          const out = handleParsed(parsed);
+          const out = handleParsed(parsed, msg.source);
           if (out.action === 'created') { result.created++; note.outcome = `ticket created${out.ticket_no ? ` (${out.ticket_no})` : ''}`; }
           else if (out.action === 'reply') { result.replies++; note.outcome = 'added to its ticket'; }
           else { result.skipped++; note.outcome = `skipped: ${out.reason || out.action}`; }

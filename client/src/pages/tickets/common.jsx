@@ -1,6 +1,8 @@
 // Shared pieces for the Ticket Board, Tickets Raised and the Raise Ticket forms.
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Icon from '../../components/Icon.jsx';
+import { Modal, Loading, ErrorBox } from '../../components/ui.jsx';
+import { api } from '../../api.js';
 import { fmtSize, utc, pad } from '../../lib/format.js';
 
 export const STATUS = {
@@ -117,6 +119,55 @@ export function AttachmentList({ files }) {
   );
 }
 
+// The whole original email (with the earlier messages it quotes), for tickets and replies that came by email.
+// The email's own formatting is shown in a locked-down frame: no scripts, no outside images or links loaded.
+const FRAME_CSP = "default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'; font-src data:";
+function FullEmailModal({ id, onClose }) {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState(null);
+  const [view, setView] = useState('formatted');
+  useEffect(() => { api.get(`/ticket-emails/${id}`).then(setD, setErr); }, [id]);
+  const doc = d?.html ? `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${FRAME_CSP}">
+    <base target="_blank"><style>body{font:14px/1.5 system-ui,sans-serif;margin:12px;color:#1f2933;background:#fff;word-wrap:break-word}img{max-width:100%;height:auto}blockquote{margin:8px 0 8px 4px;padding-left:10px;border-left:3px solid #d0d5db}</style></head><body>${d.html}</body></html>` : null;
+  return (
+    <Modal title={d ? (d.subject || 'Email') : 'Full email'} wide="xl" onClose={onClose}
+      footer={<><a className="btn" href={`/api/ticket-emails/${id}/download`}><Icon name="download" size={15} />Download (.eml)</a><button type="button" className="btn primary" onClick={onClose}>Close</button></>}>
+      {err ? <ErrorBox error={err} /> : !d ? <Loading /> : (
+        <div className="tk-mail">
+          <dl className="tk-mail-head">
+            <dt>From</dt><dd>{d.from || '—'}</dd>
+            {d.to && <><dt>To</dt><dd>{d.to}</dd></>}
+            {d.cc && <><dt>Cc</dt><dd>{d.cc}</dd></>}
+            <dt>Date</dt><dd>{d.date ? fmtLocal(d.date) : '—'}</dd>
+            {d.attachments.length > 0 && <><dt>Files</dt><dd>{d.attachments.map(a => `${a.name} (${fmtSize(a.size)})`).join(', ')}</dd></>}
+          </dl>
+          {doc && (
+            <div className="subtabs" style={{ alignSelf: 'flex-start' }}>
+              <button type="button" className={view === 'formatted' ? 'active' : ''} onClick={() => setView('formatted')}>As sent</button>
+              <button type="button" className={view === 'text' ? 'active' : ''} onClick={() => setView('text')}>Plain text</button>
+            </div>
+          )}
+          {doc && view === 'formatted'
+            ? <iframe className="tk-mail-frame" title="Email content" sandbox="allow-popups allow-popups-to-escape-sandbox" srcDoc={doc} referrerPolicy="no-referrer" />
+            : <pre className="tk-mail-text">{d.text || '(no text)'}</pre>}
+        </div>
+      )}
+    </Modal>
+  );
+}
+export function FullEmailButton({ email }) {
+  const [open, setOpen] = useState(false);
+  if (!email) return null;
+  return (
+    <>
+      <button type="button" className="tk-file link tk-mail-btn" onClick={() => setOpen(true)} title="The whole email as received, including the earlier messages in the trail">
+        <Icon name="mail" size={13} /><span>View full email</span>{email.size_bytes ? <span className="xs muted">{fmtSize(email.size_bytes)}</span> : null}
+      </button>
+      {open && <FullEmailModal id={email.id} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
 // One line of the conversation: original request, public reply, internal note or system event.
 export function ThreadItem({ m }) {
   if (m.author_type === 'system') {
@@ -135,6 +186,7 @@ export function ThreadItem({ m }) {
         </div>
         {m.body ? <div className="tk-body">{m.body}</div> : null}
         <AttachmentList files={m.attachments} />
+        <FullEmailButton email={m.email} />
       </div>
     </div>
   );

@@ -1485,3 +1485,11 @@ a.ov-stage-row:hover { background: var(--sunken); }
 .role-move { display: flex; flex-direction: column; gap: 2px; }
 .role-move .icon-btn { width: 24px; height: 20px; font-size: 13px; line-height: 1; }
 .role-move .icon-btn:disabled { opacity: .3; cursor: default; }
+/* Ticket: the whole original email */
+.tk-mail-btn { border: 0; background: none; cursor: pointer; font: inherit; padding: 0; margin-top: 6px; display: inline-flex; align-items: center; gap: 6px; }
+.tk-mail { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.tk-mail-head { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; font-size: var(--fs-sm); }
+.tk-mail-head dt { color: var(--muted); }
+.tk-mail-head dd { margin: 0; word-break: break-word; }
+.tk-mail-frame { width: 100%; height: min(62vh, 640px); border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.tk-mail-text { white-space: pre-wrap; word-break: break-word; font: 13px/1.5 ui-monospace, Consolas, monospace; max-height: 62vh; overflow: auto; margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2, transparent); }

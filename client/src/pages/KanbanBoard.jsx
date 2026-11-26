@@ -204,6 +204,12 @@ export default function KanbanBoard({ project }) {
   const employee = sp.get('member') || sp.get('employee') || '';
   const requester = sp.get('requester') || '';
   const teamsLoad = useLoad(() => api.get('/teams'), []);
+  // everyone in a team, once each (A–Z), with their role from the role list (else their job title)
+  const boardPeople = useMemo(() => {
+    const byId = new Map();
+    for (const t of teamsLoad.data || []) for (const m of t.members) if (!byId.has(m.id)) byId.set(m.id, { id: m.id, name: m.name, label: m.current_roles?.join(', ') || m.job_title || '' });
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [teamsLoad.data]);
   const reqLoad = useLoad(() => api.get('/work-packages-requesters'), []);
   const projectId = project ? String(project.id) : (sp.get('project') || ''); // one or more project ids, comma separated
   const projectIds = idList(projectId);
@@ -345,11 +351,7 @@ export default function KanbanBoard({ project }) {
               <option value="">All team members</option>
               <option value="me">Me</option>
               <option value="none">Unassigned</option>
-              {(teamsLoad.data || []).filter(t => t.members.length).map(t => (
-                <optgroup key={t.id} label={t.name}>
-                  {t.members.map(m => <option key={`${t.id}-${m.id}`} value={m.id}>{m.name}{m.job_title ? ` · ${m.job_title}` : ''}</option>)}
-                </optgroup>
-              ))}
+              {boardPeople.map(m => <option key={m.id} value={m.id}>{m.name}{m.label ? ` · ${m.label}` : ''}</option>)}
               {/^\d+$/.test(employee) && !(teamsLoad.data || []).some(t => t.members.some(m => String(m.id) === employee)) && <option value={employee}>{people.find(u => String(u.id) === employee)?.name || 'Selected person'}</option>}
             </select>
           </label>
