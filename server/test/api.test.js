@@ -1146,3 +1146,12 @@ test('Sprint Planning Teams: per-person tasks, occupancy, available and sprint h
   assert.equal(row.daily_hours, 8);
   assert.ok(row.projects.some(p => p.id === ids.project));
 });
+
+test('Sprint Planning Teams: people in the Teams page order', async () => {
+  const s = (await admin.get('/sprints')).data.sprints.find(x => x.name === 'Capacity');
+  const order = (await admin.get(`/sprints/capacity?sprint_id=${s.id}`)).data.rows.map(r => r.id);
+  const teams = (await admin.get('/teams')).data;
+  const list = Array.isArray(teams) ? teams : teams.teams;
+  const teamOrder = [...new Set(list.flatMap(t => t.members.map(m => m.id)))].filter(id => order.includes(id));
+  assert.deepEqual(order.slice(0, teamOrder.length), teamOrder);
+});

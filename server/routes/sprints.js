@@ -105,6 +105,11 @@ r.get('/sprints/capacity', (req, res) => {
   const ids = [...new Set([...memberIds, ...load.keys()])];
   const users = ids.length ? all(`SELECT * FROM users WHERE status = 'active' AND id IN (${ph(ids.length)}) ORDER BY name COLLATE NOCASE`, ...ids) : [];
   const sprintHours = Math.round(workingDays * cal.hours_per_day * 100) / 100;
+  // same order as on the Teams page: teams by name, people in each team's order; others after, A–Z
+  const rank = new Map();
+  all(`SELECT tm.user_id FROM team_members tm JOIN teams t ON t.id = tm.team_id ORDER BY t.name, tm.position IS NULL, tm.position, tm.rowid`)
+    .forEach(x => { if (!rank.has(x.user_id)) rank.set(x.user_id, rank.size); });
+  users.sort((a, b) => (rank.get(a.id) ?? 1e9) - (rank.get(b.id) ?? 1e9) || a.name.localeCompare(b.name));
   const rows = users.map(u => {
     const l = load.get(u.id) || { tasks: 0, open_tasks: 0, hours: 0 };
     const projects = pids.length ? all(`SELECT p.id, p.name, p.identifier FROM project_members pm JOIN projects p ON p.id = pm.project_id
