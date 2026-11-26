@@ -127,7 +127,7 @@ export default function Layout() {
         </nav>
         <nav className="nav-group" aria-label="Projects">
           <div className="nav-heading">
-            <span>Projects</span>
+            <span className="nav-heading-title">Projects<Link to="/projects" className="nav-viewall" title="All projects">View All</Link></span>
             {can('projects.create') && <button type="button" onClick={() => setNewProject(true)} aria-label="New project" title="New project"><Icon name="plus" size={14} /></button>}
           </div>
           {projects.map(p => (
@@ -137,7 +137,6 @@ export default function Layout() {
               <span className="pkey">{p.identifier}</span>
             </NavLink>
           ))}
-          <NavLink to="/projects" end className="nav-link quiet" title="All projects"><Icon name="folder" /><span className="nav-text">All projects</span></NavLink>
         </nav>
         <div className="sidebar-foot">
           {isAdmin || can('admin.users') || can('admin.roles') || can('admin.settings') ? (

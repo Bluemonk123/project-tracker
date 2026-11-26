@@ -1527,3 +1527,7 @@ a.ov-stage-row:hover { background: var(--sunken); }
 /* text on the orange background is always white */
 .btn.primary:hover, .btn.primary:focus-visible, .btn.primary:disabled { color: #fff; }
 .btn.primary svg { color: #fff; }
+.nav-heading-title { display: inline-flex; align-items: baseline; gap: 10px; }
+.nav-viewall { font-size: var(--fs-xs); color: var(--brand-orange); font-weight: 600; text-decoration: none; }
+.nav-viewall:hover { color: #fff; text-decoration: underline; }
+.shell.collapsed .nav-viewall { display: none; }
