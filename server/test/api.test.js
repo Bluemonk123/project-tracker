@@ -1023,3 +1023,17 @@ test('notification pop-ups: only notifications newer than the last one seen', as
   assert.ok(r.data.unread >= 1);
   assert.equal((await dev.get(`/notifications/latest?after=${r.data.max_id}`)).data.items.length, 0);
 });
+
+test('first sign-in: set your own password without the current one; afterwards the current one is needed', async () => {
+  await admin.post('/admin/users', { name: 'New Person', email: 'newbie@office.local', password: 'temporary1' });
+  const c = client();
+  assert.equal((await c.post('/auth/login', { email: 'newbie@office.local', password: 'temporary1' })).status, 200);
+  assert.equal((await c.get('/auth/me')).data.user.must_change_password, 1);
+  assert.equal((await c.post('/auth/password', { password: 'temporary1' })).status, 400); // must be a new one
+  assert.equal((await c.post('/auth/password', { password: 'short' })).status, 400);
+  assert.equal((await c.post('/auth/password', { password: 'my-own-pass-1' })).status, 200); // no current password asked
+  assert.equal((await c.get('/auth/me')).data.user.must_change_password, 0);
+  // from now on, changing it needs the current password
+  assert.equal((await c.post('/auth/password', { password: 'another-pass-2' })).status, 400);
+  assert.equal((await c.post('/auth/password', { current: 'my-own-pass-1', password: 'another-pass-2' })).status, 200);
+});

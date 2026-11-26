@@ -65,6 +65,40 @@ export function Login() {
   );
 }
 
+// First sign-in with a password an administrator set: choose your own before using the app (no current password asked).
+export function FirstPassword() {
+  const { reload, appName, user } = useApp();
+  const [pw, setPw] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const submit = async (e) => {
+    e.preventDefault();
+    if (pw !== pw2) { setError(new Error('The two passwords are not the same.')); return; }
+    setBusy(true); setError(null);
+    try { await api.post('/auth/password', { password: pw }); await reload(); }
+    catch (err) { setError(err); setBusy(false); }
+  };
+  const signOut = async () => { try { await api.post('/auth/logout'); } finally { reload(); } };
+  return (
+    <div className="auth">
+      <Art appName={appName} />
+      <div className="auth-form">
+        <form onSubmit={submit}>
+          <h2>Set your password</h2>
+          <p className="small soft" style={{ marginTop: 0 }}>Welcome{user?.name ? `, ${String(user.name).split(' ')[0]}` : ''}! You signed in with a temporary password from your administrator. Choose your own password to continue.</p>
+          <ErrorBox error={error} />
+          <input type="email" autoComplete="username" value={user?.email || ''} readOnly hidden />
+          <Field label="New password" htmlFor="npw" hint="At least 8 characters."><input id="npw" type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} required minLength={8} autoFocus /></Field>
+          <Field label="Repeat new password" htmlFor="npw2"><input id="npw2" type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} required minLength={8} /></Field>
+          <button className="btn primary" disabled={busy}>{busy ? 'Saving…' : 'Save password and continue'}</button>
+          <button type="button" className="btn ghost" onClick={signOut}>Sign out</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // For people who can't sign in: raises a ticket for the administrators (no account needed).
 function ContactAdminModal({ onClose }) {
   const [f, setF] = useState({ name: '', email: '', description: '' });

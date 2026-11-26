@@ -6,7 +6,7 @@ import './styles.css';
 import { AppProvider, useApp } from './context.jsx';
 import { ConfirmHost, Loading, Toasts } from './components/ui.jsx';
 import Layout from './components/Layout.jsx';
-import { Login, Setup } from './pages/Auth.jsx';
+import { Login, Setup, FirstPassword } from './pages/Auth.jsx';
 import MyPage from './pages/MyPage.jsx';
 import Overview from './pages/Overview.jsx';
 import Projects from './pages/Projects.jsx';
@@ -59,6 +59,7 @@ function Root() {
   if (error) return <div className="content"><div className="error-box">Cannot reach the server: {error}. Make sure the Project Tracker window is still running.</div></div>;
   if (needsSetup) return <Setup />;
   if (!me) return <Login />;
+  if (me.user?.must_change_password) return <FirstPassword />;
   return (
     <Routes>
       <Route element={<Layout />}>

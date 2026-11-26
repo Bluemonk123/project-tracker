@@ -82,8 +82,12 @@ r.get('/auth/me', requireAuth, (req, res) => {
 });
 
 r.post('/auth/password', requireAuth, (req, res) => {
-  if (!verifyPassword(String(req.body.current || ''), req.user.password_hash)) fail(400, 'Current password is incorrect.');
+  // First sign-in with the password an administrator set: the person just proved it by signing in, so only the new
+  // password is asked (and it must differ from the temporary one). Any later change asks for the current password.
+  const first = !!req.user.must_change_password;
+  if (!first && !verifyPassword(String(req.body.current || ''), req.user.password_hash)) fail(400, 'Current password is incorrect.');
   checkPassword(req.body.password);
+  if (first && verifyPassword(String(req.body.password), req.user.password_hash)) fail(400, 'Choose a new password, not the one the administrator gave you.');
   run('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?', hashPassword(req.body.password), req.user.id);
   // sign out other devices
   run('DELETE FROM sessions WHERE user_id = ? AND token <> ?', req.user.id, req.cookies[SESSION_COOKIE]);
