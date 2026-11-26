@@ -7,6 +7,7 @@ import { Modal, Field, MarkdownEditor } from '../../components/ui.jsx';
 import ModuleInput from '../ModuleInput.jsx';
 import { useProjectInfo } from '../NewWpModal.jsx';
 import { fmtDate } from '../../lib/format.js';
+import { FullEmailButton } from './common.jsx';
 
 // Due date preview: the Nth working day counting today (weekly off days and holidays skipped), like the server.
 function dueFrom(cal, days) {
@@ -61,6 +62,7 @@ export default function ConvertTicketModal({ ticket, column, sprints = [], defau
         <ModuleInput projectId={f.project_id} value={f.module} onChange={(v) => set('module', v)} />
       </Field>
       <Field label="Problem"><MarkdownEditor value={f.description} onChange={(v) => set('description', v)} rows={5} /></Field>
+      {ticket.email && <div style={{ marginTop: -6 }}><FullEmailButton email={ticket.email} /> <span className="xs muted">The whole email stays on the task too.</span></div>}
       <div className="grid-2">
         <Field label="Project *">
           <select value={f.project_id} onChange={(e) => setF(s => ({ ...s, project_id: Number(e.target.value), module: '' }))} required>

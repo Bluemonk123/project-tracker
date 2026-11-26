@@ -577,6 +577,7 @@ export function boardTickets(req, assignee) {
     id: t.id, ticket_no: t.ticket_no, subject_display: t.subject_display, status: t.status, priority: t.priority, group_name: t.group_name,
     assignee_id: t.assignee_id, assignee_name: t.assignee_name, requester_display: t.requester_display, sla: t.sla, age: t.age,
     raised_by: t.raised_by, description: stripFrom(t.feedback),
+    email: get('SELECT id, size_bytes FROM ticket_emails WHERE ticket_id = ? AND message_id IS NULL ORDER BY id LIMIT 1', t.id) || null,
   }));
 }
 
