@@ -139,13 +139,19 @@ function StageModal({ col, items, columns, onMove, onClose, sprints = [], onSpri
   const [sort, setSort] = useState('age');
   const [member, setMember] = useState('');   // assignee id, 'none' or ''
   const [proj, setProj] = useState('');       // project id or ''
+  const [type, setType] = useState('');       // type id or ''
+  const [prio, setPrio] = useState('');       // priority id or ''
   const needle = q.trim().toLowerCase();
   // choices: only the people and projects that appear in this stage
   const members = [...new Map(items.filter(w => w.assignee_id).map(w => [w.assignee_id, w.assignee_name])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
   const projects = [...new Map(items.map(w => [w.project_id, w.project_name])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  const types = [...new Map(items.map(w => [w.type_id, w.type_name])).entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+  const prios = [...new Map(items.map(w => [w.priority_id, [w.priority_name, w.priority_position || 0]])).entries()].sort((a, b) => b[1][1] - a[1][1]);
   const list = items.filter(w => (!needle || [w.subject, w.key, w.module, w.requested_by, w.assignee_name, w.project_name, w.description].some(v => String(v || '').toLowerCase().includes(needle)))
     && (!member || (member === 'none' ? !w.assignee_id : String(w.assignee_id) === member))
-    && (!proj || String(w.project_id) === proj));
+    && (!proj || String(w.project_id) === proj)
+    && (!type || String(w.type_id) === type)
+    && (!prio || String(w.priority_id) === prio));
   const count = (pred) => items.filter(pred).length;
   const sorted = [...list].sort((a, b) => {
     if (sort === 'age') return (ageing(b) ?? -1) - (ageing(a) ?? -1);
@@ -168,6 +174,14 @@ function StageModal({ col, items, columns, onMove, onClose, sprints = [], onSpri
           {projects.map(([id, name]) => <option key={id} value={id}>{name} ({count(w => w.project_id === id)})</option>)}
         </select>
         {(member || proj || q) && <button type="button" className="btn sm ghost" onClick={() => { setMember(''); setProj(''); setQ(''); }}>Reset</button>}
+        <select value={type} onChange={(e) => setType(e.target.value)} aria-label="Type" style={{ width: 'auto' }}>
+          <option value="">All types</option>
+          {types.map(([id, name]) => <option key={id} value={id}>{name} ({count(w => w.type_id === id)})</option>)}
+        </select>
+        <select value={prio} onChange={(e) => setPrio(e.target.value)} aria-label="Priority" style={{ width: 'auto' }}>
+          <option value="">All priorities</option>
+          {prios.map(([id, [name]]) => <option key={id} value={id}>{name} ({count(w => w.priority_id === id)})</option>)}
+        </select>
         <label className="row" style={{ gap: 6 }}><span className="small muted">Sort</span>
           <select value={sort} onChange={(e) => setSort(e.target.value)} style={{ width: 'auto' }}>
             <option value="age">Oldest first (ageing)</option><option value="priority">Priority</option>
