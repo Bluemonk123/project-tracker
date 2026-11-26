@@ -856,7 +856,9 @@ r.get('/ticket-attachments/:id', (req, res) => {
 function emailFor(req) {
   const e = get('SELECT * FROM ticket_emails WHERE id = ?', Number(req.params.id)) || fail(404, 'Email not found.');
   const t = get('SELECT * FROM tickets WHERE id = ?', e.ticket_id) || fail(404, 'Email not found.');
-  if (!(can(req, 'tickets.view') || t.requester_user_id === req.user.id || req.user.is_admin)) fail(404, 'Email not found.');
+  // Ticket Board users, the requester, and (for a ticket turned into a task) people who can see that task
+  const task = t.wp_id ? get('SELECT project_id FROM work_packages WHERE id = ?', t.wp_id) : null;
+  if (!(can(req, 'tickets.view') || t.requester_user_id === req.user.id || req.user.is_admin || (task && can(req, 'wp.view', task.project_id)))) fail(404, 'Email not found.');
   const file = path.join(UPLOAD_DIR, path.basename(e.stored_name));
   if (!fs.existsSync(file)) fail(404, 'The email file is missing from the server.');
   return { e, t, file };

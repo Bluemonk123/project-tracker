@@ -754,3 +754,17 @@ test('alerts: own only; administrators can see everyone; email tickets alert eve
   const everyone = (await admin.get('/notifications?scope=all')).data;
   assert.ok(new Set(everyone.map(n => n.user_id)).size > 1 && everyone[0].recipient_name);
 });
+
+test('a ticket turned into a task keeps its full email, viewable from the task', async () => {
+  const { simpleParser } = await import('mailparser');
+  const { handleParsed } = await import('../inbound.js');
+  const src = Buffer.from(['From: "Conv Person" <conv@client.com>', 'To: support@office.local', 'Subject: Convert me', 'Message-ID: <conv1@client.com>',
+    'Content-Type: text/plain; charset=utf-8', '', 'Please fix.', '', '> earlier message in the trail'].join('\r\n'));
+  const out = handleParsed(await simpleParser(src), src);
+  const r = await admin.post(`/tickets/${out.ticket_no}/convert`, { project_id: ids.proj.id });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const wp = (await admin.get(`/work-packages/${r.data.id}`)).data;
+  assert.ok(wp.ticket?.email?.id, 'the task shows the email');
+  const full = (await admin.get(`/ticket-emails/${wp.ticket.email.id}`)).data;
+  assert.match(full.text, /earlier message in the trail/);
+});

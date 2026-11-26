@@ -11,7 +11,7 @@ import { sprintOption } from './SprintPlanning.jsx';
 import NewWpModal, { useProjectInfo, WpSearchSelect, LinkEditor, FILE_ACCEPT } from './NewWpModal.jsx';
 import { LogTimeModal } from './Time.jsx';
 import { fmtDate, fmtDateTime, fmtHours, fmtSize, timeAgo } from '../lib/format.js';
-import { SourceTag } from './tickets/common.jsx';
+import { SourceTag, FullEmailButton } from './tickets/common.jsx';
 import ModuleInput from './ModuleInput.jsx';
 
 // Problem / Solution: Markdown text with its own Edit button
@@ -349,6 +349,7 @@ export default function WpDetail() {
             {wp.closed_on && <> · Closed {fmtDate(wp.closed_on)}</>}
             {wp.ticket && <> · From ticket {can.open_ticket ? <Link to={`/ticket-board?ticket=${wp.ticket.ticket_no}`}>#{wp.ticket.ticket_no}</Link> : `#${wp.ticket.ticket_no}`}</>}
           </div>
+          {wp.ticket?.email && <div><FullEmailButton email={wp.ticket.email} /></div>}
 
           <div className="wp-psol">
             <div className={`wp-module step${wp.module ? ' done' : ''}`}>

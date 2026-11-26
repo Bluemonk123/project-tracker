@@ -628,7 +628,9 @@ r.get('/work-packages/:id', (req, res) => {
     ancestors.unshift(a);
     cur = a.parent_id;
   }
-  const ticket = get('SELECT ticket_no, status FROM tickets WHERE wp_id = ? ORDER BY id LIMIT 1', wp.id) || null;
+  const ticket = get('SELECT id, ticket_no, status FROM tickets WHERE wp_id = ? ORDER BY id LIMIT 1', wp.id) || null;
+  // a ticket that came by email: its whole original email ("View full email" on the task too)
+  if (ticket) { ticket.email = get('SELECT id, size_bytes FROM ticket_emails WHERE ticket_id = ? AND message_id IS NULL ORDER BY id LIMIT 1', ticket.id) || null; delete ticket.id; }
   const sprint = wp.sprint_id ? get('SELECT * FROM sprints WHERE id = ?', wp.sprint_id) : null;
   res.json({
     ...wp, children, relations, journals, watchers, attachments, links, time, meetings, ancestors, stages, stage_hours, max_files: 5, ticket, sprint_state: sprintState(sprint),
