@@ -126,11 +126,11 @@ p { margin: 0 0 0.6em; }
   color: var(--on-spruce); font-size: var(--fs); text-decoration: none; position: relative;
 }
 /* hover and active share the brand orange fill, with navy text for contrast */
-.nav-link:hover, .nav-link.active { background: var(--brand-orange); color: var(--spruce); text-decoration: none; }
+.nav-link:hover, .nav-link.active { background: var(--brand-orange); color: #fff; text-decoration: none; }
 .nav-link.active { font-weight: 600; }
 .nav-link.quiet:not(:hover):not(.active) { color: var(--on-spruce-2); }
 .nav-link:hover svg, .nav-link.active svg { opacity: 1; }
-.nav-link:hover .pkey, .nav-link.active .pkey { color: var(--spruce); }
+.nav-link:hover .pkey, .nav-link.active .pkey { color: #fff; }
 .nav-link:hover .count, .nav-link.active .count { background: var(--spruce); color: #fff; }
 .nav-link:hover .stripe, .nav-link.active .stripe { box-shadow: 0 0 0 1.5px #fff; }
 .nav-link svg { width: 17px; height: 17px; flex: none; opacity: 0.85; }
@@ -189,7 +189,7 @@ p { margin: 0 0 0.6em; }
 .btn:hover { background: var(--surface-2); border-color: color-mix(in srgb, var(--ink-3) 50%, var(--line)); text-decoration: none; }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .btn svg { width: 16px; height: 16px; }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 .btn.primary:hover { background: color-mix(in srgb, var(--accent) 90%, #000); border-color: color-mix(in srgb, var(--accent) 90%, #000); }
 .btn.danger { color: var(--danger); }
 .btn.danger.solid { background: var(--danger); border-color: var(--danger); color: #fff; }
@@ -1521,3 +1521,9 @@ a.ov-stage-row:hover { background: var(--sunken); }
 .rs-note .link-btn { margin-left: 8px; }
 .rs-note-body { white-space: pre-wrap; word-break: break-word; margin-top: 2px; }
 @media (max-width: 640px) { .rs-fields { grid-template-columns: 1fr; } }
+/* Task Board: hovered card highlight, drawn above the columns so it is never cut off */
+.kb-hover-glow { position: fixed; z-index: 60; pointer-events: none; box-shadow: 0 0 16px 8px #646464; }
+
+/* text on the orange background is always white */
+.btn.primary:hover, .btn.primary:focus-visible, .btn.primary:disabled { color: #fff; }
+.btn.primary svg { color: #fff; }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, qs } from '../api.js';
 import { useApp, useLoad } from '../context.jsx';
@@ -67,14 +68,38 @@ function StageSelect({ w, columns, onMove }) {
 }
 
 // Sprint of a task, from the expanded stage view: sprints of the task's project that have not ended
+// Hovering a card on the board: a strong shadow drawn above everything (also over the neighbouring cards and the
+// column's scroll edge, which would otherwise cut it off). It follows the card and hides while scrolling.
+function HoverGlow({ selector = '.kb-cards .kb-card' }) {
+  const [rect, setRect] = useState(null);
+  useEffect(() => {
+    let card = null;
+    const place = () => { if (!card || !card.isConnected) { setRect(null); return; } const r = card.getBoundingClientRect(); setRect({ top: r.top, left: r.left, width: r.width, height: r.height }); };
+    const over = (e) => { const c = e.target.closest?.(selector); if (c !== card) { card = c; place(); } };
+    const out = (e) => { if (card && !card.contains(e.relatedTarget)) { card = null; setRect(null); } };
+    const hide = () => { card = null; setRect(null); };
+    document.addEventListener('mouseover', over);
+    document.addEventListener('mouseout', out);
+    window.addEventListener('scroll', hide, true);
+    window.addEventListener('resize', hide);
+    document.addEventListener('dragstart', hide);
+    return () => { document.removeEventListener('mouseover', over); document.removeEventListener('mouseout', out); window.removeEventListener('scroll', hide, true); window.removeEventListener('resize', hide); document.removeEventListener('dragstart', hide); };
+  }, [selector]);
+  if (!rect) return null;
+  const radius = getComputedStyle(document.querySelector(selector) || document.body).borderRadius;
+  return createPortal(<div className="kb-hover-glow" aria-hidden style={{ ...rect, borderRadius: radius }} />, document.body);
+}
+
 function SprintSelect({ w, sprints, onSprint }) {
   const stop = (e) => e.stopPropagation();
-  const choices = sprints.filter(s => (s.project_ids || []).includes(w.project_id) && (s.state !== 'ended' || s.id === w.sprint_id));
+  // every sprint that has not ended (current first, then planned); a sprint without the task's project gets it added
+  const order = { current: 0, planned: 1, ended: 2 };
+  const choices = sprints.filter(s => s.state !== 'ended' || s.id === w.sprint_id).sort((a, b) => order[a.state] - order[b.state] || a.start_date.localeCompare(b.start_date));
   return (
     <select className="kbx-sprint" value={w.sprint_id || ''} aria-label={`Sprint of ${w.key}`} title="Move to another sprint"
       onClick={stop} onMouseDown={stop} onKeyDown={stop} onChange={(e) => onSprint(w, e.target.value ? Number(e.target.value) : null)}>
       <option value="">No sprint</option>
-      {choices.map(s => <option key={s.id} value={s.id}>{s.code} · {s.name}{s.state === 'current' ? ' (current)' : s.state === 'planned' ? ' (planned)' : ''}</option>)}
+      {choices.map(s => <option key={s.id} value={s.id}>{s.code} · {s.name}{s.state === 'current' ? ' (current)' : s.state === 'planned' ? ' (future)' : ''}</option>)}
     </select>
   );
 }
@@ -175,7 +200,6 @@ dates && `Dates ${dates}${overdue ? ' (overdue)' : ''}`, `Logged ${hrs(spent)} o
       onDragEnd={onDragEnd}>
       <div className="kb-top">
         <span className="kb-project">{w.project_name}</span>
-        <span className={`kb-est${est > 0 && spent > est ? ' over' : ''}`} title={`Estimated ${hrs(est)}${spent ? `, logged ${hrs(spent)}` : ''}`}>{hrs(est)}</span>
       </div>
       <div className="kb-title">{w.subject}</div>
       <div className="kb-line">
@@ -217,7 +241,6 @@ function TicketCard({ t, draggable, onDragStart, onDragEnd, dragging, canOpen, o
       onClick={open} onKeyDown={(e) => { if (e.key === 'Enter') open(); }}>
       <div className="kb-top">
         <span className="kb-project">{t.group_name}</span>
-        <SlaBadge sla={t.sla} />
       </div>
       <div className="kb-title">{t.subject_display}</div>
       <div className="kb-line">
@@ -365,9 +388,9 @@ export default function KanbanBoard({ project }) {
             <span className="kb-sprint-info muted">{sl.data && !sl.data.current_id ? 'No sprint is running. ' : ''}Showing tasks by their dates.</span>
           )}
           {sprint?.state === 'planned' && sprint.can_manage && <SprintSchedule s={sprint} onChanged={() => { sl.reload(); reload(); }} />}
-          {sprint?.state === 'current' && sprint.can_end && <button type="button" className="btn sm" onClick={() => setEnding(true)} title="End the sprint today"><Icon name="stop" size={13} />End now</button>}
           <span className="spacer" />
-          <Link to="/sprint-planning" className="btn icon sm ghost" title="Open Sprint Board" aria-label="Open Sprint Board"><Icon name="flag" size={16} /></Link>
+          {sprint?.state === 'current' && sprint.can_end && <button type="button" className="btn sm" onClick={() => setEnding(true)} title="End the sprint today"><Icon name="stop" size={13} />End now</button>}
+          <Link to="/sprint-planning" className="btn sm" title="Open the Sprint Board"><Icon name="flag" size={14} />Sprint Board</Link>
         </div>
         </div>
         <div className="kb-filters" role="group" aria-label="Board filters">
@@ -507,6 +530,7 @@ export default function KanbanBoard({ project }) {
       )}
       {ending && sprint && <EndModal s={sprint} open={rows.filter(r => !r.is_closed).length} others={sprints.filter(x => x.id !== sprint.id && x.state !== 'ended' && x.project_id === sprint.project_id)}
         onClose={() => setEnding(false)} onDone={() => { setEnding(false); set({ sprint: '' }); sl.reload(); reload(); }} />}
+      <HoverGlow />
       {ticketOpen && (
         <div className="tk-drawer-wrap" onMouseDown={(e) => { if (e.target === e.currentTarget) closeTicket(); }}>
           <div className="tk-drawer" role="dialog" aria-label={`Ticket ${ticketOpen}`}>

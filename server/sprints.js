@@ -1,6 +1,6 @@
 // Sprint rules shared by the Sprint Planning routes and the task routes.
 // A sprint is planned (starts later), current (running today) or ended (past its end date, or ended with "End now").
-import { get, all } from './db.js';
+import { get, all, run } from './db.js';
 import { fail, can } from './access.js';
 import { todayISO } from './util.js';
 
@@ -22,19 +22,26 @@ export function currentSprint() {
 
 // Moving a task into or out of a sprint. Anyone who may edit the task can use planned sprints;
 // a current or ended sprint is locked: only an administrator can add tasks to it or take them out.
-// A sprint holds tasks of its own projects only.
+// A sprint holds tasks of its own projects: moving a task into a sprint without its project adds the project to the
+// sprint (for people who may plan sprints in that project).
 export function checkSprintMove(req, fromId, toId, projectId) {
   fromId = fromId ?? null; toId = toId ?? null;
   if (fromId === toId) return null;
   const to = toId ? loadSprint(toId) : null;
   if (toId && !to) fail(400, 'That sprint does not exist.');
+  const to2 = checkSprintMoveRules(req, fromId, to, projectId);
   if (to && projectId) {
     const pids = sprintProjectIds(to.id);
     if (pids.length && !pids.includes(projectId)) {
-      const pn = get('SELECT name FROM projects WHERE id = ?', projectId)?.name;
-      fail(400, `${to.name} does not include ${pn || 'this project'}. Add the project to the sprint first.`);
+      // a sprint with a version belongs to that version's single project
+      if (to.version_id) fail(400, `${to.name} is tied to a version of ${get('SELECT name FROM projects WHERE id = ?', pids[0])?.name || 'another project'}, so tasks of other projects cannot go into it.`);
+      run('INSERT OR IGNORE INTO sprint_projects(sprint_id, project_id) VALUES(?, ?)', to.id, projectId);
     }
   }
+  return to2;
+}
+function checkSprintMoveRules(req, fromId, to, projectId) {
+  const toId = to?.id ?? null;
   if (req.user.is_admin) return to;
   if (projectId && !can(req, 'sprint.manage', projectId)) fail(403, 'You need "Plan sprints" in this project to change a task\'s sprint.');
   if (toId && req.sprintSetup === toId && !fromId) return to; // picking tasks while creating the sprint

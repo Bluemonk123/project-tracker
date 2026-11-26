@@ -1188,3 +1188,12 @@ test('Research: add a requirement with files, people and notes; who may change i
   assert.equal((await someone.del(`/research/${id}`)).status, 403);
   assert.equal((await admin.del(`/research/${id}`)).status, 200);
 });
+
+test('moving a task into a sprint without its project adds the project to the sprint', async () => {
+  const p = (await admin.post('/projects', { name: 'Sprint Joiner', identifier: 'SPJ' })).data;
+  const t = (await admin.post('/work-packages', { project_id: p.id, subject: 'Joins a sprint' })).data;
+  const s = (await admin.post('/sprints', { project_id: ids.project, name: 'Open sprint', start_date: '2027-06-01', end_date: '2027-06-10' })).data;
+  const sid = s.id ?? s.sprint?.id;
+  assert.equal((await admin.patch(`/work-packages/${t.id}`, { sprint_id: sid })).status, 200);
+  assert.ok((await admin.get('/sprints')).data.sprints.find(x => x.id === sid).project_ids.includes(p.id));
+});
