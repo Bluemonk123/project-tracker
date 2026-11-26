@@ -10,7 +10,7 @@ import NotificationPopups from './NotificationPopups.jsx';
 import RaiseTicketModal from '../pages/tickets/RaiseTicketModal.jsx';
 
 function BrandMark() {
-  return <img className="brand-mark" src="/logo-tile.png" alt="" width="40" height="40" />;
+  return <img className="brand-mark" src="/logo-mark.svg" alt="" width="40" height="40" />;
 }
 
 function GlobalSearch() {

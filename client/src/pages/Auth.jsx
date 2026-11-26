@@ -13,7 +13,7 @@ function Art({ appName }) {
   ];
   return (
     <div className="auth-art">
-      <div className="row" style={{ fontWeight: 650, color: '#fff', gap: 12, fontSize: 16 }}><img src="/logo-tile.png" alt="" width="40" height="40" />{appName}</div>
+      <div className="row" style={{ fontWeight: 650, color: '#fff', gap: 12, fontSize: 16 }}><img src="/logo-mark.svg" alt="" width="40" height="40" />{appName}</div>
       <div>
         <div className="lanes" aria-hidden="true">
           {lanes.map(l => (
