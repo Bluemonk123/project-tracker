@@ -690,3 +690,19 @@ test('Enable Ticket Board on one person (on top of their role)', async () => {
   await admin.patch(`/admin/users/${u}`, { ticket_access: null });
   assert.ok(!(await c.get('/auth/me')).data.permissions.includes('tickets.view'));
 });
+
+test('Ticket Board permissions in a project role give board access', async () => {
+  const roles = (await admin.get('/admin/roles')).data;
+  const employee = roles.find(r => r.name === 'Employee' && r.scope === 'global').id;
+  const role = (await admin.post('/admin/roles', { name: 'Support on project', scope: 'project', permissions: ['project.view', 'tickets.view', 'tickets.edit', 'bogus'] })).data.id;
+  const saved = (await admin.get('/admin/roles')).data.find(r => r.id === role);
+  assert.deepEqual([...saved.permissions].sort(), ['project.view', 'tickets.edit', 'tickets.view']);
+  const u = (await admin.post('/admin/users', { name: 'Proj Support', email: 'projsup@office.local', password: 'password1', global_role_id: employee })).data.id;
+  const c = client(); await c.post('/auth/login', { email: 'projsup@office.local', password: 'password1' });
+  assert.ok(!(await c.get('/auth/me')).data.permissions.includes('tickets.view'));
+  const pid = get('SELECT id FROM projects ORDER BY id LIMIT 1').id;
+  assert.equal((await admin.post(`/projects/${pid}/members`, { user_id: u, role_id: role })).status < 300, true);
+  const perms = (await c.get('/auth/me')).data.permissions;
+  assert.ok(perms.includes('tickets.view') && perms.includes('tickets.edit') && !perms.includes('tickets.assign'));
+  assert.equal((await c.get('/ticket-board')).status, 200);
+});

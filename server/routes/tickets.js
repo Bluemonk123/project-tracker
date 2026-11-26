@@ -87,8 +87,10 @@ function boardUsers() {
 function usersWith(key) {
   const roleIds = all("SELECT id, permissions FROM roles WHERE scope = 'global'").filter(r => parseList(r.permissions).includes(key)).map(r => r.id);
   const levels = Object.entries(TICKET_ACCESS).filter(([, keys]) => keys.includes(key)).map(([k]) => `'${k}'`);
+  const projRoleIds = all("SELECT id, permissions FROM roles WHERE scope = 'project'").filter(r => parseList(r.permissions).includes(key)).map(r => r.id);
   return all(`SELECT id, name, email FROM users WHERE status = 'active' AND (is_admin = 1
-    ${roleIds.length ? `OR global_role_id IN (${roleIds.join(',')})` : ''} ${levels.length ? `OR ticket_access IN (${levels.join(',')})` : ''}) ORDER BY name`);
+    ${roleIds.length ? `OR global_role_id IN (${roleIds.join(',')})` : ''} ${levels.length ? `OR ticket_access IN (${levels.join(',')})` : ''}
+    ${projRoleIds.length ? `OR id IN (SELECT user_id FROM project_members WHERE role_id IN (${projRoleIds.join(',')}))` : ''}) ORDER BY name`);
 }
 // Engineers (can be assigned tickets): members and leads of the Support Team (teams named "Support" or "Ticket")
 // whose role has "Work on tickets"; until such a team has members, everyone who can work on tickets.

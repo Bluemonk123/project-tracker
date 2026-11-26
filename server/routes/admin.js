@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { get, all, run, tx, hashPassword, getSetting, setSetting, backupNow, BACKUP_DIR, maxUploadMb, UPLOAD_LIMIT_FROM_ENV } from '../db.js';
 import { need, fail, parseList } from '../access.js';
-import { GLOBAL_PERMISSIONS, PROJECT_PERMISSIONS, TICKET_PERMISSIONS, ALL_GLOBAL_KEYS, ALL_PROJECT_KEYS, ALL_TICKET_KEYS } from '../permissions.js';
+import { GLOBAL_PERMISSIONS, PROJECT_PERMISSIONS, TICKET_PERMISSIONS, TICKET_BOARD_KEYS, ALL_GLOBAL_KEYS, ALL_PROJECT_KEYS, ALL_TICKET_KEYS } from '../permissions.js';
 import { requireText, updateSet } from '../util.js';
 
 const r = Router();
@@ -133,7 +133,7 @@ r.get('/admin/roles', (req, res) => {
 });
 
 function cleanPerms(scope, perms) {
-  const allowed = scope === 'global' ? [...ALL_GLOBAL_KEYS, ...ALL_PROJECT_KEYS] : scope === 'ticket' ? ALL_TICKET_KEYS : ALL_PROJECT_KEYS;
+  const allowed = scope === 'global' ? [...ALL_GLOBAL_KEYS, ...ALL_PROJECT_KEYS] : scope === 'ticket' ? ALL_TICKET_KEYS : [...ALL_PROJECT_KEYS, ...TICKET_BOARD_KEYS];
   return [...new Set((perms || []).filter(p => allowed.includes(p)))];
 }
 

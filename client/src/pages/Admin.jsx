@@ -122,7 +122,7 @@ function Users() {
 function RoleModal({ role, scope, catalogue, onClose, onSaved }) {
   const [f, setF] = useState({ name: role?.name || '', description: role?.description || '', permissions: role?.permissions || [], scope: role?.scope || scope });
   const [busy, run] = useAsync();
-  const perms = f.scope === 'global' ? [...catalogue.global, ...catalogue.project] : f.scope === 'ticket' ? (catalogue.ticket || []) : catalogue.project;
+  const perms = f.scope === 'global' ? [...catalogue.global, ...catalogue.project] : f.scope === 'ticket' ? (catalogue.ticket || []) : [...catalogue.project, ...catalogue.global.filter(p => p.group === 'Ticket Board')];
   const groups = [...new Set(perms.map(p => p.group))];
   const toggle = (k) => setF(s => ({ ...s, permissions: s.permissions.includes(k) ? s.permissions.filter(x => x !== k) : [...s.permissions, k] }));
   const save = async () => {
@@ -140,6 +140,7 @@ function RoleModal({ role, scope, catalogue, onClose, onSaved }) {
       {groups.map(g => (
         <div key={g} className="perm-group">
           <h4>{g}</h4>
+          {g === 'Ticket Board' && f.scope !== 'global' && <p className="muted xs" style={{ margin: '0 0 6px' }}>There is one Ticket Board for the whole company: ticking these gives everyone with this project role that access to the board.</p>}
           <div className="perm-grid">
             {perms.filter(p => p.group === g).map(p => (
               <label key={p.key} className="check small"><input type="checkbox" checked={f.permissions.includes(p.key)} onChange={() => toggle(p.key)} />{p.label}</label>

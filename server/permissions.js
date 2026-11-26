@@ -17,6 +17,9 @@ export const GLOBAL_PERMISSIONS = [
   { key: 'tickets.assign',   group: 'Ticket Board',   label: 'Ticket lead: assign tickets to other engineers' },
 ];
 export const TICKET_PERMISSIONS = []; // (ticket roles were merged into global roles)
+// The Ticket Board permissions can also be put in a PROJECT role. The board is one for the whole company, so
+// a project role with them gives that access to the board as a whole (not only for that project's tickets).
+export const TICKET_BOARD_KEYS = GLOBAL_PERMISSIONS.filter(p => p.group === 'Ticket Board').map(p => p.key);
 // Per person (Administration → Users): "Enable Ticket Board" for one employee without changing their role.
 export const TICKET_ACCESS = {
   work: ['tickets.view', 'tickets.create', 'tickets.edit'],

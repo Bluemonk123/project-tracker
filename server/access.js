@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { get, all, run } from './db.js';
-import { ALL_GLOBAL_KEYS, ALL_PROJECT_KEYS, ALL_TICKET_KEYS, TICKET_ACCESS } from './permissions.js';
+import { ALL_GLOBAL_KEYS, ALL_PROJECT_KEYS, ALL_TICKET_KEYS, TICKET_ACCESS, TICKET_BOARD_KEYS } from './permissions.js';
 
 export class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -54,6 +54,10 @@ export function globalPerms(req) {
     set = new Set(parseList(role?.permissions));
     // "Enable Ticket Board" set on the person, on top of their role
     (TICKET_ACCESS[u.ticket_access] || []).forEach(k => set.add(k));
+    // Ticket Board permissions in any of the person's project roles
+    all(`SELECT DISTINCT r.permissions FROM project_members pm JOIN roles r ON r.id = pm.role_id JOIN projects p ON p.id = pm.project_id
+         WHERE pm.user_id = ?`, u.id)
+      .forEach(r => parseList(r.permissions).forEach(k => { if (TICKET_BOARD_KEYS.includes(k)) set.add(k); }));
   }
   req._perm.global = set;
   return set;
