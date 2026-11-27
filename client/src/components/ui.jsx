@@ -9,13 +9,20 @@ marked.setOptions({ gfm: true, breaks: true });
 
 export function Modal({ title, onClose, children, footer, wide, onSubmit }) {
   const ref = useRef(null);
+  const closeRef = useRef(onClose); closeRef.current = onClose;
+  // Focus the first field once when the window opens (not again when the page behind re-renders), unless a
+  // field inside already has focus (e.g. autoFocus).
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    if (!ref.current?.contains(document.activeElement)) {
+      const first = ref.current?.querySelector('input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled])');
+      first?.focus();
+    }
+  }, []);
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') closeRef.current?.(); };
     document.addEventListener('keydown', onKey);
-    const first = ref.current?.querySelector('input:not([type=hidden]), select, textarea');
-    first?.focus();
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, []);
   const Wrap = onSubmit ? 'form' : 'div';
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
